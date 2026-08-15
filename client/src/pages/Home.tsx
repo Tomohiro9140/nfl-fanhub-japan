@@ -3,7 +3,7 @@
  * Style reminder — editorial data journalism, ink navy / bone / endzone orange,
  * asymmetric field-note hierarchy; every element should help users decide what to watch next.
  */
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   ArrowUpRight,
   Bell,
@@ -16,6 +16,7 @@ import {
   Headphones,
   Menu,
   MoreHorizontal,
+  Newspaper,
   ShieldCheck,
   Sparkles,
   Tv,
@@ -24,46 +25,14 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { getTeamByCode, nflTeams, type FavoriteTeam, type TeamTone } from "@/lib/nflTeams";
 
 const heroImage = "/manus-storage/nfl-fan-hub-field-notes-hero_49725db5.jpg";
 const statusImage = "/manus-storage/nfl-fan-hub-status-board_53beb1fe.jpg";
 const brandLogo = "/manus-storage/nfl-fan-hub-logo_44c04145.png";
 const daznGamePassUrl = "https://www.dazn.com/ja-JP/l/nfl-game-pass";
 
-type TeamTone = "sea" | "gb" | "sf" | "kc" | "phi" | "dal" | "buf" | "mia";
-
-type FavoriteTeam = {
-  code: string;
-  name: string;
-  tone: TeamTone;
-  opponent: string;
-  opponentName: string;
-  opponentTone: TeamTone;
-  roster: { position: string; player: string; detail: string; status: string; statusClass: string }[];
-};
-
-const favoriteTeams: FavoriteTeam[] = [
-  { code: "SEA", name: "Seattle Seahawks", tone: "sea", opponent: "GB", opponentName: "Green Bay Packers", opponentTone: "gb", roster: [
-    { position: "WR", player: "DK Metcalf", detail: "練習参加 / 膝", status: "ACTIVE", statusClass: "bg-[#e7f5dd] text-[#3f6d27]" },
-    { position: "RB", player: "Kenneth Walker III", detail: "限定参加 / 足首", status: "WATCH", statusClass: "bg-[#fff0e9] text-[#c44719]" },
-    { position: "CB", player: "Devon Witherspoon", detail: "IRから復帰候補", status: "TRACK", statusClass: "bg-[#e7ebf7] text-[#364d7c]" },
-  ] },
-  { code: "SF", name: "San Francisco 49ers", tone: "sf", opponent: "KC", opponentName: "Kansas City Chiefs", opponentTone: "kc", roster: [
-    { position: "QB", player: "Brock Purdy", detail: "練習参加 / 右肩", status: "ACTIVE", statusClass: "bg-[#e7f5dd] text-[#3f6d27]" },
-    { position: "RB", player: "Christian McCaffrey", detail: "限定参加 / 休養", status: "WATCH", statusClass: "bg-[#fff0e9] text-[#c44719]" },
-    { position: "DE", player: "Nick Bosa", detail: "フル参加 / 継続観察", status: "TRACK", statusClass: "bg-[#e7ebf7] text-[#364d7c]" },
-  ] },
-  { code: "PHI", name: "Philadelphia Eagles", tone: "phi", opponent: "DAL", opponentName: "Dallas Cowboys", opponentTone: "dal", roster: [
-    { position: "QB", player: "Jalen Hurts", detail: "練習参加 / 膝", status: "ACTIVE", statusClass: "bg-[#e7f5dd] text-[#3f6d27]" },
-    { position: "WR", player: "A.J. Brown", detail: "限定参加 / ハムストリング", status: "WATCH", statusClass: "bg-[#fff0e9] text-[#c44719]" },
-    { position: "DT", player: "Jalen Carter", detail: "フル参加 / 問題なし", status: "TRACK", statusClass: "bg-[#e7ebf7] text-[#364d7c]" },
-  ] },
-  { code: "BUF", name: "Buffalo Bills", tone: "buf", opponent: "MIA", opponentName: "Miami Dolphins", opponentTone: "mia", roster: [
-    { position: "QB", player: "Josh Allen", detail: "練習参加 / 利き手", status: "ACTIVE", statusClass: "bg-[#e7f5dd] text-[#3f6d27]" },
-    { position: "RB", player: "James Cook", detail: "限定参加 / 足首", status: "WATCH", statusClass: "bg-[#fff0e9] text-[#c44719]" },
-    { position: "CB", player: "Christian Benford", detail: "フル参加 / 継続観察", status: "TRACK", statusClass: "bg-[#e7ebf7] text-[#364d7c]" },
-  ] },
-];
+const favoriteTeamStorageKey = "nfl-fan-hub-favorite-team";
 
 type GameCardProps = {
   spoilerMode: boolean;
@@ -156,13 +125,36 @@ function QuickRoute({ spoilerMode, favorite }: { spoilerMode: boolean; favorite:
             <span className="rounded-full bg-[#fff0e9] px-2 py-1 font-mono text-[10px] font-bold text-[#c44719]">3 UPDATES</span>
           </div>
           <div className="mt-3 divide-y divide-[#eeeae1]">
-            <div className="flex items-center justify-between gap-3 py-2"><p className="text-[13px] font-medium"><span className="mr-2 rounded bg-[#e7f5dd] px-1.5 py-0.5 font-mono text-[10px] font-bold text-[#3f6d27]">ACTIVE</span> DK Metcalf が練習に参加</p><ChevronRight className="h-4 w-4 text-[#94a3b8]" /></div>
+            <div className="flex items-center justify-between gap-3 py-2"><p className="text-[13px] font-medium"><span className="mr-2 rounded bg-[#e7f5dd] px-1.5 py-0.5 font-mono text-[10px] font-bold text-[#3f6d27]">{favorite.roster[0].status}</span> {favorite.roster[0].player} の最新ステータス</p><ChevronRight className="h-4 w-4 text-[#94a3b8]" /></div>
             <div className="flex items-center justify-between gap-3 py-2"><p className="text-[13px] font-medium"><span className="mr-2 rounded bg-[#fff0e9] px-1.5 py-0.5 font-mono text-[10px] font-bold text-[#c44719]">WATCH</span> {favorite.code} の次戦まで 7時間</p><ChevronRight className="h-4 w-4 text-[#94a3b8]" /></div>
           </div>
         </article>
         <article className="margin-note relative overflow-hidden bg-[#e9e3d6] p-4">
           <div className="relative z-10 flex h-full flex-col justify-between"><div><p className="font-mono text-[10px] font-bold tracking-[.16em] text-[#657084]">LAST CHECKED</p><p className="mt-1 font-display text-xl font-extrabold tracking-wide">{spoilerMode ? "SPOILER SAFE" : "LAST GAME NOTES"}</p></div><button onClick={() => toast(spoilerMode ? "セーフモード中は結果を表示しません" : "試合ノートを開く準備ができました")} className="inline-flex w-fit items-center gap-1.5 text-[13px] font-bold text-[#0a1931] underline decoration-[#e85d2a] decoration-2 underline-offset-4">{spoilerMode ? "VIEW WITHOUT SCORE" : "OPEN GAME NOTES"} <ArrowUpRight className="h-4 w-4" /></button></div>
           <div className="absolute -right-5 -bottom-7 font-display text-[120px] font-black leading-none text-[#d2c8b7]/65">H</div>
+        </article>
+      </div>
+    </section>
+  );
+}
+
+function TeamUpdates({ favorite }: { favorite: FavoriteTeam }) {
+  const news = [
+    { label: "PRACTICE", time: "20 MIN AGO", title: `${favorite.code} practice report updated`, copy: "出場可否と練習参加状況の最新更新を確認できます。" },
+    { label: "GAME PREP", time: "1 HR AGO", title: `${favorite.code} game-week notes`, copy: "次戦に向けた注目マッチアップとゲームプランの要点です。" },
+  ];
+  return (
+    <section id="updates" className="scroll-mt-24">
+      <SectionLabel number="02" label={`${favorite.code} TEAM FEED`} />
+      <div className="mt-3 grid gap-3 lg:grid-cols-[1.16fr_.84fr]">
+        <article className="clip-note border border-[#ded8cc] bg-white p-3 shadow-[0_10px_30px_rgba(34,42,53,.05)]">
+          <div className="flex items-center justify-between border-b border-[#eeeae1] pb-2"><div className="flex items-center gap-2"><div className="grid h-7 w-7 place-items-center bg-[#10213a] text-white"><Newspaper className="h-3.5 w-3.5" /></div><p className="font-display text-lg font-bold tracking-wide">LATEST NEWS</p></div><span className="font-mono text-[9px] font-bold tracking-[.12em] text-[#64748b]">DEMO FEED</span></div>
+          <div className="divide-y divide-[#eeeae1]">{news.map((item) => <button key={item.label} onClick={() => toast(`${favorite.code} のニュース詳細を開く準備ができました`)} className="flex w-full items-start gap-3 py-2.5 text-left transition hover:bg-[#fffaf0]"><span className="mt-0.5 w-12 shrink-0 font-mono text-[9px] font-bold tracking-[.1em] text-[#e85d2a]">{item.label}</span><span className="min-w-0 flex-1"><span className="flex items-center justify-between gap-2"><span className="font-display text-base font-bold tracking-wide">{item.title}</span><ChevronRight className="h-3.5 w-3.5 shrink-0 text-[#94a3b8]" /></span><span className="mt-0.5 block text-[11px] leading-4 text-[#687587]">{item.copy}</span></span><span className="hidden font-mono text-[8px] text-[#94a3b8] sm:block">{item.time}</span></button>)}</div>
+        </article>
+        <article className="border border-[#ded8cc] bg-[#fffdf8] p-3 shadow-[0_10px_30px_rgba(34,42,53,.05)]">
+          <div className="flex items-center justify-between"><p className="font-display text-lg font-bold tracking-wide">INJURY WATCH</p><span className="rounded bg-[#fff0e9] px-1.5 py-0.5 font-mono text-[8px] font-bold text-[#c44719]">DEMO</span></div>
+          <div className="mt-2 divide-y divide-[#eeeae1]">{favorite.roster.slice(0, 2).map((player) => <div key={player.player} className="flex items-center gap-2 py-2"><span className="grid h-6 w-6 place-items-center rounded bg-[#e9e3d6] font-mono text-[8px] font-bold">{player.position}</span><span className="min-w-0 flex-1"><span className="block truncate text-[12px] font-bold">{player.player}</span><span className="block truncate text-[10px] text-[#687587]">{player.detail}</span></span><span className={`rounded-full px-1.5 py-1 font-mono text-[8px] font-bold ${player.statusClass}`}>{player.status}</span></div>)}</div>
+          <button onClick={() => toast(`${favorite.code} の負傷者一覧を開く準備ができました`)} className="mt-2 inline-flex items-center gap-1.5 text-[11px] font-bold text-[#10213a] underline decoration-[#e85d2a] decoration-2 underline-offset-4">VIEW INJURY REPORT <ArrowUpRight className="h-3.5 w-3.5" /></button>
         </article>
       </div>
     </section>
@@ -182,11 +174,11 @@ function SpoilerSwitch({ spoilerMode, onToggle }: { spoilerMode: boolean; onTogg
   );
 }
 
-function Briefing() {
+function Briefing({ favorite }: { favorite: FavoriteTeam }) {
   const notes = [
-    { label: "MATCHUP", title: "RT vs. EDGE", copy: "GBの外側ラッシュを、SEAのRTがどこまで遅らせられるか。最初の3rd downに注目。", tag: "KEY MATCHUP" },
-    { label: "STATUS", title: "RB AVAILABILITY", copy: "練習参加状況は改善。ゲームデイの公式発表までは、役割限定の可能性も見ておく。", tag: "UPDATE 11:18" },
-    { label: "WATCH", title: "OPENING SCRIPT", copy: "序盤の早いダウンでランが出れば、プレーアクションの選択肢が広がる。", tag: "FIRST 15" },
+    { label: "MATCHUP", title: `${favorite.code} RT vs. ${favorite.opponent} EDGE`, copy: `${favorite.opponent}の外側ラッシュを、${favorite.code}のRTがどこまで遅らせられるか。最初の3rd downに注目。`, tag: "KEY MATCHUP" },
+    { label: "STATUS", title: `${favorite.code} RB AVAILABILITY`, copy: "練習参加状況は改善。ゲームデイの公式発表までは、役割限定の可能性も見ておく。", tag: "UPDATE 11:18" },
+    { label: "WATCH", title: `${favorite.code} OPENING SCRIPT`, copy: "序盤の早いダウンでランが出れば、プレーアクションの選択肢が広がる。", tag: "FIRST 15" },
   ];
   return (
     <section id="briefing" className="scroll-mt-24">
@@ -220,7 +212,16 @@ export default function Home() {
   const [spoilerMode, setSpoilerMode] = useState(true);
   const [navOpen, setNavOpen] = useState(false);
   const [teamDialogOpen, setTeamDialogOpen] = useState(false);
-  const [favorite, setFavorite] = useState<FavoriteTeam>(favoriteTeams[0]);
+  const [pickerConference, setPickerConference] = useState<"AFC" | "NFC">("AFC");
+  const [favorite, setFavorite] = useState<FavoriteTeam>(() => {
+    if (typeof window === "undefined") return nflTeams[0];
+    return getTeamByCode(window.localStorage.getItem(favoriteTeamStorageKey)) ?? nflTeams[0];
+  });
+  const divisionGroups = useMemo(() => ["East", "North", "South", "West"].map((division) => ({
+    division,
+    teams: nflTeams.filter((team) => team.conference === pickerConference && team.division === division),
+  })), [pickerConference]);
+  useEffect(() => { window.localStorage.setItem(favoriteTeamStorageKey, favorite.code); }, [favorite.code]);
   const toggleSpoiler = () => {
     setSpoilerMode(current => !current);
     toast(spoilerMode ? "通常モードに切り替えました" : "ネタバレ防止モードをオンにしました", { description: spoilerMode ? "試合結果を表示できます。" : "結果とスコアを伏せます。" });
@@ -232,23 +233,24 @@ export default function Home() {
       <header className="sticky top-0 z-30 border-b border-[#ded8cc]/80 bg-[#f5f2ea]/92 backdrop-blur-lg">
         <div className="mx-auto flex h-[68px] max-w-6xl items-center justify-between px-4 sm:px-6">
           <a href="#home" className="flex items-center gap-2.5" aria-label="NFL Fan Hub Japan ホーム"><img src={brandLogo} alt="NFL Fan Hub Japanのロゴ" className="h-9 w-9" /><span className="font-display text-xl font-extrabold tracking-[-.03em]">FAN<span className="text-[#e85d2a]">/</span>HUB</span><span className="hidden border-l border-[#cfc8bb] pl-2 font-mono text-[9px] font-bold tracking-[.17em] text-[#64748b] sm:inline">JAPAN</span></a>
-          <nav className="hidden items-center gap-1 md:flex" aria-label="主要ナビゲーション"><a href="#home" className="nav-link">HOME</a><a href="#briefing" className="nav-link">BRIEFING</a><a href="#status" className="nav-link">RADAR</a><a href="#safe" className="nav-link">SAFE MODE</a></nav>
+          <nav className="hidden items-center gap-1 md:flex" aria-label="主要ナビゲーション"><a href="#home" className="nav-link">HOME</a><a href="#updates" className="nav-link">UPDATES</a><a href="#briefing" className="nav-link">BRIEFING</a><a href="#status" className="nav-link">RADAR</a><a href="#safe" className="nav-link">SAFE MODE</a></nav>
           <div className="flex items-center gap-2"><button onClick={() => setTeamDialogOpen(true)} className="inline-flex items-center gap-2 border border-[#d7d1c4] bg-white px-2.5 py-2 text-[11px] font-bold transition hover:border-[#10213a]"><Flag className="h-3.5 w-3.5 text-[#e85d2a]" /> TEAM / {favorite.code}</button><button onClick={() => setNavOpen(v => !v)} className="grid h-9 w-9 place-items-center rounded-full border border-[#d7d1c4] bg-white md:hidden" aria-label="メニューを開く">{navOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}</button></div>
         </div>
-        {navOpen && <nav className="border-t border-[#ded8cc] bg-[#fffdf8] p-3 md:hidden"><div className="grid grid-cols-2 gap-2">{[["HOME", "#home"], ["BRIEFING", "#briefing"], ["RADAR", "#status"], ["SAFE MODE", "#safe"]].map(([label, href]) => <a onClick={() => setNavOpen(false)} className="rounded-lg bg-[#f5f2ea] px-3 py-2.5 font-mono text-xs font-bold tracking-wider" href={href} key={label}>{label}</a>)}</div></nav>}
+        {navOpen && <nav className="border-t border-[#ded8cc] bg-[#fffdf8] p-3 md:hidden"><div className="grid grid-cols-2 gap-2">{[["HOME", "#home"], ["UPDATES", "#updates"], ["BRIEFING", "#briefing"], ["RADAR", "#status"], ["SAFE MODE", "#safe"]].map(([label, href]) => <a onClick={() => setNavOpen(false)} className="rounded-lg bg-[#f5f2ea] px-3 py-2.5 font-mono text-xs font-bold tracking-wider" href={href} key={label}>{label}</a>)}</div></nav>}
       </header>
 
       <Dialog open={teamDialogOpen} onOpenChange={setTeamDialogOpen}>
         <DialogContent className="border-[#d7d1c4] bg-[#f5f2ea] p-5 sm:max-w-md" showCloseButton>
-          <DialogHeader className="text-left"><p className="font-mono text-[10px] font-bold tracking-[.16em] text-[#64748b]">YOUR HUDDLE</p><DialogTitle className="font-display text-2xl font-extrabold tracking-[.08em]">FAVORITE TEAM</DialogTitle><DialogDescription className="text-[12px]">表示する次戦・ロスター・更新情報を変更します。</DialogDescription></DialogHeader>
-          <div className="grid gap-2">{favoriteTeams.map(team => <button key={team.code} onClick={() => { setFavorite(team); setTeamDialogOpen(false); toast(`${team.name} を推しチームに設定しました`); }} className={`flex items-center gap-3 border p-3 text-left transition hover:border-[#e85d2a] ${favorite.code === team.code ? "border-[#e85d2a] bg-[#fffaf0]" : "border-[#d7d1c4] bg-white"}`}><TeamMark team={team.name} short={team.code} tone={team.tone} /><span className="min-w-0 flex-1"><span className="block font-display text-lg font-bold tracking-wide">{team.code}</span><span className="block truncate text-[11px] text-[#64748b]">{team.name}</span></span>{favorite.code === team.code && <ShieldCheck className="h-4 w-4 text-[#e85d2a]" />}</button>)}</div>
+          <DialogHeader className="text-left"><p className="font-mono text-[10px] font-bold tracking-[.16em] text-[#64748b]">YOUR HUDDLE</p><DialogTitle className="font-display text-2xl font-extrabold tracking-[.08em]">FAVORITE TEAM</DialogTitle><DialogDescription className="text-[12px]">AFC／NFCと地区から推しチームを選択します。選択状態はこの端末に保存されます。</DialogDescription></DialogHeader>
+          <div className="flex gap-2 border-b border-[#d7d1c4] pb-3"><button onClick={() => setPickerConference("AFC")} className={`px-3 py-1.5 font-mono text-xs font-bold tracking-[.12em] ${pickerConference === "AFC" ? "bg-[#10213a] text-white" : "border border-[#d7d1c4] bg-white text-[#526173]"}`}>AFC</button><button onClick={() => setPickerConference("NFC")} className={`px-3 py-1.5 font-mono text-xs font-bold tracking-[.12em] ${pickerConference === "NFC" ? "bg-[#10213a] text-white" : "border border-[#d7d1c4] bg-white text-[#526173]"}`}>NFC</button></div>
+          <div className="max-h-[52vh] space-y-4 overflow-y-auto pr-1">{divisionGroups.map(({ division, teams }) => <section key={division}><p className="mb-2 font-mono text-[10px] font-bold tracking-[.16em] text-[#64748b]">{pickerConference} {division.toUpperCase()}</p><div className="grid grid-cols-2 gap-2">{teams.map(team => <button key={team.code} onClick={() => { setFavorite(team); setTeamDialogOpen(false); toast(`${team.name} を推しチームに設定しました`, { description: "次回アクセス時にもこの設定を使用します。" }); }} className={`flex items-center gap-2 border p-2.5 text-left transition hover:border-[#e85d2a] ${favorite.code === team.code ? "border-[#e85d2a] bg-[#fffaf0]" : "border-[#d7d1c4] bg-white"}`}><TeamMark team={team.name} short={team.code} tone={team.tone} /><span className="min-w-0 flex-1"><span className="block font-display text-base font-bold tracking-wide">{team.code}</span><span className="block truncate text-[10px] text-[#64748b]">{team.name}</span></span>{favorite.code === team.code && <ShieldCheck className="h-3.5 w-3.5 text-[#e85d2a]" />}</button>)}</div></section>)}</div>
         </DialogContent>
       </Dialog>
 
       <main className="relative z-10 mx-auto max-w-6xl px-4 pb-24 pt-3 sm:px-6 sm:pt-5">
         <div className="mb-3 flex items-center justify-between gap-4"><p className="font-mono text-[10px] font-bold tracking-[.16em] text-[#64748b]">SAT / AUG 15 / 2026 <span className="mx-1 text-[#e85d2a]">•</span> TOKYO</p><p className="flex items-center gap-1.5 font-mono text-[10px] font-bold text-[#526173]"><span className="h-1.5 w-1.5 rounded-full bg-[#69a84c]" /> DEMO INTERFACE</p></div>
         <div className="grid items-start gap-3 lg:grid-cols-[1.22fr_.78fr]">
-          <div className="space-y-3"><UpcomingGame spoilerMode={spoilerMode} favorite={favorite} /><QuickRoute spoilerMode={spoilerMode} favorite={favorite} /><Briefing /></div>
+          <div className="space-y-3"><UpcomingGame spoilerMode={spoilerMode} favorite={favorite} /><QuickRoute spoilerMode={spoilerMode} favorite={favorite} /><TeamUpdates favorite={favorite} /><Briefing favorite={favorite} /></div>
           <div className="space-y-3"><SpoilerSwitch spoilerMode={spoilerMode} onToggle={toggleSpoiler} /><RosterRadar favorite={favorite} /></div>
         </div>
         <section className="mt-4 border-t border-[#d8d1c3] pt-3"><div className="flex flex-col justify-between gap-3 text-[11px] text-[#687587] sm:flex-row sm:items-center"><p>DEMO DATA · 実データ接続前のサンプル表示です。</p><button onClick={() => toast("選手データベースへの接続を準備中です")} className="inline-flex shrink-0 items-center gap-1.5 font-bold text-[#10213a] underline decoration-[#e85d2a] decoration-2 underline-offset-4"><UserRoundCheck className="h-3.5 w-3.5" /> PLAYER DATABASE</button></div></section>
