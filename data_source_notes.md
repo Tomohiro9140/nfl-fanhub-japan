@@ -34,3 +34,7 @@ NFL公式の[Injuriesページ](https://www.nfl.com/injuries/)では、対象チ
 2026年8月15日17:21 UTCに、認証済みHeartbeatからUTC 12時区分（LAC、LAR、LV、MIA、MIN、NE、NO、NYG）の公式フィード更新を実行した。処理は8チームすべてで成功し、チーム公式RSSとNFL公式負傷者ページ由来の情報をキャッシュへ保存した。最新の保存結果ではLAC・LAR・MIA・NO・NYGに `nfl_official` / `injury` の項目が含まれ、各チームの `team_official` 項目は同じ取得時刻で先に返る並び順になっている。
 
 同都市チーム間の誤分類を避けるため、負傷記事のチーム判定は都市名ではなく固有ニックネーム（Chargers／Rams、Giants／Jets）で行う。判定対象が取得できない場合は推測で補わず、該当チームのNFL公式負傷者項目を保存しない。
+
+### 分類修正後のUI確認
+
+2026年8月15日18:15 UTCのHeartbeat再取得後、NYJ公式RSSの「3 Standout Players From Jets-Buccaneers Preseason Game」は `category=news` として保存された。同じNYJ画面の **INJURY WATCH** には、公式負傷者ページ由来の「Jets RB Braelon Allen Roars Back in Return From Injury」など、負傷関連の記事だけが表示された。LAC／LAR／NYG／NYJの開発環境表示では、各チームの **OFFICIAL FEED** が対応するチームコードおよび公式ニュースを表示し、都市名だけを根拠とするチーム間の混同は確認されなかった。

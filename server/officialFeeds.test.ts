@@ -19,6 +19,13 @@ describe("official team feed parsing", () => {
     expect(item).toMatchObject({ category: "news" });
   });
 
+  it("does not classify a normal Stood Out story as an out-status injury report", () => {
+    const rss = `<?xml version="1.0"?><rss><channel><item><title>5 Chargers Players That Stood Out in Preseason Win Over Texans</title><link>https://www.chargers.com/news/stood-out</link><description>Official game recap.</description><pubDate>Fri, 14 Aug 2026 21:12:14 GMT</pubDate></item></channel></rss>`;
+    const [source] = getOfficialSources("LAC");
+    const [item] = parseOfficialTeamRss(rss, "LAC", source);
+    expect(item).toMatchObject({ category: "news" });
+  });
+
   it("keeps all 32 teams addressable and exposes both official source links", () => {
     expect(supportedOfficialTeamCodes).toHaveLength(32);
     expect(getOfficialSources("SEA")).toHaveLength(2);
