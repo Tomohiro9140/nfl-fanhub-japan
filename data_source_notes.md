@@ -38,3 +38,9 @@ NFL公式の[Injuriesページ](https://www.nfl.com/injuries/)では、対象チ
 ### 分類修正後のUI確認
 
 2026年8月15日18:15 UTCのHeartbeat再取得後、NYJ公式RSSの「3 Standout Players From Jets-Buccaneers Preseason Game」は `category=news` として保存された。同じNYJ画面の **INJURY WATCH** には、公式負傷者ページ由来の「Jets RB Braelon Allen Roars Back in Return From Injury」など、負傷関連の記事だけが表示された。LAC／LAR／NYG／NYJの開発環境表示では、各チームの **OFFICIAL FEED** が対応するチームコードおよび公式ニュースを表示し、都市名だけを根拠とするチーム間の混同は確認されなかった。
+
+### 同都市チームの最終キャッシュ・UI照合
+
+最終キャッシュを `team_code` と `source_kind` の優先順で照合し、通常UIの **INJURY WATCH** は各チームのレコードだけを表示することを確認した。LACでは「Why Rashawn Slater is Taking 'Smart & Thoughtful' Approach With Return From Knee Injury」と「Chargers Training Camp Report: Mesidor, Tucker Flash at Edge Rusher on Day 10」、LARでは「McVay: Puka Nacua dealing with soreness in psoas...」、NYGでは「Practice Report (8/12): View from the sideline」と「Practice Report (8/11): Sideline observations」、NYJでは「Jets RB Braelon Allen Roars Back in Return From Injury」と「Geno Smith Won't Play vs. Buccaneers in Preseason Opener」を確認した。リーグ公式の負傷ラウンドアップは、チーム公式の記事の後に補完情報として保持する。LAC／LARおよびNYG／NYJは固有のニックネームで判定され、都市名だけによる横断表示はない。
+
+「3 Standout Players From Jets-Buccaneers Preseason Game」と「5 Chargers Players That Stood Out in Preseason Win Over Texans」は、分類修正後に `category=news` として保存し直した。通常UIでもこれらは **LATEST NEWS** に表示され、**INJURY WATCH** には表示されないことを確認した。
