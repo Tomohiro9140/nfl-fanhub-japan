@@ -1,0 +1,46 @@
+import type { Request, Response } from "express";
+import { z } from "zod";
+import { cacheAgentOfficialFeed, refreshOfficialTeamFeedShard } from "./officialFeeds";
+import { sdk } from "./_core/sdk";
+
+const agentFeedPayload = z.object({
+  teamCode: z.string().min(2).max(3),
+  items: z.array(z.object({
+    title: z.string().min(1).max(800),
+    summary: z.string().max(560).nullable().optional(),
+    sourceUrl: z.string().url(),
+    sourceName: z.string().min(1).max(128),
+    sourceKind: z.enum(["team_official", "nfl_official"]),
+    category: z.enum(["news", "injury"]),
+    publishedAt: z.string().min(1),
+  })).max(24),
+});
+
+/** Platform-authenticated endpoint for a project-level official-feed refresh job. */
+export async function refreshOfficialFeedHandler(req: Request, res: Response) {
+  try {
+    const user = await sdk.authenticateRequest(req);
+    if (!user.isCron || !user.taskUid) return res.status(403).json({ error: "cron-only" });
+    const window = Math.floor(Date.now() / (15 * 60 * 1000));
+    const shard = window % 4;
+    const results = await refreshOfficialTeamFeedShard(shard);
+    res.json({ ok: true, shard, results, timestamp: new Date().toISOString() });
+  } catch (error) {
+    const details = error instanceof Error ? { message: error.message, stack: error.stack } : { message: String(error) };
+    res.status(500).json({ error: "official-feed-refresh-failed", details, timestamp: new Date().toISOString() });
+  }
+}
+
+/** Receives normalized snippets collected by a platform-run browser job from official sites. */
+export async function receiveOfficialFeedAgentHandler(req: Request, res: Response) {
+  try {
+    const user = await sdk.authenticateRequest(req);
+    if (!user.isCron || !user.taskUid) return res.status(403).json({ error: "cron-only" });
+    const payload = agentFeedPayload.parse(req.body);
+    const count = await cacheAgentOfficialFeed(payload.teamCode.toUpperCase(), payload.items);
+    res.json({ ok: true, count, teamCode: payload.teamCode.toUpperCase(), timestamp: new Date().toISOString() });
+  } catch (error) {
+    const details = error instanceof Error ? { message: error.message, stack: error.stack } : { message: String(error) };
+    res.status(500).json({ error: "official-feed-agent-ingest-failed", details, timestamp: new Date().toISOString() });
+  }
+}

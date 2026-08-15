@@ -26,6 +26,7 @@ import {
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { getTeamByCode, nflTeams, type FavoriteTeam, type TeamTone } from "@/lib/nflTeams";
+import { OfficialTeamFeed } from "@/components/OfficialTeamFeed";
 
 const heroImage = "/manus-storage/nfl-fan-hub-field-notes-hero_49725db5.jpg";
 const statusImage = "/manus-storage/nfl-fan-hub-status-board_53beb1fe.jpg";
@@ -250,7 +251,7 @@ export default function Home() {
       <main className="relative z-10 mx-auto max-w-6xl px-4 pb-24 pt-3 sm:px-6 sm:pt-5">
         <div className="mb-3 flex items-center justify-between gap-4"><p className="font-mono text-[10px] font-bold tracking-[.16em] text-[#64748b]">SAT / AUG 15 / 2026 <span className="mx-1 text-[#e85d2a]">•</span> TOKYO</p><p className="flex items-center gap-1.5 font-mono text-[10px] font-bold text-[#526173]"><span className="h-1.5 w-1.5 rounded-full bg-[#69a84c]" /> DEMO INTERFACE</p></div>
         <div className="grid items-start gap-3 lg:grid-cols-[1.22fr_.78fr]">
-          <div className="space-y-3"><UpcomingGame spoilerMode={spoilerMode} favorite={favorite} /><QuickRoute spoilerMode={spoilerMode} favorite={favorite} /><TeamUpdates favorite={favorite} /><Briefing favorite={favorite} /></div>
+          <div className="space-y-3"><UpcomingGame spoilerMode={spoilerMode} favorite={favorite} /><QuickRoute spoilerMode={spoilerMode} favorite={favorite} /><OfficialTeamFeed favorite={favorite} /><Briefing favorite={favorite} /></div>
           <div className="space-y-3"><SpoilerSwitch spoilerMode={spoilerMode} onToggle={toggleSpoiler} /><RosterRadar favorite={favorite} /></div>
         </div>
         <section className="mt-4 border-t border-[#d8d1c3] pt-3"><div className="flex flex-col justify-between gap-3 text-[11px] text-[#687587] sm:flex-row sm:items-center"><p>DEMO DATA · 実データ接続前のサンプル表示です。</p><button onClick={() => toast("選手データベースへの接続を準備中です")} className="inline-flex shrink-0 items-center gap-1.5 font-bold text-[#10213a] underline decoration-[#e85d2a] decoration-2 underline-offset-4"><UserRoundCheck className="h-3.5 w-3.5" /> PLAYER DATABASE</button></div></section>
