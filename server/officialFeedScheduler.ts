@@ -1,6 +1,6 @@
 import type { Request, Response } from "express";
 import { z } from "zod";
-import { cacheAgentOfficialFeed, refreshOfficialTeamFeedShard } from "./officialFeeds";
+import { cacheAgentOfficialFeed, refreshOfficialTeamFeedGroup } from "./officialFeeds";
 import { sdk } from "./_core/sdk";
 
 const agentFeedPayload = z.object({
@@ -21,10 +21,12 @@ export async function refreshOfficialFeedHandler(req: Request, res: Response) {
   try {
     const user = await sdk.authenticateRequest(req);
     if (!user.isCron || !user.taskUid) return res.status(403).json({ error: "cron-only" });
-    const window = Math.floor(Date.now() / (15 * 60 * 1000));
-    const shard = window % 4;
-    const results = await refreshOfficialTeamFeedShard(shard);
-    res.json({ ok: true, shard, results, timestamp: new Date().toISOString() });
+    const hour = new Date().getUTCHours();
+    if (![0, 6, 12, 18].includes(hour)) return res.json({ ok: true, skipped: "outside-utc-window", hour });
+    const groupIndex = hour / 6;
+    const results = await refreshOfficialTeamFeedGroup(groupIndex);
+    const stored = results.filter((result) => result.ok).reduce((sum, result) => sum + result.count, 0);
+    res.json({ ok: true, groupIndex, processed: results.length, stored, results, timestamp: new Date().toISOString() });
   } catch (error) {
     const details = error instanceof Error ? { message: error.message, stack: error.stack } : { message: String(error) };
     res.status(500).json({ error: "official-feed-refresh-failed", details, timestamp: new Date().toISOString() });

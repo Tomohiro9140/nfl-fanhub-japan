@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getOfficialSources, parseOfficialTeamRss, supportedOfficialTeamCodes } from "./officialFeeds";
+import { getOfficialSources, parseOfficialNflInjuryPage, parseOfficialTeamRss, scheduledTeamGroups, supportedOfficialTeamCodes } from "./officialFeeds";
 
 const sampleRss = `<?xml version="1.0"?><rss><channel><item><title><![CDATA[Practice report: player listed as questionable]]></title><link>https://www.packers.com/news/practice-report</link><description><![CDATA[Official practice report with injury updates.]]></description><pubDate>Fri, 14 Aug 2026 21:12:14 GMT</pubDate></item><item><title>Team announces community event</title><link>https://www.packers.com/news/community-event</link><description>Official team news.</description><pubDate>Thu, 13 Aug 2026 21:12:14 GMT</pubDate></item></channel></rss>`;
 
@@ -20,5 +20,18 @@ describe("official team feed parsing", () => {
   it("uses team-specific official RSS domains for each team source", () => {
     expect(getOfficialSources("BUF")[0]?.url).toBe("https://www.buffalobills.com/rss/news");
     expect(getOfficialSources("SF")[0]?.url).toBe("https://www.49ers.com/rss/news");
+  });
+
+  it("keeps only the target team's official NFL injury roundup links", () => {
+    const page = `<a href="/news/injury-roundup-dolphins-wr-tyreek-hill">Injury roundup: Dolphins WR Tyreek Hill (wrist)</a><a href="/news/injury-roundup-giants-wr-malik-nabers">Injury roundup: Giants WR Malik Nabers (groin)</a>`;
+    const [, injurySource] = getOfficialSources("MIA");
+    const items = parseOfficialNflInjuryPage(page, "MIA", injurySource);
+    expect(items).toHaveLength(1);
+    expect(items[0]).toMatchObject({ teamCode: "MIA", sourceKind: "nfl_official", category: "injury" });
+  });
+
+  it("uses the requested eight-team UTC schedule groups", () => {
+    expect(scheduledTeamGroups[0]).toEqual(["ARI", "ATL", "BAL", "BUF", "CAR", "CHI", "CIN", "CLE"]);
+    expect(scheduledTeamGroups[2]).toEqual(["LAC", "LAR", "LV", "MIA", "MIN", "NE", "NO", "NYG"]);
   });
 });

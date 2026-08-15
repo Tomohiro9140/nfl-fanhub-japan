@@ -15,7 +15,25 @@ const teamDomains: Record<string, string> = {
   PIT: "steelers.com", SF: "49ers.com", SEA: "seahawks.com", TB: "buccaneers.com", TEN: "titansonline.com", WAS: "commanders.com",
 };
 
+const teamAliases: Record<string, string[]> = {
+  ARI: ["cardinals", "arizona"], ATL: ["falcons", "atlanta"], BAL: ["ravens", "baltimore"], BUF: ["bills", "buffalo"],
+  CAR: ["panthers", "carolina"], CHI: ["bears", "chicago"], CIN: ["bengals", "cincinnati"], CLE: ["browns", "cleveland"],
+  DAL: ["cowboys", "dallas"], DEN: ["broncos", "denver"], DET: ["lions", "detroit"], GB: ["packers", "green bay"],
+  HOU: ["texans", "houston"], IND: ["colts", "indianapolis"], JAX: ["jaguars", "jacksonville"], KC: ["chiefs", "kansas city"],
+  LAC: ["chargers", "los angeles"], LAR: ["rams", "los angeles"], LV: ["raiders", "las vegas"], MIA: ["dolphins", "miami"],
+  MIN: ["vikings", "minnesota"], NE: ["patriots", "new england"], NO: ["saints", "new orleans"], NYG: ["giants", "new york"],
+  NYJ: ["jets", "new york"], PHI: ["eagles", "philadelphia"], PIT: ["steelers", "pittsburgh"], SF: ["49ers", "niners", "san francisco"],
+  SEA: ["seahawks", "seattle"], TB: ["buccaneers", "tampa bay"], TEN: ["titans", "tennessee"], WAS: ["commanders", "washington"],
+};
+
 export const supportedOfficialTeamCodes = Object.keys(teamDomains);
+
+export const scheduledTeamGroups = [
+  ["ARI", "ATL", "BAL", "BUF", "CAR", "CHI", "CIN", "CLE"],
+  ["DAL", "DEN", "DET", "GB", "HOU", "IND", "JAX", "KC"],
+  ["LAC", "LAR", "LV", "MIA", "MIN", "NE", "NO", "NYG"],
+  ["NYJ", "PHI", "PIT", "SF", "SEA", "TB", "TEN", "WAS"],
+] as const;
 
 export type OfficialSource = { name: string; url: string; kind: "team_official" | "nfl_official" };
 export type AgentOfficialFeedItem = {
@@ -88,6 +106,33 @@ export function parseOfficialTeamRss(xml: string, teamCode: string, source: Offi
   return results.slice(0, 24);
 }
 
+/** Extracts only team-matched injury roundup links from the official NFL injuries page. */
+export function parseOfficialNflInjuryPage(html: string, teamCode: string, source: OfficialSource): InsertOfficialFeedItem[] {
+  const aliases = teamAliases[teamCode] ?? [];
+  const now = new Date();
+  const results: InsertOfficialFeedItem[] = [];
+  const matches = Array.from(html.matchAll(/<a[^>]+href=["']([^"']*(?:injury|injured)[^"']*)["'][^>]*>([\s\S]*?)<\/a>/gi));
+
+  for (const match of matches) {
+    const title = stripMarkup(match[2]);
+    if (!title || !aliases.some((alias) => title.toLowerCase().includes(alias))) continue;
+    const sourceUrl = match[1].startsWith("http") ? match[1] : `https://www.nfl.com${match[1]}`;
+    results.push({
+      externalId: createHash("sha256").update(`${teamCode}:${sourceUrl}`).digest("hex"),
+      teamCode,
+      sourceKind: "nfl_official",
+      sourceName: source.name,
+      sourceUrl,
+      title,
+      summary: null,
+      category: "injury",
+      publishedAt: now,
+      fetchedAt: now,
+    });
+  }
+  return results.slice(0, 3);
+}
+
 async function fetchRss(url: string) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 12_000);
@@ -104,9 +149,15 @@ async function fetchRss(url: string) {
 }
 
 export async function refreshOfficialTeamFeed(teamCode: string) {
-  const [teamSource] = getOfficialSources(teamCode);
-  const xml = await fetchRss(teamSource.url);
-  const items = parseOfficialTeamRss(xml, teamCode, teamSource);
+  const [teamSource, nflInjurySource] = getOfficialSources(teamCode);
+  const [teamResult, injuryResult] = await Promise.allSettled([
+    fetchRss(teamSource.url),
+    fetchRss(nflInjurySource.url),
+  ]);
+  const items = [
+    ...(teamResult.status === "fulfilled" ? parseOfficialTeamRss(teamResult.value, teamCode, teamSource) : []),
+    ...(injuryResult.status === "fulfilled" ? parseOfficialNflInjuryPage(injuryResult.value, teamCode, nflInjurySource) : []),
+  ];
   if (items.length === 0) throw new Error(`No RSS items found for ${teamCode}`);
   await upsertOfficialFeedItems(items);
   return items.length;
@@ -153,6 +204,15 @@ export async function cacheAgentOfficialFeed(teamCode: string, incomingItems: Ag
 
 export async function refreshOfficialTeamFeedShard(shard: number, totalShards = 4) {
   const codes = supportedOfficialTeamCodes.filter((_, index) => index % totalShards === shard);
+  const results = await Promise.allSettled(codes.map(async (teamCode) => ({ teamCode, count: await refreshOfficialTeamFeed(teamCode) })));
+  return results.map((result, index) => result.status === "fulfilled"
+    ? { ...result.value, ok: true }
+    : { teamCode: codes[index], count: 0, ok: false, error: result.reason instanceof Error ? result.reason.message : "Unknown error" });
+}
+
+export async function refreshOfficialTeamFeedGroup(groupIndex: number) {
+  const codes = scheduledTeamGroups[groupIndex];
+  if (!codes) throw new Error(`Unsupported official feed group: ${groupIndex}`);
   const results = await Promise.allSettled(codes.map(async (teamCode) => ({ teamCode, count: await refreshOfficialTeamFeed(teamCode) })));
   return results.map((result, index) => result.status === "fulfilled"
     ? { ...result.value, ok: true }
