@@ -12,6 +12,13 @@ describe("official team feed parsing", () => {
     expect(items[1]).toMatchObject({ title: "Team announces community event", category: "news" });
   });
 
+  it("does not classify a normal Standout story as an out-status injury report", () => {
+    const rss = `<?xml version="1.0"?><rss><channel><item><title>3 Standout Players From Jets-Buccaneers Preseason Game</title><link>https://www.newyorkjets.com/news/standout</link><description>Official game recap.</description><pubDate>Fri, 14 Aug 2026 21:12:14 GMT</pubDate></item></channel></rss>`;
+    const [source] = getOfficialSources("NYJ");
+    const [item] = parseOfficialTeamRss(rss, "NYJ", source);
+    expect(item).toMatchObject({ category: "news" });
+  });
+
   it("keeps all 32 teams addressable and exposes both official source links", () => {
     expect(supportedOfficialTeamCodes).toHaveLength(32);
     expect(getOfficialSources("SEA")).toHaveLength(2);

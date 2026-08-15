@@ -214,15 +214,16 @@ export default function Home() {
   const [navOpen, setNavOpen] = useState(false);
   const [teamDialogOpen, setTeamDialogOpen] = useState(false);
   const [pickerConference, setPickerConference] = useState<"AFC" | "NFC">("AFC");
+  const debugTeamCode = typeof window !== "undefined" && import.meta.env.DEV ? new URLSearchParams(window.location.search).get("teamDebug") : null;
   const [favorite, setFavorite] = useState<FavoriteTeam>(() => {
     if (typeof window === "undefined") return nflTeams[0];
-    return getTeamByCode(window.localStorage.getItem(favoriteTeamStorageKey)) ?? nflTeams[0];
+    return getTeamByCode(debugTeamCode) ?? getTeamByCode(window.localStorage.getItem(favoriteTeamStorageKey)) ?? nflTeams[0];
   });
   const divisionGroups = useMemo(() => ["East", "North", "South", "West"].map((division) => ({
     division,
     teams: nflTeams.filter((team) => team.conference === pickerConference && team.division === division),
   })), [pickerConference]);
-  useEffect(() => { window.localStorage.setItem(favoriteTeamStorageKey, favorite.code); }, [favorite.code]);
+  useEffect(() => { if (!debugTeamCode) window.localStorage.setItem(favoriteTeamStorageKey, favorite.code); }, [debugTeamCode, favorite.code]);
   const toggleSpoiler = () => {
     setSpoilerMode(current => !current);
     toast(spoilerMode ? "通常モードに切り替えました" : "ネタバレ防止モードをオンにしました", { description: spoilerMode ? "試合結果を表示できます。" : "結果とスコアを伏せます。" });

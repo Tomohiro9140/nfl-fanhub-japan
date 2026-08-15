@@ -65,7 +65,7 @@ function field(item: string, name: string) {
 }
 
 function isInjuryRelated(title: string, summary: string) {
-  return /(injur|injury|injured|questionable|doubtful|out\b|inactive|IR\b|PUP\b|practice report|medical)/i.test(`${title} ${summary}`);
+  return /\b(?:injury|injured|questionable|doubtful|out|inactive|ir|pup|medical)\b|practice report/i.test(`${title} ${summary}`);
 }
 
 export function getOfficialSources(teamCode: string): OfficialSource[] {
