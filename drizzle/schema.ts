@@ -45,3 +45,44 @@ export const officialFeedItems = mysqlTable("official_feed_items", {
 
 export type OfficialFeedItem = typeof officialFeedItems.$inferSelect;
 export type InsertOfficialFeedItem = typeof officialFeedItems.$inferInsert;
+
+/** Next and recent games parsed from an official team schedule page. */
+export const officialGames = mysqlTable("official_games", {
+  id: int("id").autoincrement().primaryKey(),
+  externalId: varchar("external_id", { length: 191 }).notNull(),
+  teamCode: varchar("team_code", { length: 3 }).notNull(),
+  opponentCode: varchar("opponent_code", { length: 3 }).notNull(),
+  homeAway: mysqlEnum("home_away", ["home", "away"]).notNull(),
+  seasonPhase: mysqlEnum("season_phase", ["preseason", "regular", "postseason"]).notNull(),
+  weekLabel: varchar("week_label", { length: 32 }),
+  kickoffAt: timestamp("kickoff_at").notNull(),
+  venue: varchar("venue", { length: 191 }),
+  broadcast: varchar("broadcast", { length: 191 }),
+  sourceUrl: varchar("source_url", { length: 1024 }).notNull(),
+  fetchedAt: timestamp("fetched_at").defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("official_games_external_id_uq").on(table.externalId),
+  index("official_games_team_kickoff_idx").on(table.teamCode, table.kickoffAt),
+]);
+
+export type OfficialGame = typeof officialGames.$inferSelect;
+export type InsertOfficialGame = typeof officialGames.$inferInsert;
+
+/** Official roster snapshots, with the club-provided roster bucket retained as status. */
+export const officialRosterEntries = mysqlTable("official_roster_entries", {
+  id: int("id").autoincrement().primaryKey(),
+  externalId: varchar("external_id", { length: 191 }).notNull(),
+  teamCode: varchar("team_code", { length: 3 }).notNull(),
+  playerName: varchar("player_name", { length: 191 }).notNull(),
+  jerseyNumber: varchar("jersey_number", { length: 16 }),
+  position: varchar("position", { length: 24 }).notNull(),
+  rosterStatus: varchar("roster_status", { length: 96 }).notNull(),
+  sourceUrl: varchar("source_url", { length: 1024 }).notNull(),
+  fetchedAt: timestamp("fetched_at").defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("official_roster_entries_external_id_uq").on(table.externalId),
+  index("official_roster_entries_team_status_idx").on(table.teamCode, table.rosterStatus),
+]);
+
+export type OfficialRosterEntry = typeof officialRosterEntries.$inferSelect;
+export type InsertOfficialRosterEntry = typeof officialRosterEntries.$inferInsert;

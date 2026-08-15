@@ -1,27 +1,15 @@
 /** NFL team directory used by the Gameday Field Notes favorite-team selector. */
 export type TeamTone = "sea" | "gb" | "sf" | "kc" | "phi" | "dal" | "buf" | "mia";
 
-export type TeamStatus = {
-  position: string;
-  player: string;
-  detail: string;
-  status: string;
-  statusClass: string;
-};
-
 export type FavoriteTeam = {
   code: string;
   name: string;
   conference: "AFC" | "NFC";
   division: "East" | "North" | "South" | "West";
   tone: TeamTone;
-  opponent: string;
-  opponentName: string;
-  opponentTone: TeamTone;
-  roster: TeamStatus[];
 };
 
-type TeamSeed = Omit<FavoriteTeam, "opponent" | "opponentName" | "opponentTone" | "roster">;
+type TeamSeed = FavoriteTeam;
 
 const teamSeeds: TeamSeed[] = [
   { code: "BUF", name: "Buffalo Bills", conference: "AFC", division: "East", tone: "buf" },
@@ -58,33 +46,7 @@ const teamSeeds: TeamSeed[] = [
   { code: "SEA", name: "Seattle Seahawks", conference: "NFC", division: "West", tone: "sea" },
 ];
 
-const opponentCodes: Record<string, string> = {
-  BUF: "MIA", MIA: "BUF", NE: "NYJ", NYJ: "NE", BAL: "CIN", CIN: "BAL", CLE: "PIT", PIT: "CLE",
-  HOU: "IND", IND: "HOU", JAX: "TEN", TEN: "JAX", DEN: "LAC", LAC: "DEN", KC: "LV", LV: "KC",
-  DAL: "PHI", PHI: "DAL", NYG: "WAS", WAS: "NYG", CHI: "GB", GB: "CHI", DET: "MIN", MIN: "DET",
-  ATL: "NO", NO: "ATL", CAR: "TB", TB: "CAR", ARI: "LAR", LAR: "ARI", SF: "SEA", SEA: "SF",
-};
-
-function demoRoster(code: string): TeamStatus[] {
-  return [
-    { position: "QB", player: `${code} QB`, detail: "Practice report / DEMO", status: "ACTIVE", statusClass: "bg-[#e7f5dd] text-[#3f6d27]" },
-    { position: "RB", player: `${code} RB`, detail: "Limited practice / DEMO", status: "WATCH", statusClass: "bg-[#fff0e9] text-[#c44719]" },
-    { position: "CB", player: `${code} CB`, detail: "Roster report / DEMO", status: "TRACK", statusClass: "bg-[#e7ebf7] text-[#364d7c]" },
-  ];
-}
-
-const teamsByCode = new Map(teamSeeds.map((team) => [team.code, team]));
-
-export const nflTeams: FavoriteTeam[] = teamSeeds.map((team) => {
-  const opponent = teamsByCode.get(opponentCodes[team.code]) ?? teamSeeds[0];
-  return {
-    ...team,
-    opponent: opponent.code,
-    opponentName: opponent.name,
-    opponentTone: opponent.tone,
-    roster: demoRoster(team.code),
-  };
-});
+export const nflTeams: FavoriteTeam[] = teamSeeds;
 
 export function getTeamByCode(code: string | null): FavoriteTeam | undefined {
   return nflTeams.find((team) => team.code === code);

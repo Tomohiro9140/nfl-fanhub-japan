@@ -44,3 +44,9 @@ NFL公式の[Injuriesページ](https://www.nfl.com/injuries/)では、対象チ
 最終キャッシュを `team_code` と `source_kind` の優先順で照合し、通常UIの **INJURY WATCH** は各チームのレコードだけを表示することを確認した。LACでは「Why Rashawn Slater is Taking 'Smart & Thoughtful' Approach With Return From Knee Injury」と「Chargers Training Camp Report: Mesidor, Tucker Flash at Edge Rusher on Day 10」、LARでは「McVay: Puka Nacua dealing with soreness in psoas...」、NYGでは「Practice Report (8/12): View from the sideline」と「Practice Report (8/11): Sideline observations」、NYJでは「Jets RB Braelon Allen Roars Back in Return From Injury」と「Geno Smith Won't Play vs. Buccaneers in Preseason Opener」を確認した。リーグ公式の負傷ラウンドアップは、チーム公式の記事の後に補完情報として保持する。LAC／LARおよびNYG／NYJは固有のニックネームで判定され、都市名だけによる横断表示はない。
 
 「3 Standout Players From Jets-Buccaneers Preseason Game」と「5 Chargers Players That Stood Out in Preseason Win Over Texans」は、分類修正後に `category=news` として保存し直した。通常UIでもこれらは **LATEST NEWS** に表示され、**INJURY WATCH** には表示されないことを確認した。
+
+## 実試合・公式ロスターへの置換に使用する公開情報
+
+NFL公式の[2026年チーム別日程](https://www.nfl.com/schedules/2026/by-team)は全32チームの選択導線を提供する。各チーム公式のScheduleページには、試合ごとのホーム／アウェー、対戦相手、現地開始時刻、会場、配信局が掲載される。たとえば[Bills公式Schedule](https://www.buffalobills.com/schedule/)は、2026年レギュラーシーズンWeek 1の`AT Texans`（Sun 09/13、1:00 PM EDT）およびプレシーズン次戦の`AT Browns`（Sat 08/22、1:00 PM EDT）を掲載している。ページHTMLは各試合に`data-gametime`とschema.orgの`SportsEvent`（startDate、homeTeam、awayTeam）を含むため、サーバー側で構造化して保存できる。
+
+[Bills公式Roster](https://www.buffalobills.com/team/players-roster/)は、Active／Reserve-Injured／Reserve-Non-Football Injury／Reserve-PUPなどの区分を分け、各選手名・背番号・ポジションを表形式で公開する。HTMLには`nfl-o-roster__player-name`と各行のポジションセルが含まれるため、公式ロスターのスナップショットとして解析できる。各チームサイトは同じNFLクラブサイト構造を採るため、`https://www.<team-domain>/schedule/`と`https://www.<team-domain>/team/players-roster/`をチームコードに応じて取得する方針とする。

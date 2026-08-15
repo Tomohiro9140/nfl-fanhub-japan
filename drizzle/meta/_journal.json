@@ -8,6 +8,13 @@
       "when": 1786806473352,
       "tag": "0000_slimy_hellfire_club",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "5",
+      "when": 1786834530677,
+      "tag": "0001_fair_gravity",
+      "breakpoints": true
     }
   ]
 }

@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import type { InsertOfficialFeedItem } from "../drizzle/schema";
 import { getOfficialFeedItems, upsertOfficialFeedItems } from "./db";
+import { refreshOfficialTeamData } from "./officialTeamData";
 
 const NFL_OFFICIAL_INJURY_URL = "https://www.nfl.com/injuries/";
 const refreshWindowMs = 15 * 60 * 1000;
@@ -214,8 +215,12 @@ export async function refreshOfficialTeamFeedShard(shard: number, totalShards = 
 export async function refreshOfficialTeamFeedGroup(groupIndex: number) {
   const codes = scheduledTeamGroups[groupIndex];
   if (!codes) throw new Error(`Unsupported official feed group: ${groupIndex}`);
-  const results = await Promise.allSettled(codes.map(async (teamCode) => ({ teamCode, count: await refreshOfficialTeamFeed(teamCode) })));
+  const results = await Promise.allSettled(codes.map(async (teamCode) => {
+    const [feed, teamData] = await Promise.allSettled([refreshOfficialTeamFeed(teamCode), refreshOfficialTeamData(teamCode)]);
+    if (feed.status === "rejected" && teamData.status === "rejected") throw feed.reason;
+    return { teamCode, count: feed.status === "fulfilled" ? feed.value : 0, games: teamData.status === "fulfilled" ? teamData.value.games : 0, roster: teamData.status === "fulfilled" ? teamData.value.roster : 0 };
+  }));
   return results.map((result, index) => result.status === "fulfilled"
     ? { ...result.value, ok: true }
-    : { teamCode: codes[index], count: 0, ok: false, error: result.reason instanceof Error ? result.reason.message : "Unknown error" });
+    : { teamCode: codes[index], count: 0, games: 0, roster: 0, ok: false, error: result.reason instanceof Error ? result.reason.message : "Unknown error" });
 }

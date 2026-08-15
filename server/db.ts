@@ -1,6 +1,6 @@
-import { desc, eq, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { InsertOfficialFeedItem, InsertUser, officialFeedItems, users } from "../drizzle/schema";
+import { InsertOfficialFeedItem, InsertOfficialGame, InsertOfficialRosterEntry, InsertUser, officialFeedItems, officialGames, officialRosterEntries, users } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -116,4 +116,51 @@ export async function upsertOfficialFeedItems(items: InsertOfficialFeedItem[]) {
       },
     });
   }
+}
+
+export async function upsertOfficialGames(items: InsertOfficialGame[]) {
+  if (items.length === 0) return;
+  const db = await getDb();
+  if (!db) throw new Error("Database is not available for official schedule cache");
+  for (const item of items) {
+    await db.insert(officialGames).values(item).onDuplicateKeyUpdate({
+      set: { opponentCode: item.opponentCode, homeAway: item.homeAway, seasonPhase: item.seasonPhase, weekLabel: item.weekLabel, kickoffAt: item.kickoffAt, venue: item.venue, broadcast: item.broadcast, fetchedAt: item.fetchedAt },
+    });
+  }
+}
+
+export async function upsertOfficialRosterEntries(items: InsertOfficialRosterEntry[]) {
+  if (items.length === 0) return;
+  const db = await getDb();
+  if (!db) throw new Error("Database is not available for official roster cache");
+  for (const item of items) {
+    await db.insert(officialRosterEntries).values(item).onDuplicateKeyUpdate({
+      set: { jerseyNumber: item.jerseyNumber, position: item.position, rosterStatus: item.rosterStatus, fetchedAt: item.fetchedAt },
+    });
+  }
+}
+
+export async function getOfficialTeamSnapshot(teamCode: string) {
+  const db = await getDb();
+  if (!db) return { nextGame: undefined, roster: [], rosterCounts: [], injuries: [], lastUpdatedAt: undefined };
+  const now = new Date();
+  const nextGame = (await db.select().from(officialGames)
+    .where(and(eq(officialGames.teamCode, teamCode), gt(officialGames.kickoffAt, now)))
+    .orderBy(asc(officialGames.kickoffAt)).limit(1))[0];
+  const roster = await db.select().from(officialRosterEntries)
+    .where(eq(officialRosterEntries.teamCode, teamCode))
+    .orderBy(asc(officialRosterEntries.rosterStatus), asc(officialRosterEntries.position), asc(officialRosterEntries.playerName)).limit(160);
+  const injuries = await db.select().from(officialFeedItems)
+    .where(and(eq(officialFeedItems.teamCode, teamCode), eq(officialFeedItems.category, "injury")))
+    .orderBy(sql`case when ${officialFeedItems.sourceKind} = 'team_official' then 0 else 1 end`, desc(officialFeedItems.publishedAt)).limit(3);
+  const news = await db.select().from(officialFeedItems)
+    .where(and(eq(officialFeedItems.teamCode, teamCode), eq(officialFeedItems.category, "news")))
+    .orderBy(sql`case when ${officialFeedItems.sourceKind} = 'team_official' then 0 else 1 end`, desc(officialFeedItems.publishedAt)).limit(2);
+  const rosterCounts = Array.from(roster.reduce((counts, entry) => {
+    counts.set(entry.rosterStatus, (counts.get(entry.rosterStatus) ?? 0) + 1);
+    return counts;
+  }, new Map<string, number>()).entries()).map(([status, count]) => ({ status, count }));
+  const lastUpdatedAt = [nextGame?.fetchedAt, ...roster.map((entry) => entry.fetchedAt), ...injuries.map((entry) => entry.fetchedAt)]
+    .filter((value): value is Date => Boolean(value)).sort((a, b) => b.getTime() - a.getTime())[0];
+  return { nextGame, roster, rosterCounts, injuries, news, lastUpdatedAt };
 }

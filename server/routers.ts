@@ -3,6 +3,7 @@ import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { publicProcedure, router } from "./_core/trpc";
 import { getFreshOfficialTeamFeed, refreshOfficialTeamFeed } from "./officialFeeds";
+import { getOfficialTeamSnapshot } from "./db";
 import { z } from "zod";
 
 export const appRouter = router({
@@ -25,6 +26,11 @@ export const appRouter = router({
     refresh: publicProcedure.input(z.object({ teamCode: z.string().length(2).or(z.string().length(3)) })).mutation(async ({ input }) => {
       const count = await refreshOfficialTeamFeed(input.teamCode.toUpperCase());
       return { count };
+    }),
+  }),
+  teamSnapshot: router({
+    byTeam: publicProcedure.input(z.object({ teamCode: z.string().length(2).or(z.string().length(3)) })).query(({ input }) => {
+      return getOfficialTeamSnapshot(input.teamCode.toUpperCase());
     }),
   }),
 });
