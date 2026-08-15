@@ -142,7 +142,7 @@ export async function upsertOfficialRosterEntries(items: InsertOfficialRosterEnt
 
 export async function getOfficialTeamSnapshot(teamCode: string) {
   const db = await getDb();
-  if (!db) return { nextGame: undefined, roster: [], rosterCounts: [], injuries: [], lastUpdatedAt: undefined };
+  if (!db) return { nextGame: undefined, roster: [], rosterCounts: [], injuries: [], news: [], sources: { schedule: null, roster: null, injury: null }, lastUpdatedAt: undefined };
   const now = new Date();
   const nextGame = (await db.select().from(officialGames)
     .where(and(eq(officialGames.teamCode, teamCode), gt(officialGames.kickoffAt, now)))
@@ -162,5 +162,5 @@ export async function getOfficialTeamSnapshot(teamCode: string) {
   }, new Map<string, number>()).entries()).map(([status, count]) => ({ status, count }));
   const lastUpdatedAt = [nextGame?.fetchedAt, ...roster.map((entry) => entry.fetchedAt), ...injuries.map((entry) => entry.fetchedAt)]
     .filter((value): value is Date => Boolean(value)).sort((a, b) => b.getTime() - a.getTime())[0];
-  return { nextGame, roster, rosterCounts, injuries, news, lastUpdatedAt };
+  return { nextGame, roster, rosterCounts, injuries, news, sources: { schedule: nextGame?.sourceUrl ?? null, roster: roster[0]?.sourceUrl ?? null, injury: injuries[0]?.sourceUrl ?? null }, lastUpdatedAt };
 }

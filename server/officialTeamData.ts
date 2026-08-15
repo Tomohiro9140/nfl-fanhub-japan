@@ -2,8 +2,8 @@ import { createHash } from "node:crypto";
 import type { InsertOfficialGame, InsertOfficialRosterEntry } from "../drizzle/schema";
 import { upsertOfficialGames, upsertOfficialRosterEntries } from "./db";
 
-const domains: Record<string, string> = {
-  ARI: "azcardinals.com", ATL: "atlantafalcons.com", BAL: "baltimoreravens.com", BUF: "buffalobills.com", CAR: "panthers.com", CHI: "chicagobears.com", CIN: "bengals.com", CLE: "clevelandbrowns.com", DAL: "dallascowboys.com", DEN: "denverbroncos.com", DET: "detroitlions.com", GB: "packers.com", HOU: "houstontexans.com", IND: "colts.com", JAX: "jaguars.com", KC: "chiefs.com", LAC: "chargers.com", LAR: "therams.com", LV: "raiders.com", MIA: "miamidolphins.com", MIN: "vikings.com", NE: "patriots.com", NO: "neworleansaints.com", NYG: "giants.com", NYJ: "newyorkjets.com", PHI: "philadelphiaeagles.com", PIT: "steelers.com", SF: "49ers.com", SEA: "seahawks.com", TB: "buccaneers.com", TEN: "titansonline.com", WAS: "commanders.com",
+export const TEAM_DOMAINS: Record<string, string> = {
+  ARI: "azcardinals.com", ATL: "atlantafalcons.com", BAL: "baltimoreravens.com", BUF: "buffalobills.com", CAR: "panthers.com", CHI: "chicagobears.com", CIN: "bengals.com", CLE: "clevelandbrowns.com", DAL: "dallascowboys.com", DEN: "denverbroncos.com", DET: "detroitlions.com", GB: "packers.com", HOU: "houstontexans.com", IND: "colts.com", JAX: "jaguars.com", KC: "chiefs.com", LAC: "chargers.com", LAR: "therams.com", LV: "raiders.com", MIA: "miamidolphins.com", MIN: "vikings.com", NE: "patriots.com", NO: "neworleanssaints.com", NYG: "giants.com", NYJ: "newyorkjets.com", PHI: "philadelphiaeagles.com", PIT: "steelers.com", SF: "49ers.com", SEA: "seahawks.com", TB: "buccaneers.com", TEN: "titansonline.com", WAS: "commanders.com",
 };
 
 const names: Record<string, string> = {
@@ -19,7 +19,7 @@ function hash(value: string) {
 }
 
 export function getOfficialTeamDataSources(teamCode: string) {
-  const domain = domains[teamCode];
+  const domain = TEAM_DOMAINS[teamCode];
   if (!domain) throw new Error(`Unsupported NFL team code: ${teamCode}`);
   return {
     scheduleUrl: `https://www.${domain}/schedule/`,
@@ -32,7 +32,7 @@ function parseKickoff(value: string) {
   if (!match) return undefined;
   const [, month, day, year, time, offset] = match;
   const date = new Date(`${year}-${month}-${day}T${time}${offset}`);
-  return Number.isNaN(date.getTime()) ? undefined : date;
+  return Number.isNaN(date.getTime()) || date.getUTCFullYear() < 2000 ? undefined : date;
 }
 
 export function parseOfficialSchedulePage(html: string, teamCode: string, sourceUrl: string): InsertOfficialGame[] {
