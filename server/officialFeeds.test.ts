@@ -16,4 +16,9 @@ describe("official team feed parsing", () => {
     expect(supportedOfficialTeamCodes).toHaveLength(32);
     expect(getOfficialSources("SEA")).toHaveLength(2);
   });
+
+  it("uses team-specific official RSS domains for each team source", () => {
+    expect(getOfficialSources("BUF")[0]?.url).toBe("https://www.buffalobills.com/rss/news");
+    expect(getOfficialSources("SF")[0]?.url).toBe("https://www.49ers.com/rss/news");
+  });
 });

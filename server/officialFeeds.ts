@@ -119,21 +119,33 @@ export async function getFreshOfficialTeamFeed(teamCode: string) {
 
 export async function cacheAgentOfficialFeed(teamCode: string, incomingItems: AgentOfficialFeedItem[]) {
   getOfficialSources(teamCode);
+  const teamDomain = teamDomains[teamCode];
   const now = new Date();
-  const items: InsertOfficialFeedItem[] = incomingItems.slice(0, 24).map((item) => {
+  const items: InsertOfficialFeedItem[] = incomingItems.slice(0, 24).flatMap((item) => {
+    let url: URL;
+    try {
+      url = new URL(item.sourceUrl);
+    } catch {
+      return [];
+    }
+    const isTeamDomain = url.hostname === `www.${teamDomain}` || url.hostname === teamDomain;
+    const isNflDomain = url.hostname === "www.nfl.com" || url.hostname === "nfl.com";
+    if ((item.sourceKind === "team_official" && !isTeamDomain) || (item.sourceKind === "nfl_official" && !isNflDomain)) return [];
+
     const date = new Date(item.publishedAt);
-    return {
+    const sourceKind = item.sourceKind;
+    return [{
       externalId: createHash("sha256").update(`${teamCode}:${item.sourceUrl}`).digest("hex"),
       teamCode,
-      sourceKind: item.sourceKind,
-      sourceName: item.sourceName,
+      sourceKind,
+      sourceName: sourceKind === "team_official" ? `${teamCode} Official News` : "NFL Official Injury Report",
       sourceUrl: item.sourceUrl,
       title: item.title.trim(),
       summary: item.summary?.trim().slice(0, 560) || null,
-      category: item.category,
+      category: sourceKind === "nfl_official" ? "injury" : item.category,
       publishedAt: Number.isNaN(date.getTime()) ? now : date,
       fetchedAt: now,
-    };
+    }];
   }).filter((item) => item.title && item.sourceUrl);
   await upsertOfficialFeedItems(items);
   return items.length;

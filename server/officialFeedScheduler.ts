@@ -34,10 +34,16 @@ export async function refreshOfficialFeedHandler(req: Request, res: Response) {
 /** Receives normalized snippets collected by a platform-run browser job from official sites. */
 export async function receiveOfficialFeedAgentHandler(req: Request, res: Response) {
   try {
+    console.log("[official-feed-agent] received", {
+      hasCookie: Boolean(req.headers.cookie),
+      hasAuthorization: Boolean(req.headers.authorization),
+      bodyKeys: Object.keys(req.body ?? {}),
+    });
     const user = await sdk.authenticateRequest(req);
     if (!user.isCron || !user.taskUid) return res.status(403).json({ error: "cron-only" });
     const payload = agentFeedPayload.parse(req.body);
     const count = await cacheAgentOfficialFeed(payload.teamCode.toUpperCase(), payload.items);
+    console.log("[official-feed-agent] stored", { teamCode: payload.teamCode.toUpperCase(), count });
     res.json({ ok: true, count, teamCode: payload.teamCode.toUpperCase(), timestamp: new Date().toISOString() });
   } catch (error) {
     const details = error instanceof Error ? { message: error.message, stack: error.stack } : { message: String(error) };

@@ -9,6 +9,12 @@
 | 負傷者関連ニュース | https://www.nfl.com/injuries/ | NFL.comの負傷者ラウンドアップ記事のタイトル・リンク・画像が公開されている。 | 公式ページへのリンクを出典として明示し、見出し・公開時刻・要約を取得対象にする。試合ごとの正式なステータスは公開ページの構造変化に備えた検証が必要。 |
 | チームページ | https://www.nfl.com/teams/green-bay-packers/ | チームページに動画・ニュースのタイトル、公開日、記事リンク、ロスターや日程への導線がある。 | チーム別ニュースを作る際は、公式チームページからの見出し・URL・日付を利用し、詳細はモーダルで短い要約と原文リンクを表示する。 |
 
+## 公式チームRSSの追加確認
+
+Packers、Patriots、49ers、Cowboys、Billsの公式サイトで `https://www.<team-domain>/rss/news` 形式のRSSを確認した。RSSには公式記事のタイトル、記事URL、公開日時、短い説明があり、ニュース一覧を構造化して保存するための優先的な取得元として適している。対象URLの例は、[Packers](https://www.packers.com/rss/news)、[Patriots](https://www.patriots.com/rss/news)、[49ers](https://www.49ers.com/rss/news)、[Cowboys](https://www.dallascowboys.com/rss/news)、[Bills](https://www.buffalobills.com/rss/news)である。
+
+Bills公式RSSには、2025年7月23日公開のトレーニングキャンプ記事と、負傷により初日の練習を欠場する選手についての公式発表が確認できた。NFL公式の[Injuriesページ](https://www.nfl.com/injuries/)には、2026年Week 1のBills TE Dalton KincaidおよびWR Keon Colemanに関する負傷ラウンドアップ記事が表示されている。これらは初回の表示・統合テストに利用できる。
+
 ## アーキテクチャ判断
 
 現在の静的サイトでは、クロスオリジン制約、取得元の更新、ニュース本文の整形、データの保存が安定しない。そのため、公式ページから取得した情報をサーバー側で検証・正規化し、保存済みの最新データを画面へ返す構成が必要である。

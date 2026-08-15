@@ -94,7 +94,7 @@ export async function getOfficialFeedItems(teamCode: string) {
   if (!db) return [];
   return db.select().from(officialFeedItems)
     .where(eq(officialFeedItems.teamCode, teamCode))
-    .orderBy(desc(officialFeedItems.publishedAt))
+    .orderBy(officialFeedItems.sourceKind, desc(officialFeedItems.publishedAt))
     .limit(24);
 }
 
