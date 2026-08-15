@@ -30,6 +30,14 @@ describe("official team feed parsing", () => {
     expect(items[0]).toMatchObject({ teamCode: "MIA", sourceKind: "nfl_official", category: "injury" });
   });
 
+  it("does not confuse teams that share a city", () => {
+    const page = `<a href="/news/injury-roundup-chargers-qb">Injury roundup: Chargers QB update</a><a href="/news/injury-roundup-giants-wr">Injury roundup: Giants WR update</a>`;
+    const [, ramsSource] = getOfficialSources("LAR");
+    const [, jetsSource] = getOfficialSources("NYJ");
+    expect(parseOfficialNflInjuryPage(page, "LAR", ramsSource)).toHaveLength(0);
+    expect(parseOfficialNflInjuryPage(page, "NYJ", jetsSource)).toHaveLength(0);
+  });
+
   it("uses the requested eight-team UTC schedule groups", () => {
     expect(scheduledTeamGroups[0]).toEqual(["ARI", "ATL", "BAL", "BUF", "CAR", "CHI", "CIN", "CLE"]);
     expect(scheduledTeamGroups[2]).toEqual(["LAC", "LAR", "LV", "MIA", "MIN", "NE", "NO", "NYG"]);
