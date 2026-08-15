@@ -70,7 +70,7 @@ function TeamMark({ team, short, tone }: { team: string; short: string; tone: Te
 
 function UpcomingGame({ spoilerMode, favorite }: GameCardProps) {
   return (
-    <section className="ticket-cut ticket-paper relative overflow-hidden rounded-[18px] bg-[#0a1931] text-[#fffaf0] shadow-[0_24px_50px_rgba(10,25,49,0.2)]">
+    <section data-layout-scope="hero" className="ticket-cut ticket-paper relative overflow-hidden rounded-[18px] bg-[#0a1931] text-[#fffaf0] shadow-[0_24px_50px_rgba(10,25,49,0.2)]">
       <img src={heroImage} alt="夜明けのアメリカンフットボールフィールド" className="absolute inset-0 h-full w-full object-cover opacity-30" />
       <div className="absolute inset-0 bg-[linear-gradient(100deg,rgba(10,25,49,.96)_0%,rgba(10,25,49,.85)_56%,rgba(10,25,49,.48)_100%)]" />
       <div className="absolute inset-y-0 left-7 z-10 hidden border-l border-dashed border-white/25 lg:block" />
@@ -114,7 +114,7 @@ function UpcomingGame({ spoilerMode, favorite }: GameCardProps) {
 
 function QuickRoute({ spoilerMode, favorite }: { spoilerMode: boolean; favorite: FavoriteTeam }) {
   return (
-    <section id="home" className="scroll-mt-24">
+    <section id="home" data-layout-scope="huddle" className="scroll-mt-24">
       <SectionLabel number="01" label="YOUR HUDDLE" />
       <div className="mt-3 grid gap-3 sm:grid-cols-[1.15fr_.85fr]">
         <article className="clip-note border border-[#ded8cc] bg-white p-3 shadow-[0_10px_30px_rgba(34,42,53,.05)]">
@@ -164,7 +164,7 @@ function TeamUpdates({ favorite }: { favorite: FavoriteTeam }) {
 
 function SpoilerSwitch({ spoilerMode, onToggle }: { spoilerMode: boolean; onToggle: () => void }) {
   return (
-    <section id="safe" className={`memo-slip relative overflow-hidden border p-4 transition-colors ${spoilerMode ? "border-[#b8dca8] bg-[#f0f8eb]" : "border-[#ded8cc] bg-[#fffdf8]"}`}>
+    <section id="safe" data-layout-scope="spoiler" className={`memo-slip relative overflow-hidden border p-4 transition-colors ${spoilerMode ? "border-[#b8dca8] bg-[#f0f8eb]" : "border-[#ded8cc] bg-[#fffdf8]"}`}>
       <div className="flex items-center gap-3">
         <div className={`grid h-10 w-10 place-items-center rounded-xl ${spoilerMode ? "bg-[#3d6b2c] text-white" : "bg-[#e9e3d6] text-[#526173]"}`}>{spoilerMode ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}</div>
         <div className="min-w-0 flex-1"><p className="font-display text-base font-bold leading-none tracking-wide">SPOILER SAFE</p><p className="mt-1 text-[11px] text-[#687587]">{spoilerMode ? "結果・スコア・結果が分かる画像を隠しています" : "試合結果を通常どおり表示しています"}</p></div>
@@ -182,7 +182,7 @@ function Briefing({ favorite }: { favorite: FavoriteTeam }) {
     { label: "WATCH", title: `${favorite.code} OPENING SCRIPT`, copy: "序盤の早いダウンでランが出れば、プレーアクションの選択肢が広がる。", tag: "FIRST 15" },
   ];
   return (
-    <section id="briefing" className="scroll-mt-24">
+    <section id="briefing" data-layout-scope="briefing" className="scroll-mt-24">
       <SectionLabel number="02" label="60-SECOND BRIEFING" />
       <div className="briefing-sheet bg-[#fff] p-3 shadow-[0_10px_30px_rgba(34,42,53,.05)] ring-1 ring-[#ded8cc]">
         <div className="flex items-end justify-between gap-4"><div><h2 className="font-display text-xl font-extrabold tracking-[.08em]">GAME NOTES</h2><p className="mt-0.5 text-[11px] text-[#687587]">THREE THINGS TO WATCH</p></div><div className="grid h-8 w-8 place-items-center rounded-full bg-[#e85d2a] text-white"><Sparkles className="h-3.5 w-3.5" /></div></div>
@@ -199,7 +199,7 @@ function Briefing({ favorite }: { favorite: FavoriteTeam }) {
 function RosterRadar({ favorite }: { favorite: FavoriteTeam }) {
   const rows = favorite.roster;
   return (
-    <section id="status" className="scroll-mt-24">
+    <section id="status" data-layout-scope="roster" className="scroll-mt-24">
       <SectionLabel number="03" label="STATUS RADAR" />
       <div className="roster-slip mt-3 overflow-hidden border border-[#ded8cc] bg-white shadow-[0_10px_30px_rgba(34,42,53,.05)]">
         <div className="relative min-h-[116px] overflow-hidden bg-[#0a1931] p-4 text-white"><img src={statusImage} alt="戦術ボードの抽象イラスト" className="absolute inset-0 h-full w-full object-cover opacity-55 mix-blend-screen" /><div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(10,25,49,.98),rgba(10,25,49,.42))]" /><div className="relative z-10"><p className="font-mono text-[9px] font-bold tracking-[.15em] text-[#ffc1a7]">ROSTER / INJURY / TRANSACTION <span className="ml-1 rounded bg-white/10 px-1.5 py-0.5 text-[8px] text-white">DEMO</span></p><h2 className="mt-1 font-display text-2xl font-extrabold leading-[.9] tracking-wide">STATUS RADAR</h2><p className="mt-2 text-[11px] text-[#d9e3f3]">OFFICIAL SOURCES · LAST UPDATE 11:18 JST</p></div></div>
@@ -215,6 +215,8 @@ export default function Home() {
   const [teamDialogOpen, setTeamDialogOpen] = useState(false);
   const [pickerConference, setPickerConference] = useState<"AFC" | "NFC">("AFC");
   const debugTeamCode = typeof window !== "undefined" && import.meta.env.DEV ? new URLSearchParams(window.location.search).get("teamDebug") : null;
+  const showLayoutAudit = typeof window !== "undefined" && import.meta.env.DEV && new URLSearchParams(window.location.search).get("layoutAudit") === "1";
+  const [layoutAudit, setLayoutAudit] = useState<{ viewport: number; scrollWidth: number; overflowingScopes: string[]; sections: Array<{ name: string; width: number; height: number; textLength: number }>; labels: Array<{ label: string; visible: boolean; fontSize: number }> } | null>(null);
   const [favorite, setFavorite] = useState<FavoriteTeam>(() => {
     if (typeof window === "undefined") return nflTeams[0];
     return getTeamByCode(debugTeamCode) ?? getTeamByCode(window.localStorage.getItem(favoriteTeamStorageKey)) ?? nflTeams[0];
@@ -224,16 +226,44 @@ export default function Home() {
     teams: nflTeams.filter((team) => team.conference === pickerConference && team.division === division),
   })), [pickerConference]);
   useEffect(() => { if (!debugTeamCode) window.localStorage.setItem(favoriteTeamStorageKey, favorite.code); }, [debugTeamCode, favorite.code]);
+  useEffect(() => {
+    if (!showLayoutAudit) return;
+    const inspectLayout = () => {
+      const viewport = window.innerWidth;
+      const scopes = Array.from(document.querySelectorAll<HTMLElement>("[data-layout-scope]"));
+      const overflowingScopes = scopes.flatMap((node) => {
+        const rect = node.getBoundingClientRect();
+        return rect.left < -0.5 || rect.right > viewport + 0.5 ? [node.dataset.layoutScope ?? "unknown"] : [];
+      });
+      const sections = scopes.map((node) => {
+        const rect = node.getBoundingClientRect();
+        return { name: node.dataset.layoutScope ?? "unknown", width: Math.round(rect.width), height: Math.round(rect.height), textLength: node.innerText.trim().length };
+      });
+      const requiredLabels = ["GAME TICKET / PRESEASON W1", "SPOILER SAFE", "YOUR HUDDLE", "LATEST NEWS", "STATUS RADAR"];
+      const labels = requiredLabels.map((label) => {
+        const node = Array.from(document.querySelectorAll<HTMLElement>("body *")).find((candidate) => candidate.tagName !== "BODY" && (candidate.textContent?.trim().startsWith(label) ?? false));
+        const rect = node?.getBoundingClientRect();
+        const visible = Boolean(node && rect && rect.width > 0 && rect.height > 0 && rect.left >= 0 && rect.right <= viewport && rect.top >= 0);
+        return { label, visible, fontSize: node ? Math.round(Number.parseFloat(window.getComputedStyle(node).fontSize)) : 0 };
+      });
+      const nextAudit = { viewport, scrollWidth: document.documentElement.scrollWidth, overflowingScopes, sections, labels };
+      console.info("[layout-audit]", nextAudit);
+      setLayoutAudit(nextAudit);
+    };
+    inspectLayout();
+    window.addEventListener("resize", inspectLayout);
+    return () => window.removeEventListener("resize", inspectLayout);
+  }, [showLayoutAudit]);
   const toggleSpoiler = () => {
     setSpoilerMode(current => !current);
     toast(spoilerMode ? "通常モードに切り替えました" : "ネタバレ防止モードをオンにしました", { description: spoilerMode ? "試合結果を表示できます。" : "結果とスコアを伏せます。" });
   };
 
   return (
-    <div className="min-h-screen bg-[#f5f2ea] text-[#10213a] selection:bg-[#e85d2a] selection:text-white">
+    <div className="min-h-screen overflow-x-clip bg-[#f5f2ea] text-[#10213a] selection:bg-[#e85d2a] selection:text-white">
       <div className="field-grid pointer-events-none fixed inset-0 z-0 opacity-[.16]" />
       <header className="sticky top-0 z-30 border-b border-[#ded8cc]/80 bg-[#f5f2ea]/92 backdrop-blur-lg">
-        <div className="mx-auto flex h-[68px] max-w-6xl items-center justify-between px-4 sm:px-6">
+        <div className="mx-auto flex h-[68px] w-full min-w-0 max-w-6xl items-center justify-between px-4 sm:px-6">
           <a href="#home" className="flex items-center gap-2.5" aria-label="NFL Fan Hub Japan ホーム"><img src={brandLogo} alt="NFL Fan Hub Japanのロゴ" className="h-9 w-9" /><span className="font-display text-xl font-extrabold tracking-[-.03em]">FAN<span className="text-[#e85d2a]">/</span>HUB</span><span className="hidden border-l border-[#cfc8bb] pl-2 font-mono text-[9px] font-bold tracking-[.17em] text-[#64748b] sm:inline">JAPAN</span></a>
           <nav className="hidden items-center gap-1 md:flex" aria-label="主要ナビゲーション"><a href="#home" className="nav-link">HOME</a><a href="#updates" className="nav-link">UPDATES</a><a href="#briefing" className="nav-link">BRIEFING</a><a href="#status" className="nav-link">RADAR</a><a href="#safe" className="nav-link">SAFE MODE</a></nav>
           <div className="flex items-center gap-2"><button onClick={() => setTeamDialogOpen(true)} className="inline-flex items-center gap-2 border border-[#d7d1c4] bg-white px-2.5 py-2 text-[11px] font-bold transition hover:border-[#10213a]"><Flag className="h-3.5 w-3.5 text-[#e85d2a]" /> TEAM / {favorite.code}</button><button onClick={() => setNavOpen(v => !v)} className="grid h-9 w-9 place-items-center rounded-full border border-[#d7d1c4] bg-white md:hidden" aria-label="メニューを開く">{navOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}</button></div>
@@ -249,11 +279,12 @@ export default function Home() {
         </DialogContent>
       </Dialog>
 
-      <main className="relative z-10 mx-auto max-w-6xl px-4 pb-24 pt-3 sm:px-6 sm:pt-5">
+      <main className="relative z-10 mx-auto w-full min-w-0 max-w-6xl overflow-x-clip px-4 pb-24 pt-3 sm:px-6 sm:pt-5">
         <div className="mb-3 flex items-center justify-between gap-4"><p className="font-mono text-[10px] font-bold tracking-[.16em] text-[#64748b]">SAT / AUG 15 / 2026 <span className="mx-1 text-[#e85d2a]">•</span> TOKYO</p><p className="flex items-center gap-1.5 font-mono text-[10px] font-bold text-[#526173]"><span className="h-1.5 w-1.5 rounded-full bg-[#69a84c]" /> DEMO INTERFACE</p></div>
-        <div className="grid items-start gap-3 lg:grid-cols-[1.22fr_.78fr]">
-          <div className="space-y-3"><UpcomingGame spoilerMode={spoilerMode} favorite={favorite} /><QuickRoute spoilerMode={spoilerMode} favorite={favorite} /><OfficialTeamFeed favorite={favorite} /><Briefing favorite={favorite} /></div>
-          <div className="space-y-3"><SpoilerSwitch spoilerMode={spoilerMode} onToggle={toggleSpoiler} /><RosterRadar favorite={favorite} /></div>
+        {showLayoutAudit && layoutAudit && <div className={`mb-3 rounded border px-3 py-2 font-mono text-[10px] font-bold ${layoutAudit.scrollWidth <= layoutAudit.viewport && layoutAudit.overflowingScopes.length === 0 && layoutAudit.labels.every((item) => item.visible) ? "border-[#b8dca8] bg-[#f0f8eb] text-[#426237]" : "border-[#efb49a] bg-[#fff0e9] text-[#a93d17]"}`}>LAYOUT AUDIT / {layoutAudit.scrollWidth <= layoutAudit.viewport && layoutAudit.overflowingScopes.length === 0 && layoutAudit.labels.every((item) => item.visible) ? "PASS" : "CHECK"} · viewport {layoutAudit.viewport}px · content {layoutAudit.scrollWidth}px · scopes {layoutAudit.overflowingScopes.length ? layoutAudit.overflowingScopes.join(", ") : "clear"} · labels {layoutAudit.labels.filter((item) => item.visible).length}/{layoutAudit.labels.length}</div>}
+        <div className="grid min-w-0 items-start gap-3 lg:grid-cols-[1.22fr_.78fr]">
+          <div className="min-w-0 space-y-3"><UpcomingGame spoilerMode={spoilerMode} favorite={favorite} /><SpoilerSwitch spoilerMode={spoilerMode} onToggle={toggleSpoiler} /><QuickRoute spoilerMode={spoilerMode} favorite={favorite} /><div data-layout-scope="official-feed" className="min-w-0"><OfficialTeamFeed favorite={favorite} /></div><Briefing favorite={favorite} /></div>
+          <div className="min-w-0 space-y-3"><RosterRadar favorite={favorite} /></div>
         </div>
         <section className="mt-4 border-t border-[#d8d1c3] pt-3"><div className="flex flex-col justify-between gap-3 text-[11px] text-[#687587] sm:flex-row sm:items-center"><p>DEMO DATA · 実データ接続前のサンプル表示です。</p><button onClick={() => toast("選手データベースへの接続を準備中です")} className="inline-flex shrink-0 items-center gap-1.5 font-bold text-[#10213a] underline decoration-[#e85d2a] decoration-2 underline-offset-4"><UserRoundCheck className="h-3.5 w-3.5" /> PLAYER DATABASE</button></div></section>
       </main>
