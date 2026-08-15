@@ -1,4 +1,4 @@
-import { desc, eq } from "drizzle-orm";
+import { desc, eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import { InsertOfficialFeedItem, InsertUser, officialFeedItems, users } from "../drizzle/schema";
 import { ENV } from './_core/env';
@@ -94,7 +94,10 @@ export async function getOfficialFeedItems(teamCode: string) {
   if (!db) return [];
   return db.select().from(officialFeedItems)
     .where(eq(officialFeedItems.teamCode, teamCode))
-    .orderBy(officialFeedItems.sourceKind, desc(officialFeedItems.publishedAt))
+    .orderBy(
+      sql`case when ${officialFeedItems.sourceKind} = 'team_official' then 0 else 1 end`,
+      desc(officialFeedItems.publishedAt),
+    )
     .limit(24);
 }
 
