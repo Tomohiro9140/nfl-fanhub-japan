@@ -16,17 +16,22 @@ const agentFeedPayload = z.object({
   })).max(24),
 });
 
+const heartbeatPayload = z.object({
+  forceGroupIndex: z.number().int().min(0).max(3).optional(),
+});
+
 /** Platform-authenticated endpoint for a project-level official-feed refresh job. */
 export async function refreshOfficialFeedHandler(req: Request, res: Response) {
   try {
     const user = await sdk.authenticateRequest(req);
     if (!user.isCron || !user.taskUid) return res.status(403).json({ error: "cron-only" });
     const hour = new Date().getUTCHours();
-    if (![0, 6, 12, 18].includes(hour)) return res.json({ ok: true, skipped: "outside-utc-window", hour });
-    const groupIndex = hour / 6;
+    const payload = heartbeatPayload.parse(req.body ?? {});
+    if (payload.forceGroupIndex === undefined && ![0, 6, 12, 18].includes(hour)) return res.json({ ok: true, skipped: "outside-utc-window", hour });
+    const groupIndex = payload.forceGroupIndex ?? hour / 6;
     const results = await refreshOfficialTeamFeedGroup(groupIndex);
     const stored = results.filter((result) => result.ok).reduce((sum, result) => sum + result.count, 0);
-    res.json({ ok: true, groupIndex, processed: results.length, stored, results, timestamp: new Date().toISOString() });
+    res.json({ ok: true, groupIndex, forced: payload.forceGroupIndex !== undefined, processed: results.length, stored, results, timestamp: new Date().toISOString() });
   } catch (error) {
     const details = error instanceof Error ? { message: error.message, stack: error.stack } : { message: String(error) };
     res.status(500).json({ error: "official-feed-refresh-failed", details, timestamp: new Date().toISOString() });
