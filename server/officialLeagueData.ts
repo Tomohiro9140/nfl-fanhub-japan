@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import type { InsertOfficialScoreboardGame, InsertOfficialStanding } from "../drizzle/schema";
 import { replaceOfficialScoreboardGames, upsertOfficialStandings } from "./db";
+import { refreshOfficialGameHighlights } from "./nflGameHighlights";
 import { TEAM_NAMES } from "./officialTeamData";
 
 const officialScheduleUrl = "https://www.nfl.com/schedules";
@@ -83,5 +84,6 @@ export async function refreshOfficialLeagueDashboard() {
   const scores = parseNFLScoresPage(scoresHtml, season);
   await upsertOfficialStandings(standings);
   await replaceOfficialScoreboardGames(season, scores);
-  return { standings: standings.length, scores: scores.length, season };
+  const highlights = await refreshOfficialGameHighlights();
+  return { standings: standings.length, scores: scores.length, highlights, season };
 }

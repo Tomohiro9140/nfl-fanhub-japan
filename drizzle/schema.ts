@@ -128,11 +128,16 @@ export const officialScoreboardGames = mysqlTable("official_scoreboard_games", {
   homeScore: int("home_score"),
   gameState: varchar("game_state", { length: 32 }).notNull(),
   gameUrl: varchar("game_url", { length: 1024 }).notNull(),
+  /** Individual NFL-published highlights URL, retained only after team/week verification. */
+  nflHighlightUrl: varchar("nfl_highlight_url", { length: 1024 }),
+  nflHighlightSourceUrl: varchar("nfl_highlight_source_url", { length: 1024 }),
+  nflHighlightMatchedAt: timestamp("nfl_highlight_matched_at"),
   sourceUrl: varchar("source_url", { length: 1024 }).notNull(),
   fetchedAt: timestamp("fetched_at").defaultNow().notNull(),
 }, (table) => [
   uniqueIndex("official_scoreboard_games_external_id_uq").on(table.externalId),
   index("official_scoreboard_games_season_state_idx").on(table.season, table.gameState),
+  index("official_scoreboard_games_nfl_highlight_idx").on(table.nflHighlightUrl),
 ]);
 
 export type OfficialScoreboardGame = typeof officialScoreboardGames.$inferSelect;

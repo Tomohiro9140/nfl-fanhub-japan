@@ -1,5 +1,6 @@
 import { and, asc, desc, eq, gt, gte, lt, sql } from "drizzle-orm";
 import { attachOfficialScore, findOfficialScoreForGame } from "./gameStatus";
+import { isNull } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import { InsertOfficialFeedItem, InsertOfficialGame, InsertOfficialRosterEntry, InsertOfficialScoreboardGame, InsertOfficialStanding, InsertUser, officialFeedItems, officialGames, officialRosterEntries, officialScoreboardGames, officialStandings, users } from "../drizzle/schema";
 import { ENV } from './_core/env';
@@ -195,9 +196,25 @@ export async function upsertOfficialStandings(items: InsertOfficialStanding[]) {
 export async function replaceOfficialScoreboardGames(season: number, items: InsertOfficialScoreboardGame[]) {
   const db = await getDb();
   if (!db) throw new Error("Database is not available for official scoreboard cache");
+  const existingLinks = await db.select({ externalId: officialScoreboardGames.externalId, nflHighlightUrl: officialScoreboardGames.nflHighlightUrl, nflHighlightSourceUrl: officialScoreboardGames.nflHighlightSourceUrl, nflHighlightMatchedAt: officialScoreboardGames.nflHighlightMatchedAt }).from(officialScoreboardGames).where(eq(officialScoreboardGames.season, season));
+  const highlightsByExternalId = new Map(existingLinks.map((link) => [link.externalId, link]));
   await db.delete(officialScoreboardGames).where(eq(officialScoreboardGames.season, season));
   if (!items.length) return;
-  for (const item of items) await db.insert(officialScoreboardGames).values(item).onDuplicateKeyUpdate({ set: { awayScore: item.awayScore, homeScore: item.homeScore, gameState: item.gameState, sourceUrl: item.sourceUrl, fetchedAt: item.fetchedAt } });
+  for (const item of items) await db.insert(officialScoreboardGames).values({ ...item, ...(highlightsByExternalId.get(item.externalId) ?? {}) }).onDuplicateKeyUpdate({ set: { awayScore: item.awayScore, homeScore: item.homeScore, gameState: item.gameState, sourceUrl: item.sourceUrl, fetchedAt: item.fetchedAt } });
+}
+
+export async function getOfficialScoreboardGamesForHighlightMatching() {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(officialScoreboardGames).where(and(eq(officialScoreboardGames.gameState, "FINAL"), isNull(officialScoreboardGames.nflHighlightUrl)));
+}
+
+export async function upsertOfficialScoreboardHighlights(links: Array<{ externalId: string; nflHighlightUrl: string; sourceUrl: string }>) {
+  if (!links.length) return;
+  const db = await getDb();
+  if (!db) throw new Error("Database is not available for NFL official highlight cache");
+  const matchedAt = new Date();
+  for (const link of links) await db.update(officialScoreboardGames).set({ nflHighlightUrl: link.nflHighlightUrl, nflHighlightSourceUrl: link.sourceUrl, nflHighlightMatchedAt: matchedAt }).where(eq(officialScoreboardGames.externalId, link.externalId));
 }
 
 export async function getOfficialLeagueDashboard() {

@@ -3,7 +3,7 @@ import { getOfficialTeamDataSources, parseNFLLeagueSchedulePage, parseOfficialRo
 
 const scheduleFixture = `<div class="nfl-o-matchup-cards" data-gametime="08/22/2026 13:00:00 -04:00"><p class="nfl-o-matchup-cards__date-info"><strong>WEEK 2</strong></p><p class="nfl-o-matchup-cards__team-game-location"><span>AT</span></p><p>Buffalo Bills</p><p>Cleveland Browns</p><span class="nfl-o-matchup-cards__venue--location">Huntington Bank Field</span></div>`;
 const rosterFixture = `<span class="nfl-o-roster__title-status">Active</span><tr><td><span class="nfl-o-roster__player-name"><a>Josh Allen</a></span></td><td>17</td><td>QB</td></tr><span class="nfl-o-roster__title-status">Reserve/Injured</span><tr><td><span class="nfl-o-roster__player-name"><a>Demo Player</a></span></td><td>8</td><td>WR</td></tr>`;
-const leagueScheduleFixture = `<li><div class="shadow-extended"><p>PRE SEASON Week 2</p><a data-analytics="Bills at Browns, Saturday"></a><span class="sr-only">Bills at Browns, Saturday, August 22nd, 1:00 PM, NFLN</span><time dateTime="2026-08-22T17:00:00.000Z"></time><span>Buffalo Bills</span><span>Cleveland Browns</span><span>NFLN</span></div></li>`;
+const leagueScheduleFixture = `<div><h3 class="header-2-sans">Week 2</h3></div><ul><li><div class="shadow-extended"><p>PRE SEASON</p><a data-analytics="Bills at Browns, Saturday"></a><span class="sr-only">Bills at Browns, Saturday, August 22nd, 1:00 PM, NFLN</span><time dateTime="2026-08-22T17:00:00.000Z"></time><span>Buffalo Bills</span><span>Cleveland Browns</span><span>NFLN</span></div></li></ul>`;
 const expectedOfficialDomains = {
   ARI: "azcardinals.com", ATL: "atlantafalcons.com", BAL: "baltimoreravens.com", BUF: "buffalobills.com", CAR: "panthers.com", CHI: "chicagobears.com", CIN: "bengals.com", CLE: "clevelandbrowns.com", DAL: "dallascowboys.com", DEN: "denverbroncos.com", DET: "detroitlions.com", GB: "packers.com", HOU: "houstontexans.com", IND: "colts.com", JAX: "jaguars.com", KC: "chiefs.com", LAC: "chargers.com", LAR: "therams.com", LV: "raiders.com", MIA: "miamidolphins.com", MIN: "vikings.com", NE: "patriots.com", NO: "neworleanssaints.com", NYG: "giants.com", NYJ: "newyorkjets.com", PHI: "philadelphiaeagles.com", PIT: "steelers.com", SF: "49ers.com", SEA: "seahawks.com", TB: "buccaneers.com", TEN: "titansonline.com", WAS: "commanders.com",
 };
@@ -28,7 +28,7 @@ describe("official team data parsers", () => {
     const sourceUrl = "https://www.nfl.com/schedules/2026/by-team/buffalo-bills";
     const result = parseNFLLeagueSchedulePage(leagueScheduleFixture, "BUF", sourceUrl);
     expect(result).toHaveLength(1);
-    expect(result[0]).toMatchObject({ teamCode: "BUF", opponentCode: "CLE", homeAway: "away", seasonPhase: "preseason", sourceUrl });
+    expect(result[0]).toMatchObject({ teamCode: "BUF", opponentCode: "CLE", homeAway: "away", seasonPhase: "preseason", weekLabel: "PRESEASON WEEK 2", sourceUrl });
   });
   it("falls back to the team official Schedule only when the NFL league source returns no games", () => {
     const teamGames = parseOfficialSchedulePage(scheduleFixture, "BUF", "https://www.buffalobills.com/schedule/");

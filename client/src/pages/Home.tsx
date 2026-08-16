@@ -58,7 +58,6 @@ export default function Home() {
 
   const toggleSpoiler = () => {
     setSpoilerMode((current) => !current);
-    toast(spoilerMode ? "通常モードに切り替えました" : "ネタバレ防止モードをオンにしました", { description: spoilerMode ? "試合結果を表示できます。" : "結果とスコアを伏せます。" });
   };
 
   return <div className="min-h-screen overflow-x-clip bg-[#f5f2ea] text-[#10213a] selection:bg-[#e85d2a] selection:text-white">

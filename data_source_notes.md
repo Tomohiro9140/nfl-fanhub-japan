@@ -116,3 +116,9 @@ NFL公式の`https://www.nfl.com/videos/channel/game-highlights-vc`は`NFL Game 
 ## DAZNホーム・ハイライト導線のモバイル確認（2026-08-16）
 
 390px幅で、GAME TICKETの`観戦する`は`DAZN NFL GAME PASS HOME · APP / BROWSER`と表示され、個別fixture URLに依存しないGame Passホーム導線へ統一されていることを確認した。SPOILER SAFEを有効にした状態でもLATEST RESULTSのスコアは`RESULT HIDDEN`のまま、独立した`WATCH HIGHLIGHTS`リンクが表示され、リンク自体は結果表示を復元せずに操作できる。
+
+## NFL公式・個別ハイライト同期とWeek番号（2026-08-16）
+
+共有された`Colts vs. Patriots highlights | Preseason Week 1`のNFL公式ページは、2026年のIND対NEプレシーズン第1週の試合であることを本文・タイトルで確認した。保存済みの公式スコア結果（`IND @ NE`、`PRESEASON WEEK 1`）へ同じURLを保存し、対戦チーム名・フェーズ・Weekが一致する場合だけ個別ハイライトURLを有効にする。初回同期ではFINAL扱いの15試合を候補にし、NFL公式ページで12試合の個別URLを検証・保存した。未公開または検証不能な3試合は、汎用のNFL公式Game Highlightsチャンネルへ安全にフォールバックする。
+
+NFL公式の全32チーム日程をリーグページだけで再同期し、保存された542件の予定すべてにWeekラベルを付与した。Schedule Deskでは`PRE · WEEK 1`または`REG · WEEK 1`のようにシーズン区分とWeekを明示し、2列モバイルカードでの可読性を上げた。SPOILER SAFE切替時に画面上部へ出していた一時通知は削除し、切替そのものとカード内の結果非表示は維持している。

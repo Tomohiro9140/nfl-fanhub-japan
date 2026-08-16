@@ -47,5 +47,5 @@ export function abbreviatedMatchup(game: LeagueCalendarGame) {
 export function seasonWeekLabel(game: LeagueCalendarGame) {
   const phase = game.seasonPhase === "preseason" ? "PRE" : game.seasonPhase === "postseason" ? "POST" : "REG";
   const week = game.weekLabel?.match(/(\d+)/)?.[1];
-  return week ? `${phase} · WEEK ${week}` : phase;
+  return `${phase} · WEEK ${week ?? "TBD"}`;
 }

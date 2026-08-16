@@ -49,6 +49,20 @@ function phaseFor(kickoffAt: Date, sourceText: string) {
   return "regular" as const;
 }
 
+/** NFL weeks begin on Thursday; this fills a label when an official league card omits its Week heading. */
+export function fallbackWeekLabel(kickoffAt: Date, seasonPhase: "preseason" | "regular" | "postseason") {
+  if (seasonPhase === "postseason") return null;
+  const season = kickoffAt.getUTCFullYear();
+  const anchorMonth = seasonPhase === "preseason" ? 7 : 8;
+  const first = new Date(Date.UTC(season, anchorMonth, 1));
+  const firstThursdayOffset = (4 - first.getUTCDay() + 7) % 7;
+  const firstThursday = new Date(Date.UTC(season, anchorMonth, 1 + firstThursdayOffset));
+  if (seasonPhase === "preseason") firstThursday.setUTCDate(firstThursday.getUTCDate() + 7);
+  const week = Math.floor((kickoffAt.getTime() - firstThursday.getTime()) / (7 * 24 * 60 * 60 * 1_000)) + 1;
+  if (week < 1 || week > (seasonPhase === "preseason" ? 5 : 18)) return null;
+  return seasonPhase === "preseason" ? `PRESEASON WEEK ${week}` : `WEEK ${week}`;
+}
+
 function gameEntry(teamCode: string, opponentCode: string, homeAway: "home" | "away", kickoffAt: Date, seasonPhase: "preseason" | "regular" | "postseason", weekLabel: string | null, venue: string | null, broadcast: string | null, sourceUrl: string): InsertOfficialGame {
   return { externalId: hash(`${teamCode}:${kickoffAt.toISOString()}:${opponentCode}`), teamCode, opponentCode, homeAway, seasonPhase, weekLabel, kickoffAt, venue, broadcast, sourceUrl, fetchedAt: new Date() };
 }
@@ -84,8 +98,9 @@ export function parseNFLLeagueSchedulePage(html: string, teamCode: string, sourc
   const teamName = TEAM_NAMES[teamCode];
   if (!teamName) return [];
   const games: InsertOfficialGame[] = [];
-  const cards = Array.from(html.matchAll(/<li><div class="shadow-extended[\s\S]*?<\/li>/gi), (match) => match[0]);
-  for (const card of cards) {
+  const weekHeaders = Array.from(html.matchAll(/<h3[^>]*>\s*Week\s+(\d+)\s*<\/h3>/gi));
+  for (const cardMatch of Array.from(html.matchAll(/<li><div class="shadow-extended[\s\S]*?<\/li>/gi))) {
+    const card = cardMatch[0];
     const kickoffValue = card.match(/(?:datetime|data-gametime|data-start-date)="([^"]+)"/i)?.[1];
     const kickoffAt = kickoffValue ? parseLeagueKickoff(kickoffValue) ?? parseKickoff(kickoffValue) : undefined;
     if (!kickoffAt || !card.includes(teamName)) continue;
@@ -97,10 +112,14 @@ export function parseNFLLeagueSchedulePage(html: string, teamCode: string, sourc
     const away = new RegExp(`${teamNickname}\\s+at\\s+${opponentNickname}`, "i").test(plain);
     const home = new RegExp(`${opponentNickname}\\s+at\\s+${teamNickname}`, "i").test(plain);
     if (!away && !home) continue;
-    const weekLabel = plain.match(/Week\s+\d+/i)?.[0] ?? null;
+    const seasonPhase = phaseFor(kickoffAt, card);
+    const headerWeek = weekHeaders.filter((header) => (header.index ?? -1) <= (cardMatch.index ?? -1)).at(-1)?.[1];
+    const inlineWeek = plain.match(/(?:Preseason\s+)?Week\s+(\d+)/i)?.[1];
+    const resolvedWeek = headerWeek ?? inlineWeek;
+    const weekLabel = resolvedWeek ? seasonPhase === "preseason" ? `PRESEASON WEEK ${resolvedWeek}` : `WEEK ${resolvedWeek}` : fallbackWeekLabel(kickoffAt, seasonPhase);
     const venue = text(card.match(/(?:venue|stadium)[^>]*>([\s\S]*?)<\//i)?.[1] ?? "") || null;
     const broadcast = plain.match(/\b(CBS|FOX|NBC|ESPN|NFLN|PRIME|NETFLIX)\b/i)?.[0] ?? null;
-    games.push(gameEntry(teamCode, opponent[0], away ? "away" : "home", kickoffAt, phaseFor(kickoffAt, card), weekLabel, venue, broadcast, sourceUrl));
+    games.push(gameEntry(teamCode, opponent[0], away ? "away" : "home", kickoffAt, seasonPhase, weekLabel, venue, broadcast, sourceUrl));
   }
   return games;
 }
