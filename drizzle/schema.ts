@@ -38,6 +38,9 @@ export const officialFeedItems = mysqlTable("official_feed_items", {
   /** Generated from a transient fetch of the official source; article bodies are never persisted. */
   japaneseSummary: text("japanese_summary"),
   japaneseSummaryFetchedAt: timestamp("japanese_summary_fetched_at"),
+  /** Detailed English summary generated from a transient official article fetch; article bodies are never persisted. */
+  englishSummary: text("english_summary"),
+  englishSummaryFetchedAt: timestamp("english_summary_fetched_at"),
   category: mysqlEnum("category", ["news", "injury", "transaction"]).notNull().default("news"),
   publishedAt: timestamp("published_at").notNull(),
   fetchedAt: timestamp("fetched_at").defaultNow().notNull(),

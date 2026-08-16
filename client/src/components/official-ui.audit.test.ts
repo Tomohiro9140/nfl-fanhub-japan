@@ -64,12 +64,14 @@ describe("compact mobile result and schedule UI", () => {
     expect(markup).toContain("Houston Texans Transactions");
   });
 
-  it("keeps the expanded PFT team update watch below official related items and uses compact result spacing", () => {
+  it("keeps the expanded PFT team update watch below official related items, removes the result icon, and uses tighter result spacing", () => {
     const snapshot = { nextGame: undefined, roster: [], rosterCounts: [], injuries: [{ id: 1, title: "Official injury item", sourceName: "Team Official", sourceUrl: "https://example.com/injury", publishedAt: kickoffAt, category: "injury" as const }], externalInsights: [{ id: 1, playerName: "Example Player", statusLabel: "TRANSACTION", headline: "Team signs Example Player", sourceName: "ProFootballTalk (NBC Sports)", sourceUrl: "https://example.com/pft", publishedAt: kickoffAt }], news: [], sources: { schedule: null, roster: null, injury: null }, lastUpdatedAt: kickoffAt };
     const radarMarkup = renderToStaticMarkup(createElement(OfficialStatusRadar, { favorite, snapshot, loading: false }));
     const resultMarkup = renderToStaticMarkup(createElement(OfficialLatestResults, { favorite, dashboard, loading: false, spoilerMode: false }));
     expect(radarMarkup.indexOf("INJURY OR TRANSACTION RELATED")).toBeLessThan(radarMarkup.indexOf("TEAM UPDATE WATCH · PFT"));
     expect(radarMarkup).toContain("TRANSACTION");
-    expect(resultMarkup).toContain("px-3 py-2.5");
+    expect(resultMarkup).toContain("px-3 py-2");
+    expect(resultMarkup).toContain("py-1.5");
+    expect(resultMarkup).not.toContain("lucide-trophy");
   });
 });

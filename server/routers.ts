@@ -3,8 +3,8 @@ import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { publicProcedure, router } from "./_core/trpc";
 import { getFreshOfficialTeamFeed, refreshOfficialTeamFeed } from "./officialFeeds";
-import { getOfficialFeedItemById, getOfficialLeagueDashboard, getOfficialTeamSnapshot, saveOfficialFeedJapaneseSummary } from "./db";
-import { generateOfficialNewsJapaneseSummary, getOfficialNewsEnglishExcerpt } from "./newsJapaneseSummary";
+import { getOfficialFeedItemById, getOfficialLeagueDashboard, getOfficialTeamSnapshot, saveOfficialFeedEnglishSummary, saveOfficialFeedJapaneseSummary } from "./db";
+import { generateOfficialNewsEnglishSummary, generateOfficialNewsJapaneseSummary } from "./newsJapaneseSummary";
 import { z } from "zod";
 
 export const appRouter = router({
@@ -43,16 +43,20 @@ export const appRouter = router({
       }
       return { itemId: item.id, summary: item.summary, generated: false };
     }),
-    englishExcerpt: publicProcedure.input(z.object({ itemId: z.number().int().positive() })).mutation(async ({ input }) => {
+    englishSummary: publicProcedure.input(z.object({ itemId: z.number().int().positive() })).mutation(async ({ input }) => {
       const item = await getOfficialFeedItemById(input.itemId);
       if (!item) throw new Error("Official news item was not found");
+      if (item.englishSummary) return { itemId: item.id, summary: item.englishSummary, generated: true };
       try {
-        const result = await getOfficialNewsEnglishExcerpt(item);
-        return { itemId: item.id, excerpt: result?.excerpt ?? null, truncated: result?.truncated ?? false };
+        const summary = await generateOfficialNewsEnglishSummary(item);
+        if (summary) {
+          await saveOfficialFeedEnglishSummary(item.id, summary);
+          return { itemId: item.id, summary, generated: true };
+        }
       } catch (error) {
-        console.warn("[Official news excerpt] fetch unavailable", { itemId: item.id, error: error instanceof Error ? error.message : error });
-        return { itemId: item.id, excerpt: null, truncated: false };
+        console.warn("[Official English news summary] generation unavailable", { itemId: item.id, error: error instanceof Error ? error.message : error });
       }
+      return { itemId: item.id, summary: item.summary, generated: false };
     }),
   }),
   teamSnapshot: router({

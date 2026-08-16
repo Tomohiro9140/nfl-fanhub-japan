@@ -115,6 +115,12 @@ export async function saveOfficialFeedJapaneseSummary(id: number, japaneseSummar
   await db.update(officialFeedItems).set({ japaneseSummary, japaneseSummaryFetchedAt: new Date() }).where(eq(officialFeedItems.id, id));
 }
 
+export async function saveOfficialFeedEnglishSummary(id: number, englishSummary: string) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is not available for English summary cache");
+  await db.update(officialFeedItems).set({ englishSummary, englishSummaryFetchedAt: new Date() }).where(eq(officialFeedItems.id, id));
+}
+
 export async function upsertOfficialFeedItems(items: InsertOfficialFeedItem[]) {
   if (items.length === 0) return;
   const db = await getDb();

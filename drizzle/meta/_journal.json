@@ -57,6 +57,13 @@
       "when": 1786875618555,
       "tag": "0007_mushy_colossus",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "5",
+      "when": 1786880092253,
+      "tag": "0008_abnormal_azazel",
+      "breakpoints": true
     }
   ]
 }
