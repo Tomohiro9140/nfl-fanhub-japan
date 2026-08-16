@@ -96,3 +96,23 @@ DAZNの競技ページから公開JSON-LDの`SportsEvent`だけを解析し、�
 ## 試合状態・Week表示のモバイル確認（2026-08-16）
 
 試合開始前は`STARTS IN`のカウントダウン、開始から6時間以内で公式最終結果が未取得の場合は`LIVE`、公式結果が`FINAL`の場合はカウントダウンに代えて`FINAL <away score> - <home score>`を表示する状態分岐を追加した。390×844pxの実データ表示では、GAME TICKETおよび2列Schedule Deskのカード内に開始前表示が収まり、Schedule Deskには`PRE · WEEK 2`や`REG · WEEK 1`のようにシーズン区分とWeek番号が同時に表示された。LATEST RESULTSは、紐付いたDAZN URLがあればそのリンクを開き、未紐付けの場合はNFL公式スコアページへフォールバックする。
+
+## DAZN fixture URLの公開情報確認（2026-08-16）
+
+ユーザー共有の`/fixture/ContentId:.../.../...`形式URLは、地域リダイレクト後もDAZN公開ページとして表示され、ブラウザ上のタイトル・本文から`Panthers @ Bills`と`NFL Game Pass`を取得できた。従って、個別URL自体は対戦カードを持つ有効な公開識別子である。一方、サーバー側の競技ページ取得は403となっており、HTMLを単純取得する既存方式だけでは全試合のURLを列挙できない。次の調査では個別fixtureのHTMLに含まれる公開埋め込みデータ・関連リンクと、DAZNのスケジュール画面の公開データを照合する。
+
+DAZN公式の`/schedule`画面は検索結果ではNFL Game Passの試合を含むことが示されるが、サンドボックスのブラウザでは地域・動的読込の影響で安定して描画できず、全試合URLをHTML一覧として取得する経路には直結しなかった。個別fixtureページの公開HTMLには過去の関連fixtureリンクが多数含まれ、URL形式と対戦名を併せて出力するカードも確認できたため、次段階では公式検索インデックスや個別fixtureの関連カードを補助経路として検証する。
+
+検索結果から、DAZNにはBuffalo Billsの公式チームページ（`https://www.dazn.com/en-CA/competitor/Competitor:80cfzhmvjwrbxyl0coffwywpj`）があり、同一のチーム識別子を地域別ページで利用していることを確認した。ただし、公開検索インデックスが返す`Panthers @ Bills`のページは2024年のオンデマンドコンテンツも混在しており、検索結果だけを今季の試合URL自動紐付けに使うことは安全ではない。全チーム同期には、今季試合だけを明確に識別できるDAZNの公開フィードまたはチームページの最新fixtureカードを検証する必要がある。
+
+公式チームページは地域リダイレクト後のベネズエラ向けページではコンテンツを返さず、現在のブラウザ環境だけで地域非依存な全チームfixture一覧を取得する方法にはならなかった。個別fixture URLは公開ページとして機能する一方、チームページ・スケジュールページは地域権利・動的レンダリングに依存するため、サーバー側の自動取得では応答の有無だけで未提供と判定せず、既存の安全な0件フォールバックを維持する。
+
+DAZNの地域向けホームには、`Best of DAZN`として`Cowboys @ Seahawks`、`Browns @ Bears`、`Packers @ Steelers`、`Cardinals @ Raiders`などのNFL Game Pass fixtureカードが公開され、各カードは`/fixture/ContentId:<opaque-id>/<opaque-id>`形式の個別URLを含むことを確認した。このため、公開HTMLのカードから対戦名・個別URLを抽出すること自体は可能である。ただし、このレールは編集された一部の試合で、全日程を保証する一覧ではない。自動紐付けは、今季の公式NFL日程と一致する対戦だけを受け入れ、未掲載の試合を推測しない方式に限定する。
+
+## NFL公式ハイライト導線（2026-08-16）
+
+NFL公式の`https://www.nfl.com/videos/channel/game-highlights-vc`は`NFL Game Highlights Videos | NFL.com`として公開され、試合ハイライトの公式チャンネルであることを確認した。LATEST RESULTSでは結果やスコアを明かさない独立した`WATCH HIGHLIGHTS`導線としてこのURLを出し、ネタバレ防止中にも押せるようにする。試合ごとの直接ハイライトURLは公式スコア同期で今後公開される場合のみ追加し、現時点ではタイトル・サムネイルからのネタバレをサイト内で表示しない。
+
+## DAZNホーム・ハイライト導線のモバイル確認（2026-08-16）
+
+390px幅で、GAME TICKETの`観戦する`は`DAZN NFL GAME PASS HOME · APP / BROWSER`と表示され、個別fixture URLに依存しないGame Passホーム導線へ統一されていることを確認した。SPOILER SAFEを有効にした状態でもLATEST RESULTSのスコアは`RESULT HIDDEN`のまま、独立した`WATCH HIGHLIGHTS`リンクが表示され、リンク自体は結果表示を復元せずに操作できる。
