@@ -3,7 +3,8 @@ import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { publicProcedure, router } from "./_core/trpc";
 import { getFreshOfficialTeamFeed, refreshOfficialTeamFeed } from "./officialFeeds";
-import { getOfficialLeagueDashboard, getOfficialTeamSnapshot } from "./db";
+import { getOfficialFeedItemById, getOfficialLeagueDashboard, getOfficialTeamSnapshot, saveOfficialFeedJapaneseSummary } from "./db";
+import { generateOfficialNewsJapaneseSummary } from "./newsJapaneseSummary";
 import { z } from "zod";
 
 export const appRouter = router({
@@ -26,6 +27,21 @@ export const appRouter = router({
     refresh: publicProcedure.input(z.object({ teamCode: z.string().length(2).or(z.string().length(3)) })).mutation(async ({ input }) => {
       const count = await refreshOfficialTeamFeed(input.teamCode.toUpperCase());
       return { count };
+    }),
+    japaneseSummary: publicProcedure.input(z.object({ itemId: z.number().int().positive() })).mutation(async ({ input }) => {
+      const item = await getOfficialFeedItemById(input.itemId);
+      if (!item) throw new Error("Official news item was not found");
+      if (item.japaneseSummary) return { itemId: item.id, summary: item.japaneseSummary, generated: true };
+      try {
+        const summary = await generateOfficialNewsJapaneseSummary(item);
+        if (summary) {
+          await saveOfficialFeedJapaneseSummary(item.id, summary);
+          return { itemId: item.id, summary, generated: true };
+        }
+      } catch (error) {
+        console.warn("[Official news summary] generation unavailable", { itemId: item.id, error: error instanceof Error ? error.message : error });
+      }
+      return { itemId: item.id, summary: item.summary, generated: false };
     }),
   }),
   teamSnapshot: router({

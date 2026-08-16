@@ -191,3 +191,7 @@ PFTの文単位照合を、出場可否だけでなく契約・登録関連の�
 ## 負傷主題の明示判定（2026-08-16）
 
 Buccaneers公式の「Jacob Parrish Prepping for Hybrid Role in Bucs' Secondary」は、記事本文に負傷と関係する語句が含まれていたことで旧キャッシュでは`injury`として残っていた。分類を見出し・正規URLの明示的な主題へ限定し、単独の`out`は負傷判定に使わないよう変更した。`sit out`、`ruled out`、`out with`、`out for`、`will not play`のように欠場を明示する見出しだけを保持する。全チームの既存関連キャッシュを新規則で再分類し、共有記事は`news`へ戻った。Tampa Bayの390px幅実データ画面では、関連情報欄に共有記事がなく、公式Transactions記事だけが残ることを確認した。
+
+## 公式記事の日本語要約（2026-08-16）
+
+LATEST NEWSの詳細ポップアップでは、チーム公式またはNFL公式の記事本文を一時取得し、本文自体は保存せず、日本語要約だけを公式フィード項目へキャッシュする。初回表示時に`gpt-5-mini`で2〜4段落程度の要約を生成し、取得・生成失敗時はRSSの公式概要と原記事リンクを表示する。Buffaloの「Top 3 things we learned from Bills vs. Panthers | Preseason Week 1」で666文字の日本語要約を生成・保存できることを確認した。要約キャッシュ列の追加は非破壊で、記事本文の保存は行わない。

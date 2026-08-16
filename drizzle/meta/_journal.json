@@ -50,6 +50,13 @@
       "when": 1786870086565,
       "tag": "0006_blushing_namora",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "5",
+      "when": 1786875618555,
+      "tag": "0007_mushy_colossus",
+      "breakpoints": true
     }
   ]
 }

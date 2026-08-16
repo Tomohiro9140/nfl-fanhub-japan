@@ -4,7 +4,7 @@ import { trpc } from "@/lib/trpc";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import type { FavoriteTeam } from "@/lib/nflTeams";
 
-type FeedItem = { id: number; title: string; summary: string | null; sourceUrl: string; sourceName: string; category: "news" | "injury"; publishedAt: Date; fetchedAt: Date };
+type FeedItem = { id: number; title: string; summary: string | null; japaneseSummary: string | null; sourceUrl: string; sourceName: string; category: "news" | "injury" | "transaction"; publishedAt: Date; fetchedAt: Date };
 
 function displayDate(value: Date) {
   return new Intl.DateTimeFormat("ja-JP", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit", timeZone: "Asia/Tokyo" }).format(new Date(value));
@@ -19,7 +19,19 @@ export function OfficialTeamFeed({ favorite }: { favorite: FavoriteTeam }) {
   const byLatest = (left: FeedItem, right: FeedItem) => new Date(right.publishedAt).getTime() - new Date(left.publishedAt).getTime();
   const news = items.filter((item) => item.category === "news").sort(byLatest).slice(0, 3);
 
-  const openArticle = (item: FeedItem) => setActiveItem(item);
+  const japaneseSummary = trpc.officialFeed.japaneseSummary.useMutation({
+    onSuccess: (result) => {
+      if (result.generated && result.summary) {
+        setActiveItem((current) => current?.id === result.itemId ? { ...current, japaneseSummary: result.summary } : current);
+      }
+    },
+  });
+
+  const openArticle = (item: FeedItem) => {
+    setActiveItem(item);
+    japaneseSummary.reset();
+    if (!item.japaneseSummary) japaneseSummary.mutate({ itemId: item.id });
+  };
 
   return (
     <section id="updates" className="scroll-mt-24">
@@ -32,7 +44,7 @@ export function OfficialTeamFeed({ favorite }: { favorite: FavoriteTeam }) {
       </div>
       {displayError && <div className="mt-2 flex items-center gap-1.5 border border-[#f1c7b5] bg-[#fff4ef] px-3 py-2 font-mono text-[9px] font-bold tracking-[.06em] text-[#a34220]"><CircleAlert className="h-3.5 w-3.5 shrink-0" />LIVE REFRESH UNAVAILABLE — SHOWING LAST SAVED OFFICIAL ITEMS</div>}
       <Dialog open={Boolean(activeItem)} onOpenChange={(open) => !open && setActiveItem(null)}>
-        <DialogContent className="border-[#d7d1c4] bg-[#f5f2ea] p-5 sm:max-w-lg"><DialogHeader className="text-left"><p className="font-mono text-[10px] font-bold tracking-[.16em] text-[#e85d2a]">{activeItem?.category === "injury" ? "INJURY WATCH" : "OFFICIAL TEAM NEWS"}</p><DialogTitle className="pr-7 font-display text-2xl font-extrabold leading-[.95] tracking-[.04em]">{activeItem?.title}</DialogTitle><DialogDescription className="font-mono text-[10px]">{activeItem ? `${activeItem.sourceName} · ${displayDate(activeItem.publishedAt)} JST` : ""}</DialogDescription></DialogHeader><div className="border-y border-[#d7d1c4] py-4 text-[14px] leading-6 text-[#334155]">{activeItem?.summary || "公式記事の要約が提供されていません。原文で詳細をご確認ください。"}</div>{activeItem && <a href={activeItem.sourceUrl} target="_blank" rel="noreferrer" className="inline-flex min-h-10 items-center justify-center gap-2 bg-[#10213a] px-4 font-sans text-[13px] font-bold text-white transition hover:bg-[#203a61] active:scale-[.97]">READ ON OFFICIAL SITE <ArrowUpRight className="h-4 w-4" /></a>}</DialogContent>
+        <DialogContent className="border-[#d7d1c4] bg-[#f5f2ea] p-5 sm:max-w-lg"><DialogHeader className="text-left"><p className="font-mono text-[10px] font-bold tracking-[.16em] text-[#e85d2a]">{activeItem?.category === "injury" ? "INJURY WATCH" : "OFFICIAL TEAM NEWS"}</p><DialogTitle className="pr-7 font-display text-2xl font-extrabold leading-[.95] tracking-[.04em]">{activeItem?.title}</DialogTitle><DialogDescription className="font-mono text-[10px]">{activeItem ? `${activeItem.sourceName} · ${displayDate(activeItem.publishedAt)} JST` : ""}</DialogDescription></DialogHeader><div className="border-y border-[#d7d1c4] py-4"><p className="mb-2 font-mono text-[9px] font-bold tracking-[.14em] text-[#e85d2a]">日本語要約</p><div className="whitespace-pre-line text-[14px] leading-6 text-[#334155]">{japaneseSummary.isPending && !activeItem?.japaneseSummary ? "公式記事を読み込み、日本語要約を生成しています…" : activeItem?.japaneseSummary || japaneseSummary.data?.summary || activeItem?.summary || "公式記事の要約が提供されていません。原文で詳細をご確認ください。"}</div>{japaneseSummary.data && !japaneseSummary.data.generated && <p className="mt-3 text-[11px] leading-4 text-[#687587]">日本語要約を生成できなかったため、公式RSSの概要を表示しています。</p>}</div>{activeItem && <a href={activeItem.sourceUrl} target="_blank" rel="noreferrer" className="inline-flex min-h-10 items-center justify-center gap-2 bg-[#10213a] px-4 font-sans text-[13px] font-bold text-white transition hover:bg-[#203a61] active:scale-[.97]">READ ON OFFICIAL SITE <ArrowUpRight className="h-4 w-4" /></a>}</DialogContent>
       </Dialog>
     </section>
   );

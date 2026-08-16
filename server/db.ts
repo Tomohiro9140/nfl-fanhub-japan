@@ -103,6 +103,18 @@ export async function getOfficialFeedItems(teamCode: string) {
     .limit(24);
 }
 
+export async function getOfficialFeedItemById(id: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  return (await db.select().from(officialFeedItems).where(eq(officialFeedItems.id, id)).limit(1))[0];
+}
+
+export async function saveOfficialFeedJapaneseSummary(id: number, japaneseSummary: string) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is not available for Japanese summary cache");
+  await db.update(officialFeedItems).set({ japaneseSummary, japaneseSummaryFetchedAt: new Date() }).where(eq(officialFeedItems.id, id));
+}
+
 export async function upsertOfficialFeedItems(items: InsertOfficialFeedItem[]) {
   if (items.length === 0) return;
   const db = await getDb();
