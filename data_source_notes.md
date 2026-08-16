@@ -74,3 +74,13 @@ NFL公式の[Standings](https://www.nfl.com/standings/league/2026/reg)は、全3
 ### LATEST RESULTS／SCHEDULE DESK変更後の確認
 
 同じ390×844pxビューポートで、LATEST RESULTSがSPOILER SAFEの直下に配置され、スイッチ有効時に得点ではなく`RESULT HIDDEN`を表示することを確認した。SCHEDULE DESKの初期タブは`MY TEAM / FULL SCHEDULE`で、Buffalo Billsの今季予定を時系列に並べ、対戦表記はすべて`BUF @ CLE`のような略称に統一した。`ALL GAMES / NEXT 7 DAYS`は現在時刻から7日未満にキックオフする全試合を返すロジックをテストで確認し、チーム視点のホーム／アウェー反転と略称表示も回帰テストで確認した。両タブのカードはモバイル1列表示で、対戦略称・日時・放送局が同一幅内に収まる設計である。
+
+## DAZN試合別視聴リンクの公開仕様確認（2026-08-16）
+
+DAZN公式のNFL Game Passランディングページと日本語ヘルプページを確認した。Game PassがモバイルアプリとPCブラウザの双方で利用できることは公式に案内されているが、試合IDから生成できる公開済みのアプリ専用URLスキーム、Universal Link、または個別試合固定URLの仕様は確認できなかった。したがって実装では、DAZN公式の共有可能なWeb URLを優先してリンクし、対応端末ではOSとDAZNアプリがUniversal Linkを処理する場合にアプリ起動を委ねる。公開仕様のない`dazn://`などの独自スキームは使用しない。
+
+追加確認では、DAZNがNFL Game Passのリーグ単位ページを`/competition/Competition:wy3kluvb4efae1of0d8146c1`、チーム単位ページを`/competitor/Competitor:<id>`として公開していることを確認した。一方で、NFL公式日程データの対戦・開始時刻からDAZNの個別配信コンテンツIDへ変換する公開対応表は見つからなかった。そのため、個別試合ページを推測で組み立てることはせず、当面は安定したNFL Game Pass公式URLを単一の正規視聴導線として使う。
+
+### Schedule Desk 2列化／DAZN導線のモバイル確認
+
+390×844pxビューポートで、推しチームの全日程が2列グリッドで描画されることを確認した。各カードには略称の対戦、日時、週・放送局を圧縮して表示し、1列表示時よりページ高を抑えつつ横はみ出しを起こしていない。GAME TICKETの「観戦する」には`DAZN NFL GAME PASS · APP / BROWSER`を明示した。モバイルでは同一タブでDAZN公式URLへ遷移するため、端末に設定されたUniversal Link/App Linkがある場合はOSの標準挙動でDAZNアプリを起動できる。PCでは新しいブラウザタブで同URLを開く。個別試合ページ固定遷移は、DAZNから公開された試合ID対応表がないため未実装とする。
