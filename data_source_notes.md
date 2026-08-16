@@ -58,3 +58,15 @@ NFL公式のチーム別日程ページ（例：[Buffalo Bills 2026 Schedule](ht
 ブラウザで確認した公式ページのネットワーク経路には、チーム別ページ`/schedules/2026/by-team/<team-slug>`と、NFL公式の`api.nfl.com/experience/v1/gamedetails/season/2026/team/<team-id>`が含まれる。実装では、公開チーム別ページをリーグ公式の優先日程ソースとし、チーム公式Scheduleは照合・フォールバックに位置付ける。
 
 2026年8月15日23:53 UTCに、NFL公式の全32チーム別日程ページを初回同期した。32チームすべてでリーグ公式日程の解析に成功し、今季の将来試合は合計544件保存された。DB集計では、将来試合を持つチームは32、NFL公式`nfl.com/schedules/`を参照する保存済み試合は544件であり、次戦表示がチーム公式Scheduleの取得待ちに依存しない状態になった。
+
+## NFL公式スコア・順位・週別日程
+
+NFL公式の[Standings](https://www.nfl.com/standings/league/2026/reg)は、全32チームについて勝敗、引き分け、勝率、得失点、ホーム／ロード、地区／カンファレンス成績を公開している。2026年レギュラーシーズン開始前の表示は各チーム0勝0敗だが、成績が未確定であることをそのまま表示できる。
+
+[Schedules](https://www.nfl.com/schedules)は、Hall of Fame、Preseason Week 1〜3、Week 1〜18の週単位切替と、各試合の対戦・得点・試合状態を公開している。[Scores](https://www.nfl.com/scores)はLIVE GAMESとCOMPLETED GAMESを区別し、完了試合には`FINAL`、進行中試合にはクオーター・残り時間を表示する。これらを公式スコア・結果の同期元とし、カレンダーは週ラベル単位、順位表は地区ごとにモバイルで表示する。
+
+2026年8月16日00:44 UTCに、NFL公式[Standings](https://www.nfl.com/standings/league/2026/reg)と[Schedules](https://www.nfl.com/schedules)を初回同期した。公式順位表は32チーム、完了試合スコアは16件を解析・保存した。順位表は今季の公式レギュラーシーズン成績（開始前の場合は0-0-0）を保持し、スコアは公式カードで`FINAL`と明記された完了試合だけを保存する。
+
+## モバイル表示検証（2026-08-16）
+
+390×844pxの実機相当ビューポートでトップ画面を確認した。GAME TICKETでは通常チーム名（Buffalo Bills／Cleveland Browns）と開催日時を表示し、略称だけの対戦行と未確定会場は表示されなかった。SPOILER SAFEはYOUR HUDDLEの直上にあり、有効時のLATEST RESULTSは結果を`RESULT HIDDEN`として隠す設計になっている。LEAGUE DESKは同一幅内にDIVISION STANDINGS、LATEST RESULTS、横スクロール可能な週選択、週内の全試合を表示し、ページ全体・各主要カードに横はみ出しは確認されなかった。

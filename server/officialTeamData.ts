@@ -6,7 +6,7 @@ export const TEAM_DOMAINS: Record<string, string> = {
   ARI: "azcardinals.com", ATL: "atlantafalcons.com", BAL: "baltimoreravens.com", BUF: "buffalobills.com", CAR: "panthers.com", CHI: "chicagobears.com", CIN: "bengals.com", CLE: "clevelandbrowns.com", DAL: "dallascowboys.com", DEN: "denverbroncos.com", DET: "detroitlions.com", GB: "packers.com", HOU: "houstontexans.com", IND: "colts.com", JAX: "jaguars.com", KC: "chiefs.com", LAC: "chargers.com", LAR: "therams.com", LV: "raiders.com", MIA: "miamidolphins.com", MIN: "vikings.com", NE: "patriots.com", NO: "neworleanssaints.com", NYG: "giants.com", NYJ: "newyorkjets.com", PHI: "philadelphiaeagles.com", PIT: "steelers.com", SF: "49ers.com", SEA: "seahawks.com", TB: "buccaneers.com", TEN: "titansonline.com", WAS: "commanders.com",
 };
 
-const names: Record<string, string> = {
+export const TEAM_NAMES: Record<string, string> = {
   ARI: "Arizona Cardinals", ATL: "Atlanta Falcons", BAL: "Baltimore Ravens", BUF: "Buffalo Bills", CAR: "Carolina Panthers", CHI: "Chicago Bears", CIN: "Cincinnati Bengals", CLE: "Cleveland Browns", DAL: "Dallas Cowboys", DEN: "Denver Broncos", DET: "Detroit Lions", GB: "Green Bay Packers", HOU: "Houston Texans", IND: "Indianapolis Colts", JAX: "Jacksonville Jaguars", KC: "Kansas City Chiefs", LAC: "Los Angeles Chargers", LAR: "Los Angeles Rams", LV: "Las Vegas Raiders", MIA: "Miami Dolphins", MIN: "Minnesota Vikings", NE: "New England Patriots", NO: "New Orleans Saints", NYG: "New York Giants", NYJ: "New York Jets", PHI: "Philadelphia Eagles", PIT: "Pittsburgh Steelers", SF: "San Francisco 49ers", SEA: "Seattle Seahawks", TB: "Tampa Bay Buccaneers", TEN: "Tennessee Titans", WAS: "Washington Commanders",
 };
 
@@ -25,7 +25,7 @@ function currentSeason() {
 
 export function getOfficialTeamDataSources(teamCode: string) {
   const domain = TEAM_DOMAINS[teamCode];
-  const name = names[teamCode];
+  const name = TEAM_NAMES[teamCode];
   if (!domain || !name) throw new Error(`Unsupported NFL team code: ${teamCode}`);
   const slug = name.toLowerCase().replace(/\s+/g, "-");
   return {
@@ -54,7 +54,7 @@ function gameEntry(teamCode: string, opponentCode: string, homeAway: "home" | "a
 }
 
 export function parseOfficialSchedulePage(html: string, teamCode: string, sourceUrl: string): InsertOfficialGame[] {
-  const teamName = names[teamCode];
+  const teamName = TEAM_NAMES[teamCode];
   if (!teamName) return [];
   const games: InsertOfficialGame[] = [];
   const cards = html.split(/(?=<div class="nfl-o-matchup-cards\b)/gi);
@@ -62,7 +62,7 @@ export function parseOfficialSchedulePage(html: string, teamCode: string, source
     const kickoffValue = card.match(/data-gametime="([^"]+)"/i)?.[1];
     const kickoffAt = kickoffValue ? parseKickoff(kickoffValue) : undefined;
     if (!kickoffAt) continue;
-    const matchedTeams = Object.entries(names).filter(([, name]) => card.includes(name));
+    const matchedTeams = Object.entries(TEAM_NAMES).filter(([, name]) => card.includes(name));
     const opponent = matchedTeams.find(([code]) => code !== teamCode);
     if (!opponent || !card.includes(teamName)) continue;
     const atVs = card.match(/nfl-o-matchup-cards__team-game-location[^>]*>\s*<span>\s*(AT|VS)\s*<\/span>/i)?.[1]?.toUpperCase();
@@ -81,7 +81,7 @@ function parseLeagueKickoff(value: string) {
 }
 
 export function parseNFLLeagueSchedulePage(html: string, teamCode: string, sourceUrl: string): InsertOfficialGame[] {
-  const teamName = names[teamCode];
+  const teamName = TEAM_NAMES[teamCode];
   if (!teamName) return [];
   const games: InsertOfficialGame[] = [];
   const cards = Array.from(html.matchAll(/<li><div class="shadow-extended[\s\S]*?<\/li>/gi), (match) => match[0]);
@@ -89,7 +89,7 @@ export function parseNFLLeagueSchedulePage(html: string, teamCode: string, sourc
     const kickoffValue = card.match(/(?:datetime|data-gametime|data-start-date)="([^"]+)"/i)?.[1];
     const kickoffAt = kickoffValue ? parseLeagueKickoff(kickoffValue) ?? parseKickoff(kickoffValue) : undefined;
     if (!kickoffAt || !card.includes(teamName)) continue;
-    const opponent = Object.entries(names).find(([code, name]) => code !== teamCode && card.includes(name));
+    const opponent = Object.entries(TEAM_NAMES).find(([code, name]) => code !== teamCode && card.includes(name));
     if (!opponent) continue;
     const plain = text(card);
     const teamNickname = teamName.split(" ").at(-1)?.replace("49ers", "49ers") ?? teamName;

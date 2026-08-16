@@ -1,6 +1,6 @@
 import { and, asc, desc, eq, gt, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { InsertOfficialFeedItem, InsertOfficialGame, InsertOfficialRosterEntry, InsertUser, officialFeedItems, officialGames, officialRosterEntries, users } from "../drizzle/schema";
+import { InsertOfficialFeedItem, InsertOfficialGame, InsertOfficialRosterEntry, InsertOfficialScoreboardGame, InsertOfficialStanding, InsertUser, officialFeedItems, officialGames, officialRosterEntries, officialScoreboardGames, officialStandings, users } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -171,4 +171,36 @@ export async function getOfficialTeamSnapshot(teamCode: string) {
   const lastUpdatedAt = [nextGame?.fetchedAt, ...roster.map((entry) => entry.fetchedAt), ...injuries.map((entry) => entry.fetchedAt)]
     .filter((value): value is Date => Boolean(value)).sort((a, b) => b.getTime() - a.getTime())[0];
   return { nextGame, roster, rosterCounts, injuries, news, sources: { schedule: nextGame?.sourceUrl ?? null, roster: roster[0]?.sourceUrl ?? null, injury: injuries[0]?.sourceUrl ?? null }, lastUpdatedAt };
+}
+
+export async function upsertOfficialStandings(items: InsertOfficialStanding[]) {
+  if (!items.length) return;
+  const db = await getDb();
+  if (!db) throw new Error("Database is not available for standings cache");
+  for (const item of items) await db.insert(officialStandings).values(item).onDuplicateKeyUpdate({ set: { wins: item.wins, losses: item.losses, ties: item.ties, pct: item.pct, pointsFor: item.pointsFor, pointsAgainst: item.pointsAgainst, sourceUrl: item.sourceUrl, fetchedAt: item.fetchedAt } });
+}
+
+export async function replaceOfficialScoreboardGames(season: number, items: InsertOfficialScoreboardGame[]) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is not available for official scoreboard cache");
+  await db.delete(officialScoreboardGames).where(eq(officialScoreboardGames.season, season));
+  if (!items.length) return;
+  for (const item of items) await db.insert(officialScoreboardGames).values(item).onDuplicateKeyUpdate({ set: { awayScore: item.awayScore, homeScore: item.homeScore, gameState: item.gameState, sourceUrl: item.sourceUrl, fetchedAt: item.fetchedAt } });
+}
+
+export async function getOfficialLeagueDashboard() {
+  const db = await getDb();
+  if (!db) return { standings: [], results: [], calendar: [], lastUpdatedAt: undefined };
+  const standings = await db.select().from(officialStandings).orderBy(desc(officialStandings.pct), desc(officialStandings.wins), asc(officialStandings.losses));
+  const results = await db.select().from(officialScoreboardGames).orderBy(desc(officialScoreboardGames.fetchedAt)).limit(24);
+  const games = await db.select().from(officialGames).orderBy(asc(officialGames.kickoffAt));
+  const seen = new Set<string>();
+  const calendar = games.filter((game) => {
+    const key = `${game.kickoffAt.toISOString()}:${[game.teamCode, game.opponentCode].sort().join("-")}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+  const lastUpdatedAt = [standings[0]?.fetchedAt, results[0]?.fetchedAt, calendar[0]?.fetchedAt].filter((value): value is Date => Boolean(value)).sort((a, b) => b.getTime() - a.getTime())[0];
+  return { standings, results, calendar, lastUpdatedAt };
 }

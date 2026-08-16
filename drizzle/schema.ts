@@ -86,3 +86,49 @@ export const officialRosterEntries = mysqlTable("official_roster_entries", {
 
 export type OfficialRosterEntry = typeof officialRosterEntries.$inferSelect;
 export type InsertOfficialRosterEntry = typeof officialRosterEntries.$inferInsert;
+
+/** Regular-season standings parsed from the official NFL standings page. */
+export const officialStandings = mysqlTable("official_standings", {
+  id: int("id").autoincrement().primaryKey(),
+  externalId: varchar("external_id", { length: 191 }).notNull(),
+  season: int("season").notNull(),
+  seasonType: varchar("season_type", { length: 24 }).notNull(),
+  teamCode: varchar("team_code", { length: 3 }).notNull(),
+  wins: int("wins").notNull(),
+  losses: int("losses").notNull(),
+  ties: int("ties").notNull(),
+  pct: varchar("pct", { length: 12 }).notNull(),
+  pointsFor: int("points_for"),
+  pointsAgainst: int("points_against"),
+  sourceUrl: varchar("source_url", { length: 1024 }).notNull(),
+  fetchedAt: timestamp("fetched_at").defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("official_standings_external_id_uq").on(table.externalId),
+  index("official_standings_season_team_idx").on(table.season, table.teamCode),
+]);
+
+export type OfficialStanding = typeof officialStandings.$inferSelect;
+export type InsertOfficialStanding = typeof officialStandings.$inferInsert;
+
+/** Current official scores/results parsed from the NFL schedules page. */
+export const officialScoreboardGames = mysqlTable("official_scoreboard_games", {
+  id: int("id").autoincrement().primaryKey(),
+  externalId: varchar("external_id", { length: 191 }).notNull(),
+  season: int("season").notNull(),
+  seasonPhase: mysqlEnum("season_phase", ["preseason", "regular", "postseason"]).notNull(),
+  weekLabel: varchar("week_label", { length: 32 }),
+  awayTeamCode: varchar("away_team_code", { length: 3 }).notNull(),
+  homeTeamCode: varchar("home_team_code", { length: 3 }).notNull(),
+  awayScore: int("away_score"),
+  homeScore: int("home_score"),
+  gameState: varchar("game_state", { length: 32 }).notNull(),
+  gameUrl: varchar("game_url", { length: 1024 }).notNull(),
+  sourceUrl: varchar("source_url", { length: 1024 }).notNull(),
+  fetchedAt: timestamp("fetched_at").defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("official_scoreboard_games_external_id_uq").on(table.externalId),
+  index("official_scoreboard_games_season_state_idx").on(table.season, table.gameState),
+]);
+
+export type OfficialScoreboardGame = typeof officialScoreboardGames.$inferSelect;
+export type InsertOfficialScoreboardGame = typeof officialScoreboardGames.$inferInsert;

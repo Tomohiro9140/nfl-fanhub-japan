@@ -3,7 +3,7 @@ import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { publicProcedure, router } from "./_core/trpc";
 import { getFreshOfficialTeamFeed, refreshOfficialTeamFeed } from "./officialFeeds";
-import { getOfficialTeamSnapshot } from "./db";
+import { getOfficialLeagueDashboard, getOfficialTeamSnapshot } from "./db";
 import { z } from "zod";
 
 export const appRouter = router({
@@ -32,6 +32,9 @@ export const appRouter = router({
     byTeam: publicProcedure.input(z.object({ teamCode: z.string().length(2).or(z.string().length(3)) })).query(({ input }) => {
       return getOfficialTeamSnapshot(input.teamCode.toUpperCase());
     }),
+  }),
+  leagueDashboard: router({
+    summary: publicProcedure.query(() => getOfficialLeagueDashboard()),
   }),
 });
 
