@@ -6,7 +6,7 @@ import { OfficialLatestResults, OfficialLeagueDashboard, type LeagueDashboard } 
 import { SpoilerSwitch } from "@/pages/Home";
 import type { FavoriteTeam } from "@/lib/nflTeams";
 
-const favorite: FavoriteTeam = { code: "BUF", name: "Buffalo Bills", conference: "AFC", division: "East", tone: "blue" };
+const favorite: FavoriteTeam = { code: "BUF", name: "Buffalo Bills", conference: "AFC", division: "East", brand: { primary: "#00338D", accent: "#C60C30", onPrimary: "#FFFFFF" } };
 const kickoffAt = new Date("2026-08-23T06:00:00.000Z");
 
 const dashboard: LeagueDashboard = {
@@ -33,6 +33,18 @@ describe("compact mobile result and schedule UI", () => {
     expect(markup).not.toContain("SPOILER SAFE");
     expect(markup).not.toContain("NFL OFFICIAL SCHEDULE");
     expect(markup).not.toContain("calendar-days");
+  });
+
+  it("marks the home club with @ in the Game Ticket and Latest Results rows", () => {
+    const ticketMarkup = renderToStaticMarkup(createElement(OfficialGameTicket, {
+      favorite,
+      loading: false,
+      snapshot: { nextGame: { opponentCode: "CLE", homeAway: "away", seasonPhase: "preseason", weekLabel: "PRESEASON WEEK 2", kickoffAt, venue: null, broadcast: null, sourceUrl: "https://www.nfl.com/schedules", daznUrl: null, gameState: null, awayScore: null, homeScore: null }, roster: [], rosterCounts: [], injuries: [], news: [], sources: { schedule: null, roster: null, injury: null } },
+    }));
+    const resultMarkup = renderToStaticMarkup(createElement(OfficialLatestResults, { favorite, dashboard, loading: false, spoilerMode: false }));
+    expect(ticketMarkup).toContain("@ Cleveland Browns");
+    expect(ticketMarkup).not.toContain("@ Buffalo Bills");
+    expect(resultMarkup).toContain("@ Buffalo Bills");
   });
 
   it("uses the Japanese spoiler label and omits schedule-card countdown text", () => {

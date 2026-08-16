@@ -48,6 +48,11 @@ export type AgentOfficialFeedItem = {
   publishedAt: string;
 };
 
+/** Returns true when the five-card LATEST NEWS panel needs more official RSS entries. */
+export function needsOfficialNewsTopUp(items: Array<{ category: string }>) {
+  return items.filter((item) => item.category === "news").length < 5;
+}
+
 function stripMarkup(value: string) {
   return value
     .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1")
@@ -209,6 +214,16 @@ async function fetchRss(url: string) {
   }
 }
 
+/** Refreshes only a club's official RSS news, avoiding an unnecessary injury-page pass for a news-panel top-up. */
+export async function refreshOfficialTeamNews(teamCode: string) {
+  const [teamSource] = getOfficialSources(teamCode);
+  const xml = await fetchRss(teamSource.url);
+  const items = parseOfficialTeamRss(xml, teamCode, teamSource);
+  if (items.length === 0) throw new Error(`No RSS items found for ${teamCode}`);
+  await upsertOfficialFeedItems(items);
+  return items.length;
+}
+
 export async function refreshOfficialTeamFeed(teamCode: string) {
   const [teamSource, nflInjurySource] = getOfficialSources(teamCode);
   const [teamResult, injuryResult] = await Promise.allSettled([
@@ -225,7 +240,15 @@ export async function refreshOfficialTeamFeed(teamCode: string) {
 }
 
 export async function getFreshOfficialTeamFeed(teamCode: string) {
-  const items = await getOfficialFeedItems(teamCode);
+  let items = await getOfficialFeedItems(teamCode);
+  if (needsOfficialNewsTopUp(items)) {
+    try {
+      await refreshOfficialTeamNews(teamCode);
+      items = await getOfficialFeedItems(teamCode);
+    } catch (error) {
+      console.warn("[Official news] cache top-up unavailable", { teamCode, error: error instanceof Error ? error.message : error });
+    }
+  }
   return { items, sources: getOfficialSources(teamCode) };
 }
 
