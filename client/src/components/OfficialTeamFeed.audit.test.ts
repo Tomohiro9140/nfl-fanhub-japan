@@ -35,7 +35,7 @@ describe("official feed mobile content selection", () => {
     );
   });
 
-  it("renders the three newest news cards and excludes injuries older than 45 days", () => {
+  it("renders the three newest news cards while moving injury status out of the news panel", () => {
     const markup = renderToStaticMarkup(createElement(OfficialTeamFeed, { favorite }));
     expect(markup).toContain("News newest");
     expect(markup).toContain("News second");
@@ -43,11 +43,10 @@ describe("official feed mobile content selection", () => {
     expect(markup).not.toContain("News fourth hidden");
     expect(markup.indexOf("News newest")).toBeLessThan(markup.indexOf("News second"));
     expect(markup.indexOf("News second")).toBeLessThan(markup.indexOf("News third"));
-    expect(markup).toContain("Current injury newest");
-    expect(markup).toContain("Current injury update");
-    expect(markup).toContain("Current injury older");
+    expect(markup).not.toContain("INJURY WATCH");
+    expect(markup).not.toContain("Current injury newest");
+    expect(markup).not.toContain("Current injury update");
+    expect(markup).not.toContain("Current injury older");
     expect(markup).not.toContain("Historic injury hidden");
-    expect(markup.indexOf("Current injury newest")).toBeLessThan(markup.indexOf("Current injury update"));
-    expect(markup.indexOf("Current injury update")).toBeLessThan(markup.indexOf("Current injury older"));
   });
 });

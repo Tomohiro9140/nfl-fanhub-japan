@@ -134,3 +134,32 @@ NFL公式の全32チーム日程をリーグページだけで再同期し、保
 ## YOUR HUDDLE再構成と負傷情報の鮮度検証（2026-08-16）
 
 390px幅の実データ表示で、SOURCE STATUSを削除し、Official Statusの一枚のカードに最新チーム更新、負傷情報、ロスター概要を集約したことを確認した。LATEST NEWSは公式新着3件を表示し、INJURY WATCHには45日以内の情報だけを表示するようにした。NFL公式負傷者一覧に掲載される過去記事は、個別記事のJSON-LD `datePublished`を取得して45日超なら保存対象から除外する。BUFで検出された2024年12月公開の負傷記事は削除後の再同期で除外され、2026年8月13日のチーム公式更新だけが残った。GAME NOTESは次戦の対戦・日時・会場を外し、公式ストーリー、出場状況、ロスター構成の3つを見どころとして表示する。
+
+## 外部NFL情報源の初期調査（2026-08-16）
+
+ESPNのNFLトップページはこの実行環境からポリシー制限により取得できなかった。NBC SportsのProFootballTalkは、公開HTMLで最新記事タイトル、著者、チームメニュー、Rumor Millの導線を提供しており、ニュース・負傷・ロスター移動の候補をチーム名で絞り込む余地がある。ただし、この時点では利用規約・robots・チーム別の安定URL・サーバー定期取得の可否を確認していないため、実アプリには未統合とする。
+
+CBS Sportsもこの実行環境ではポリシー制限により取得できなかった。PFFは公開トップページにNFLのニュース、チームプレビュー、ランキング、選手・チーム名のタグを表示する一方、評価データや詳細ツールには購読導線が明示されている。PFFは有料評価を転載せず、公開記事への外部リンク候補としてのみ検討する。
+
+SpotracはNFLチーム一覧、契約、トランザクション、チーム・選手ランキングの公開導線を提供するが、契約・移籍補完の候補として扱い、負傷状態の一次情報には使用しない。
+
+## Ben Brownの状態未検出の原因（2026-08-16）
+
+Boston Heraldは2026年8月13日、PatriotsのセンターBen BrownがColts戦で下肢を痛めて退出したと報じた。Heavy Sportsは2026年8月15日に、PatriotsのMike VrabelがBrownは「数週間」離脱する見込みと述べたことを報じている。これに対し現在のSTATUS RADARは公式ロスターの登録区分`Active`をそのまま表示しており、短期離脱があってもIR登録や公式ロスター区分の変更前は`Active`のままとなる。したがって、公式ロスターは登録区分、外部の時刻付き報道は直近の出場可否見込みとして分離表示する必要がある。将来的には、チーム名・選手名・記事公開時刻が一致する外部記事を`Availability Watch`として表示し、本文は転載せず、短い中立要約と原記事リンクだけを示す方針とする。
+
+根拠URL:
+
+- https://www.bostonherald.com/2026/08/13/patriots-lose-key-reserve-to-injury-in-preseason-opener/
+- https://heavy.com/sports/nfl/new-england-patriots/patriots-christian-gonzalez-ben-brown-injury-news/
+
+## モバイル画面の重複削減（2026-08-16）
+
+390px幅の実データ画面で、GAME TICKET・ネタバレ防止・LATEST RESULTSの後に、LATEST NEWSとSTATUS RADARだけが続く構成を確認した。YOUR HUDDLE、Official Status、INJURY WATCH、GAME NOTESをホーム画面から外し、最新ニュース3件とロスター・公式負傷情報をSTATUS RADARへ集約した。Schedule DeskやLeague Deskはそのまま維持している。
+
+## 外部情報源の自動取得に関する方針（2026-08-16）
+
+ESPNのrobots.txtはGPTBotおよびChatGPT-Userを明示的に禁止しているため、ESPN記事の自動収集・保存は実施しない。SpotracもAIクローラについてNFLトップページ以外を禁止しているため、チーム契約やロスター詳細の自動収集は実施しない。PFFのrobots.txtは一部の認証・提携URLのみを禁止しているが、有料評価や購読者向けデータの転載は行わず、公開記事への外部リンク候補に限定する。NBC Sportsは一般クローラへ10秒のCrawl-delayを示し、ニュースサイトマップを公開しているため、許容される場合は低頻度で記事タイトル・公開時刻・リンクだけを取得する候補となる。外部情報は、本文転載ではなく、チーム名・選手名で厳密に照合した短い中立ラベルと元記事リンクに限定する。
+
+## PFT出場可否インサイトの初回同期（2026-08-16）
+
+PFT Rumor Millの公開ページを一度取得し、最大5本の記事ページを10秒以上の間隔で確認する処理を追加した。記事本文は保存せず、公式ロスターに存在するチーム・選手名と出場可否表現が一致した場合だけ、見出し、状態ラベル、公開時刻、原記事URLを保存する。Patriotsを一時選択した390px幅画面で、STATUS RADARの`AVAILABILITY WATCH · PFT`にBen Brownの多週離脱情報が表示されることを確認した。Brownは公式ロスターではActiveのまま表示しつつ、PFT補完では`OUT · MULTI-WEEK`として区別される。

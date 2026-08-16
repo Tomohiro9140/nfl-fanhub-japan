@@ -92,6 +92,26 @@ export const officialRosterEntries = mysqlTable("official_roster_entries", {
 export type OfficialRosterEntry = typeof officialRosterEntries.$inferSelect;
 export type InsertOfficialRosterEntry = typeof officialRosterEntries.$inferInsert;
 
+/** Public PFT availability headlines matched to a current official roster entry. Article bodies are never stored. */
+export const externalAvailabilityInsights = mysqlTable("external_availability_insights", {
+  id: int("id").autoincrement().primaryKey(),
+  externalId: varchar("external_id", { length: 191 }).notNull(),
+  teamCode: varchar("team_code", { length: 3 }).notNull(),
+  playerName: varchar("player_name", { length: 191 }).notNull(),
+  statusLabel: varchar("status_label", { length: 64 }).notNull(),
+  headline: text("headline").notNull(),
+  sourceName: varchar("source_name", { length: 128 }).notNull(),
+  sourceUrl: varchar("source_url", { length: 1024 }).notNull(),
+  publishedAt: timestamp("published_at").notNull(),
+  fetchedAt: timestamp("fetched_at").defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("external_availability_insights_external_id_uq").on(table.externalId),
+  index("external_availability_insights_team_published_idx").on(table.teamCode, table.publishedAt),
+]);
+
+export type ExternalAvailabilityInsight = typeof externalAvailabilityInsights.$inferSelect;
+export type InsertExternalAvailabilityInsight = typeof externalAvailabilityInsights.$inferInsert;
+
 /** Regular-season standings parsed from the official NFL standings page. */
 export const officialStandings = mysqlTable("official_standings", {
   id: int("id").autoincrement().primaryKey(),
