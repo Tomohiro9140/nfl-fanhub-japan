@@ -12,3 +12,8 @@ export function isMobileDevice(userAgent: string) {
 export function daznWatchTarget(userAgent: string) {
   return isMobileDevice(userAgent) ? "_self" : "_blank";
 }
+
+/** Prefer a verified individual DAZN URL; retain the official NFL game page when one is not available. */
+export function resultWatchHref(daznUrl: string | null | undefined, officialGameUrl: string) {
+  return daznUrl ?? officialGameUrl;
+}

@@ -1,4 +1,5 @@
-import { and, asc, desc, eq, gt, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, gte, lt, sql } from "drizzle-orm";
+import { attachOfficialScore, findOfficialScoreForGame } from "./gameStatus";
 import { drizzle } from "drizzle-orm/mysql2";
 import { InsertOfficialFeedItem, InsertOfficialGame, InsertOfficialRosterEntry, InsertOfficialScoreboardGame, InsertOfficialStanding, InsertUser, officialFeedItems, officialGames, officialRosterEntries, officialScoreboardGames, officialStandings, users } from "../drizzle/schema";
 import { ENV } from './_core/env';
@@ -154,9 +155,18 @@ export async function getOfficialTeamSnapshot(teamCode: string) {
   const db = await getDb();
   if (!db) return { nextGame: undefined, roster: [], rosterCounts: [], injuries: [], news: [], sources: { schedule: null, roster: null, injury: null }, lastUpdatedAt: undefined };
   const now = new Date();
-  const nextGame = (await db.select().from(officialGames)
+  const activeWindowStart = new Date(now.getTime() - 6 * 60 * 60 * 1_000);
+  const activeGame = (await db.select().from(officialGames)
+    .where(and(eq(officialGames.teamCode, teamCode), gte(officialGames.kickoffAt, activeWindowStart), lt(officialGames.kickoffAt, now)))
+    .orderBy(desc(officialGames.kickoffAt)).limit(1))[0];
+  const scheduledGame = (await db.select().from(officialGames)
     .where(and(eq(officialGames.teamCode, teamCode), gt(officialGames.kickoffAt, now)))
     .orderBy(asc(officialGames.kickoffAt)).limit(1))[0];
+  const matchedGame = activeGame ?? scheduledGame;
+  const scoreboard = matchedGame ? await db.select().from(officialScoreboardGames)
+    .where(and(eq(officialScoreboardGames.awayTeamCode, matchedGame.homeAway === "away" ? teamCode : matchedGame.opponentCode), eq(officialScoreboardGames.homeTeamCode, matchedGame.homeAway === "away" ? matchedGame.opponentCode : teamCode)))
+    .orderBy(desc(officialScoreboardGames.fetchedAt)).limit(1) : [];
+  const nextGame = matchedGame ? attachOfficialScore(matchedGame, scoreboard) : undefined;
   const roster = await db.select().from(officialRosterEntries)
     .where(eq(officialRosterEntries.teamCode, teamCode))
     .orderBy(asc(officialRosterEntries.rosterStatus), asc(officialRosterEntries.position), asc(officialRosterEntries.playerName)).limit(160);
@@ -194,15 +204,17 @@ export async function getOfficialLeagueDashboard() {
   const db = await getDb();
   if (!db) return { standings: [], results: [], calendar: [], lastUpdatedAt: undefined };
   const standings = await db.select().from(officialStandings).orderBy(desc(officialStandings.pct), desc(officialStandings.wins), asc(officialStandings.losses));
-  const results = await db.select().from(officialScoreboardGames).orderBy(desc(officialScoreboardGames.fetchedAt)).limit(24);
+  const rawResults = await db.select().from(officialScoreboardGames).orderBy(desc(officialScoreboardGames.fetchedAt)).limit(24);
   const games = await db.select().from(officialGames).orderBy(asc(officialGames.kickoffAt));
+  const relatedGame = (awayTeamCode: string, homeTeamCode: string, weekLabel: string | null) => games.find((game) => findOfficialScoreForGame([{ awayTeamCode, homeTeamCode, weekLabel, gameState: "", awayScore: null, homeScore: null }], game));
+  const results = rawResults.map((result) => ({ ...result, daznUrl: relatedGame(result.awayTeamCode, result.homeTeamCode, result.weekLabel)?.daznUrl ?? null }));
   const seen = new Set<string>();
   const calendar = games.filter((game) => {
     const key = `${game.kickoffAt.toISOString()}:${[game.teamCode, game.opponentCode].sort().join("-")}`;
     if (seen.has(key)) return false;
     seen.add(key);
     return true;
-  });
+  }).map((game) => attachOfficialScore(game, rawResults));
   const lastUpdatedAt = [standings[0]?.fetchedAt, results[0]?.fetchedAt, calendar[0]?.fetchedAt].filter((value): value is Date => Boolean(value)).sort((a, b) => b.getTime() - a.getTime())[0];
   return { standings, results, calendar, lastUpdatedAt };
 }

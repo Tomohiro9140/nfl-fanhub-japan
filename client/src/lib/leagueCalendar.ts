@@ -9,6 +9,9 @@ export type LeagueCalendarGame = {
   broadcast: string | null;
   sourceUrl: string;
   daznUrl: string | null;
+  gameState: string | null;
+  awayScore: number | null;
+  homeScore: number | null;
 };
 
 /** Converts a canonical league game row into the selected team's perspective. */
@@ -39,4 +42,10 @@ export function getNextSevenDayGames(games: LeagueCalendarGame[], now: Date) {
 /** Calendar rows intentionally use abbreviations to retain a compact mobile layout. */
 export function abbreviatedMatchup(game: LeagueCalendarGame) {
   return `${game.teamCode} ${game.homeAway === "away" ? "@" : "vs."} ${game.opponentCode}`;
+}
+
+export function seasonWeekLabel(game: LeagueCalendarGame) {
+  const phase = game.seasonPhase === "preseason" ? "PRE" : game.seasonPhase === "postseason" ? "POST" : "REG";
+  const week = game.weekLabel?.match(/(\d+)/)?.[1];
+  return week ? `${phase} · WEEK ${week}` : phase;
 }

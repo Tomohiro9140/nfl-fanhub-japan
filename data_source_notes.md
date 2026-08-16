@@ -92,3 +92,7 @@ GAME TICKETとSCHEDULE DESKの各カードに、クライアント側で1秒ご�
 DAZNの競技ページから公開JSON-LDの`SportsEvent`だけを解析し、両チーム名と開始時刻（±36時間）が一意に一致する場合のみ`official_games.dazn_url`へ保存する仕組みを追加した。現時点のDAZN公式競技ページで実行した結果は`candidates: 0`、`linked: 0`であり、未公開のURLを推測して登録することはない。既存Heartbeatの6時間更新で同じ安全な照合処理を実行する。
 
 公開済みバージョンに対し、認証済みHeartbeatを一時作成して`official-feed-refresh`を強制グループ0で実行した。HTTP 200で完了し、8チームの公式データ更新（`processed: 8`、`stored: 186`）、リーグ順位表32件、スコア16件の更新は成功した。DAZN競技ページへのサーバー側リクエストは403となったが、DAZN同期処理は`ok: false`、`linked: 0`として応答に記録され、既存の公式更新を失敗させなかった。検証用Heartbeatは実行後に削除し、通常の6時間ごとの更新ジョブだけを残している。
+
+## 試合状態・Week表示のモバイル確認（2026-08-16）
+
+試合開始前は`STARTS IN`のカウントダウン、開始から6時間以内で公式最終結果が未取得の場合は`LIVE`、公式結果が`FINAL`の場合はカウントダウンに代えて`FINAL <away score> - <home score>`を表示する状態分岐を追加した。390×844pxの実データ表示では、GAME TICKETおよび2列Schedule Deskのカード内に開始前表示が収まり、Schedule Deskには`PRE · WEEK 2`や`REG · WEEK 1`のようにシーズン区分とWeek番号が同時に表示された。LATEST RESULTSは、紐付いたDAZN URLがあればそのリンクを開き、未紐付けの場合はNFL公式スコアページへフォールバックする。
