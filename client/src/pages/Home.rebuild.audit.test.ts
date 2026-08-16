@@ -47,4 +47,12 @@ describe("mobile team page information hierarchy", () => {
     expect(markup).toContain("01");
     expect(markup).toContain("04");
   });
+
+  it("uses the FAN/HUB field-mark logo and omits redundant cache status labels below the header", () => {
+    const markup = renderToStaticMarkup(createElement(Home));
+    expect(markup).toContain("/manus-storage/fan-hub-field-mark_2da1d2c0.png");
+    expect(markup).toContain("FAN/HUBのフィールドノートロゴ");
+    expect(markup).not.toContain("JST · OFFICIAL DATA");
+    expect(markup).not.toContain("OFFICIAL CACHE");
+  });
 });
