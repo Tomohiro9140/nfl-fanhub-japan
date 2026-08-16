@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { availabilityStatus, parsePftAvailabilityArticle } from "./pftAvailability";
+import { availabilityStatus, parsePftAvailabilityArticle, pftInsightStatus } from "./pftAvailability";
 
 const articleHtml = `<!doctype html><html><head><title>Christian Gonzalez remains out of practice Saturday | NBC Sports</title><script type="application/ld+json">{"datePublished":"2026-08-15T13:41:25.823Z"}</script></head><body><article>New England Patriots coach Mike Vrabel said Christian Gonzalez is physically unavailable and not ready to return. Vrabel also announced that reserve offensive lineman Ben Brown will miss the rest of the preseason with an injury.</article></body></html>`;
 
@@ -21,6 +21,11 @@ describe("PFT availability parsing", () => {
   it("does not assign Ben Brown's multi-week absence to a teammate named in the same article", () => {
     const insights = parsePftAvailabilityArticle(articleHtml, "https://example.com/article", [{ teamCode: "NE", playerName: "Christian Gonzalez" }]);
     expect(insights).toEqual([expect.objectContaining({ playerName: "Christian Gonzalez", statusLabel: "LIMITED" })]);
+  });
+
+  it("classifies roster moves as transaction insights without treating autograph events as a move", () => {
+    expect(pftInsightStatus("The Texans signed center Example Player to the active roster.")).toBe("TRANSACTION");
+    expect(pftInsightStatus("Example Player signed autographs for fans after practice.")).toBeNull();
   });
 
   it("ignores player and status words found only in navigation or related links outside the article body", () => {

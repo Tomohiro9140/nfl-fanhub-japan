@@ -63,4 +63,13 @@ describe("compact mobile result and schedule UI", () => {
     expect(markup).toContain("TRANSACTION");
     expect(markup).toContain("Houston Texans Transactions");
   });
+
+  it("keeps the expanded PFT team update watch below official related items and uses compact result spacing", () => {
+    const snapshot = { nextGame: undefined, roster: [], rosterCounts: [], injuries: [{ id: 1, title: "Official injury item", sourceName: "Team Official", sourceUrl: "https://example.com/injury", publishedAt: kickoffAt, category: "injury" as const }], externalInsights: [{ id: 1, playerName: "Example Player", statusLabel: "TRANSACTION", headline: "Team signs Example Player", sourceName: "ProFootballTalk (NBC Sports)", sourceUrl: "https://example.com/pft", publishedAt: kickoffAt }], news: [], sources: { schedule: null, roster: null, injury: null }, lastUpdatedAt: kickoffAt };
+    const radarMarkup = renderToStaticMarkup(createElement(OfficialStatusRadar, { favorite, snapshot, loading: false }));
+    const resultMarkup = renderToStaticMarkup(createElement(OfficialLatestResults, { favorite, dashboard, loading: false, spoilerMode: false }));
+    expect(radarMarkup.indexOf("INJURY OR TRANSACTION RELATED")).toBeLessThan(radarMarkup.indexOf("TEAM UPDATE WATCH · PFT"));
+    expect(radarMarkup).toContain("TRANSACTION");
+    expect(resultMarkup).toContain("px-3 py-2.5");
+  });
 });

@@ -36,6 +36,14 @@ export function availabilityStatus(value: string) {
   return null;
 }
 
+export function pftInsightStatus(value: string) {
+  const availability = availabilityStatus(value);
+  if (availability) return availability;
+  if (/\b(?:transactions?|roster moves?|sign(?:ed|s)?|released?|waived|waivers?|claimed|claim|trade(?:d)?|contract(?: extension)?|extensions?|activated?|designated (?:for|to return)|placed on (?:injured reserve|ir|pup))\b/i.test(value)
+    && !/\b(?:autographs?|signature event|signed poster|signed memorabilia)\b/i.test(value)) return "TRANSACTION";
+  return null;
+}
+
 export function parsePftAvailabilityArticle(html: string, sourceUrl: string, roster: RosterMatch[]): InsertExternalAvailabilityInsight[] {
   const title = parseTitle(html);
   const publishedAt = parsePublishedAt(html);
@@ -52,7 +60,7 @@ export function parsePftAvailabilityArticle(html: string, sourceUrl: string, ros
     const teamAlias = teamName.split(" ").at(-1) ?? "";
     if (!teamName || (!lower.includes(teamName) && !lower.includes(teamAlias))) return [];
     const playerSentence = sentences.find((sentence) => sentence.toLowerCase().includes(entry.playerName.toLowerCase()));
-    const statusLabel = playerSentence ? availabilityStatus(playerSentence) : null;
+    const statusLabel = playerSentence ? pftInsightStatus(playerSentence) : null;
     if (!statusLabel) return [];
     return [{
       externalId: createHash("sha256").update(`${entry.teamCode}:${entry.playerName}:${sourceUrl}`).digest("hex"),
@@ -70,7 +78,7 @@ export function parsePftAvailabilityArticle(html: string, sourceUrl: string, ros
 
 export function extractPftAvailabilityUrls(html: string) {
   const urls = Array.from(html.matchAll(/https:\/\/www\.nbcsports\.com\/nfl\/profootballtalk\/rumor-mill\/news\/([a-z0-9-]+)/gi), (match) => match[0]);
-  return Array.from(new Set(urls)).filter((url) => /injur|out|unavailable|limited|miss|return|ir-/.test(url)).slice(0, MAX_ARTICLES_PER_REFRESH);
+  return Array.from(new Set(urls)).filter((url) => /injur|out|unavailable|limited|miss|return|ir-|transaction|roster|sign|release|waiv|claim|trade|contract|extension|activat/.test(url)).slice(0, MAX_ARTICLES_PER_REFRESH);
 }
 
 async function fetchText(url: string) {
@@ -81,7 +89,7 @@ async function fetchText(url: string) {
 
 const pause = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-/** Fetches the latest public PFT availability story, observing the site's stated crawl delay. */
+/** Fetches the latest public PFT availability or transaction story, observing the site's stated crawl delay. */
 export async function refreshPftAvailabilityInsights(seedUrls: string[] = []) {
   const roster = await getOfficialRosterEntriesForPftMatching();
   if (!roster.length) return { scanned: 0, stored: 0, skipped: "roster-empty" as const };

@@ -73,7 +73,7 @@ function isInjuryRelated(title: string, summary: string) {
 
 function isTransactionRelated(title: string, summary: string) {
   const text = `${title} ${summary}`;
-  if (/\b(?:autograph|signature event|signed poster|signed memorabilia)\b/i.test(text)) return false;
+  if (/\b(?:autographs?|signature event|signed poster|signed memorabilia)\b/i.test(text)) return false;
   return /\b(?:transactions?|roster moves?|sign(?:ed|s)?|released?|waived|waivers?|claimed|claim|trade(?:d)?|contract(?: extension)?|extensions?|activated?|designated (?:for|to return)|placed on (?:injured reserve|ir|pup))\b/i.test(text);
 }
 

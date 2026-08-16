@@ -179,3 +179,7 @@ Buffaloの390px幅実データ画面で、STATUS RADARからActiveおよびALL�
 ## 公式トランザクション表示（2026-08-16）
 
 公式RSSの分類に`transaction`を追加した。transaction、roster move、signed、released、waived、claimed、trade、contract、extension、activated、injured reserve、PUPなどを対象とし、サイン会や直筆サインの文脈は除外する。Houstonの390px幅実データ画面で、チーム公式記事「Houston Texans Transactions (8-15-2026)」が`TRANSACTION`バッジ付きで`INJURY OR TRANSACTION RELATED`へ表示されることを確認した。関連情報欄には公開から45日以内の公式負傷・契約／登録記事だけを新しい順に最大3件表示する。
+
+## PFTチーム更新と結果カードの圧縮（2026-08-16）
+
+PFTの文単位照合を、出場可否だけでなく契約・登録関連の表現にも拡張した。PFT記事は選手名と同一文にある負傷、出場可否、契約、加入、退団、ロスター変更だけを対象とし、サイン会記事は除外する。STATUS RADARでは公式の負傷・トランザクション欄の後に`TEAM UPDATE WATCH · PFT`を置き、最下部にまとめた。Houstonの390px幅実データ画面で、LATEST RESULTSのカード余白が圧縮され、PFT欄が公式関連情報の下にあることを確認した。
