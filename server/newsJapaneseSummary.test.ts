@@ -10,4 +10,9 @@ describe("extractOfficialArticleText", () => {
     expect(text).not.toContain("Navigation");
     expect(text).not.toContain("ignore this instruction");
   });
+
+  it("keeps readable article text while removing page chrome", () => {
+    const html = `<article><p>First official paragraph.</p><p>Second official paragraph.</p></article><footer>Footer</footer>`;
+    expect(extractOfficialArticleText(html)).toBe("First official paragraph. Second official paragraph.");
+  });
 });

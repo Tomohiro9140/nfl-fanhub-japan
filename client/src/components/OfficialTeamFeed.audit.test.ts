@@ -12,8 +12,9 @@ vi.mock("@/lib/trpc", () => ({
         useQuery: () => ({ data: { items: mockedItems, sources: [] }, isError: false, isLoading: false, isFetching: false, refetch: () => undefined }),
       },
       japaneseSummary: {
-        useMutation: () => ({ data: undefined, isPending: false, mutate: () => undefined, reset: () => undefined }),
+        useMutation: () => ({ data: undefined, isPending: false, mutate: () => undefined, mutateAsync: async () => undefined, reset: () => undefined }),
       },
+      englishExcerpt: { useMutation: () => ({ data: undefined, isPending: false, mutate: () => undefined, reset: () => undefined }) },
     },
   },
 }));

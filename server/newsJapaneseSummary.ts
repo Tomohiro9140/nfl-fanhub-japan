@@ -9,6 +9,9 @@ type OfficialNewsForSummary = {
 
 const MAX_ARTICLE_CHARS = 14_000;
 const MIN_ARTICLE_CHARS = 280;
+const DISPLAY_EXCERPT_CHARS = 1_800;
+const ARTICLE_CACHE_TTL_MS = 15 * 60 * 1_000;
+const transientArticleCache = new Map<string, { text: string; expiresAt: number }>();
 
 function decodeHtml(value: string) {
   return value
@@ -38,6 +41,32 @@ export function extractOfficialArticleText(html: string) {
   return htmlToText(article).slice(0, MAX_ARTICLE_CHARS);
 }
 
+/** Fetches official article text into a short-lived memory cache only; it is never persisted. */
+export async function getOfficialArticleText(item: OfficialNewsForSummary) {
+  if (item.sourceKind !== "team_official" && item.sourceKind !== "nfl_official") return undefined;
+  const cached = transientArticleCache.get(item.sourceUrl);
+  if (cached && cached.expiresAt > Date.now()) return cached.text;
+
+  const response = await fetch(item.sourceUrl, {
+    headers: {
+      "user-agent": "NFLFanHubJapan/1.0 (official-news-summary)",
+      accept: "text/html,application/xhtml+xml",
+    },
+    signal: AbortSignal.timeout(15_000),
+  });
+  if (!response.ok) return undefined;
+  const articleText = extractOfficialArticleText(await response.text());
+  if (articleText.length < MIN_ARTICLE_CHARS) return undefined;
+  transientArticleCache.set(item.sourceUrl, { text: articleText, expiresAt: Date.now() + ARTICLE_CACHE_TTL_MS });
+  return articleText;
+}
+
+export async function getOfficialNewsEnglishExcerpt(item: OfficialNewsForSummary) {
+  const text = await getOfficialArticleText(item);
+  if (!text) return undefined;
+  return { excerpt: text.slice(0, DISPLAY_EXCERPT_CHARS), truncated: text.length > DISPLAY_EXCERPT_CHARS };
+}
+
 function parseSummary(content: string | null | undefined) {
   if (!content) return undefined;
   try {
@@ -50,18 +79,8 @@ function parseSummary(content: string | null | undefined) {
 }
 
 export async function generateOfficialNewsJapaneseSummary(item: OfficialNewsForSummary) {
-  if (item.sourceKind !== "team_official" && item.sourceKind !== "nfl_official") return undefined;
-  const response = await fetch(item.sourceUrl, {
-    headers: {
-      "user-agent": "NFLFanHubJapan/1.0 (official-news-summary)",
-      accept: "text/html,application/xhtml+xml",
-    },
-    signal: AbortSignal.timeout(15_000),
-  });
-  if (!response.ok) return undefined;
-
-  const articleText = extractOfficialArticleText(await response.text());
-  if (articleText.length < MIN_ARTICLE_CHARS) return undefined;
+  const articleText = await getOfficialArticleText(item);
+  if (!articleText) return undefined;
 
   const result = await invokeLLM({
     model: "gpt-5-mini",

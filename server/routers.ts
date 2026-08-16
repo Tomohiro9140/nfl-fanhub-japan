@@ -4,7 +4,7 @@ import { systemRouter } from "./_core/systemRouter";
 import { publicProcedure, router } from "./_core/trpc";
 import { getFreshOfficialTeamFeed, refreshOfficialTeamFeed } from "./officialFeeds";
 import { getOfficialFeedItemById, getOfficialLeagueDashboard, getOfficialTeamSnapshot, saveOfficialFeedJapaneseSummary } from "./db";
-import { generateOfficialNewsJapaneseSummary } from "./newsJapaneseSummary";
+import { generateOfficialNewsJapaneseSummary, getOfficialNewsEnglishExcerpt } from "./newsJapaneseSummary";
 import { z } from "zod";
 
 export const appRouter = router({
@@ -42,6 +42,17 @@ export const appRouter = router({
         console.warn("[Official news summary] generation unavailable", { itemId: item.id, error: error instanceof Error ? error.message : error });
       }
       return { itemId: item.id, summary: item.summary, generated: false };
+    }),
+    englishExcerpt: publicProcedure.input(z.object({ itemId: z.number().int().positive() })).mutation(async ({ input }) => {
+      const item = await getOfficialFeedItemById(input.itemId);
+      if (!item) throw new Error("Official news item was not found");
+      try {
+        const result = await getOfficialNewsEnglishExcerpt(item);
+        return { itemId: item.id, excerpt: result?.excerpt ?? null, truncated: result?.truncated ?? false };
+      } catch (error) {
+        console.warn("[Official news excerpt] fetch unavailable", { itemId: item.id, error: error instanceof Error ? error.message : error });
+        return { itemId: item.id, excerpt: null, truncated: false };
+      }
     }),
   }),
   teamSnapshot: router({
