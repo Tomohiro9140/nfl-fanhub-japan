@@ -22,4 +22,10 @@ describe("PFT availability parsing", () => {
     const insights = parsePftAvailabilityArticle(articleHtml, "https://example.com/article", [{ teamCode: "NE", playerName: "Christian Gonzalez" }]);
     expect(insights).toEqual([expect.objectContaining({ playerName: "Christian Gonzalez", statusLabel: "LIMITED" })]);
   });
+
+  it("ignores player and status words found only in navigation or related links outside the article body", () => {
+    const htmlWithRelatedLinks = articleHtml.replace("</body>", "<nav>New York Giants quarterback Jaxson Dart is out for the season. Cleveland Browns quarterback Deshaun Watson is out for the season.</nav></body>");
+    const insights = parsePftAvailabilityArticle(htmlWithRelatedLinks, "https://example.com/article-body-only", [{ teamCode: "NE", playerName: "Ben Brown" }, { teamCode: "NYG", playerName: "Jaxson Dart" }, { teamCode: "CLE", playerName: "Deshaun Watson" }]);
+    expect(insights).toEqual([expect.objectContaining({ teamCode: "NE", playerName: "Ben Brown", statusLabel: "OUT · MULTI-WEEK" })]);
+  });
 });

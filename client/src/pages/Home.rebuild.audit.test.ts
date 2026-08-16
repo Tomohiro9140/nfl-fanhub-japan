@@ -32,4 +32,14 @@ describe("mobile team page information hierarchy", () => {
     expect(markup).not.toContain("GAME NOTES");
     expect(markup).not.toContain("OFFICIAL BRIEFING");
   });
+
+  it("keeps mobile menu destinations and section numbering aligned with the rebuilt page", () => {
+    const markup = renderToStaticMarkup(createElement(Home));
+    expect(markup).toContain('href="#results"');
+    expect(markup).toContain('href="#updates"');
+    expect(markup).toContain('href="#status"');
+    expect(markup).toContain('href="#league"');
+    expect(markup).toContain("01");
+    expect(markup).toContain("04");
+  });
 });

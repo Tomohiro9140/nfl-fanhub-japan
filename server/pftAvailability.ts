@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import type { InsertExternalAvailabilityInsight } from "../drizzle/schema";
-import { getOfficialRosterEntriesForPftMatching, upsertExternalAvailabilityInsights } from "./db";
+import { getOfficialRosterEntriesForPftMatching, replaceExternalAvailabilityInsightsForSources } from "./db";
 import { TEAM_NAMES } from "./officialTeamData";
 
 const PFT_RUMOR_MILL_URL = "https://www.nbcsports.com/nfl/profootballtalk/rumor-mill";
@@ -39,7 +39,10 @@ export function availabilityStatus(value: string) {
 export function parsePftAvailabilityArticle(html: string, sourceUrl: string, roster: RosterMatch[]): InsertExternalAvailabilityInsight[] {
   const title = parseTitle(html);
   const publishedAt = parsePublishedAt(html);
-  const content = clean(html);
+  const articleHtml = html.match(/<article\b[^>]*>([\s\S]*?)<\/article>/i)?.[1]
+    ?? html.match(/<main\b[^>]*>([\s\S]*?)<\/main>/i)?.[1]
+    ?? html;
+  const content = clean(articleHtml);
   if (!title || !publishedAt) return [];
   const lower = content.toLowerCase();
   const sentences = content.split(/(?<=[.!?])\s+/);
@@ -78,7 +81,7 @@ async function fetchText(url: string) {
 
 const pause = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-/** Fetches a maximum of five public PFT availability stories, observing the site's stated crawl delay. */
+/** Fetches the latest public PFT availability story, observing the site's stated crawl delay. */
 export async function refreshPftAvailabilityInsights(seedUrls: string[] = []) {
   const roster = await getOfficialRosterEntriesForPftMatching();
   if (!roster.length) return { scanned: 0, stored: 0, skipped: "roster-empty" as const };
@@ -95,6 +98,6 @@ export async function refreshPftAvailabilityInsights(seedUrls: string[] = []) {
       console.warn("[pft-availability] article skipped", { url, error: error instanceof Error ? error.message : String(error) });
     }
   }
-  await upsertExternalAvailabilityInsights(insights);
+  await replaceExternalAvailabilityInsightsForSources(urls, insights);
   return { scanned: urls.length, stored: insights.length };
 }

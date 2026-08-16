@@ -169,6 +169,15 @@ export async function upsertExternalAvailabilityInsights(items: InsertExternalAv
   }
 }
 
+export async function replaceExternalAvailabilityInsightsForSources(sourceUrls: string[], items: InsertExternalAvailabilityInsight[]) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is not available for PFT availability cache");
+  for (const sourceUrl of Array.from(new Set(sourceUrls))) {
+    await db.delete(externalAvailabilityInsights).where(eq(externalAvailabilityInsights.sourceUrl, sourceUrl));
+  }
+  await upsertExternalAvailabilityInsights(items);
+}
+
 export async function getOfficialTeamSnapshot(teamCode: string) {
   const db = await getDb();
   if (!db) return { nextGame: undefined, roster: [], rosterCounts: [], injuries: [], news: [], sources: { schedule: null, roster: null, injury: null }, lastUpdatedAt: undefined };
@@ -188,14 +197,15 @@ export async function getOfficialTeamSnapshot(teamCode: string) {
   const roster = await db.select().from(officialRosterEntries)
     .where(eq(officialRosterEntries.teamCode, teamCode))
     .orderBy(asc(officialRosterEntries.rosterStatus), asc(officialRosterEntries.position), asc(officialRosterEntries.playerName)).limit(160);
+  const officialInjuryWindowStart = new Date(now.getTime() - 45 * 24 * 60 * 60 * 1_000);
   const injuries = await db.select().from(officialFeedItems)
-    .where(and(eq(officialFeedItems.teamCode, teamCode), eq(officialFeedItems.category, "injury")))
+    .where(and(eq(officialFeedItems.teamCode, teamCode), eq(officialFeedItems.category, "injury"), gte(officialFeedItems.publishedAt, officialInjuryWindowStart)))
     .orderBy(sql`case when ${officialFeedItems.sourceKind} = 'team_official' then 0 else 1 end`, desc(officialFeedItems.publishedAt)).limit(3);
   const news = await db.select().from(officialFeedItems)
     .where(and(eq(officialFeedItems.teamCode, teamCode), eq(officialFeedItems.category, "news")))
     .orderBy(sql`case when ${officialFeedItems.sourceKind} = 'team_official' then 0 else 1 end`, desc(officialFeedItems.publishedAt)).limit(2);
   const externalInsights = await db.select().from(externalAvailabilityInsights)
-    .where(and(eq(externalAvailabilityInsights.teamCode, teamCode), gte(externalAvailabilityInsights.publishedAt, new Date(now.getTime() - 45 * 24 * 60 * 60 * 1_000))))
+    .where(and(eq(externalAvailabilityInsights.teamCode, teamCode), gte(externalAvailabilityInsights.publishedAt, new Date(now.getTime() - 14 * 24 * 60 * 60 * 1_000))))
     .orderBy(desc(externalAvailabilityInsights.publishedAt)).limit(3);
   const rosterCounts = Array.from(roster.reduce((counts, entry) => {
     counts.set(entry.rosterStatus, (counts.get(entry.rosterStatus) ?? 0) + 1);
