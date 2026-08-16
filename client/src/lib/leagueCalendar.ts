@@ -8,6 +8,7 @@ export type LeagueCalendarGame = {
   kickoffAt: Date;
   broadcast: string | null;
   sourceUrl: string;
+  daznUrl: string | null;
 };
 
 /** Converts a canonical league game row into the selected team's perspective. */

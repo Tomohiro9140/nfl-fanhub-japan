@@ -2,6 +2,7 @@ import type { Request, Response } from "express";
 import { z } from "zod";
 import { cacheAgentOfficialFeed, refreshOfficialTeamFeedGroup } from "./officialFeeds";
 import { refreshOfficialLeagueDashboard } from "./officialLeagueData";
+import { refreshDaznGameLinks } from "./daznGameLinks";
 import { sdk } from "./_core/sdk";
 
 const agentFeedPayload = z.object({
@@ -30,9 +31,9 @@ export async function refreshOfficialFeedHandler(req: Request, res: Response) {
     const payload = heartbeatPayload.parse(req.body ?? {});
     if (payload.forceGroupIndex === undefined && ![0, 6, 12, 18].includes(hour)) return res.json({ ok: true, skipped: "outside-utc-window", hour });
     const groupIndex = payload.forceGroupIndex ?? hour / 6;
-    const [results, league] = await Promise.all([refreshOfficialTeamFeedGroup(groupIndex), refreshOfficialLeagueDashboard()]);
+    const [results, league, dazn] = await Promise.all([refreshOfficialTeamFeedGroup(groupIndex), refreshOfficialLeagueDashboard(), refreshDaznGameLinks()]);
     const stored = results.filter((result) => result.ok).reduce((sum, result) => sum + result.count, 0);
-    res.json({ ok: true, groupIndex, forced: payload.forceGroupIndex !== undefined, processed: results.length, stored, results, league, timestamp: new Date().toISOString() });
+    res.json({ ok: true, groupIndex, forced: payload.forceGroupIndex !== undefined, processed: results.length, stored, results, league, dazn, timestamp: new Date().toISOString() });
   } catch (error) {
     const details = error instanceof Error ? { message: error.message, stack: error.stack } : { message: String(error) };
     res.status(500).json({ error: "official-feed-refresh-failed", details, timestamp: new Date().toISOString() });

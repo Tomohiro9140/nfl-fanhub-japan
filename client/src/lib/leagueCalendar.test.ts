@@ -2,10 +2,10 @@ import { describe, expect, it } from "vitest";
 import { abbreviatedMatchup, getFavoriteSchedule, getNextSevenDayGames, type LeagueCalendarGame } from "./leagueCalendar";
 
 const games: LeagueCalendarGame[] = [
-  { id: 1, teamCode: "CLE", opponentCode: "BUF", homeAway: "home", seasonPhase: "preseason", weekLabel: "Week 2", kickoffAt: new Date("2026-08-22T17:00:00.000Z"), broadcast: null, sourceUrl: "https://nfl.com/schedules" },
-  { id: 2, teamCode: "BUF", opponentCode: "PIT", homeAway: "away", seasonPhase: "regular", weekLabel: "Week 1", kickoffAt: new Date("2026-09-13T17:00:00.000Z"), broadcast: "CBS", sourceUrl: "https://nfl.com/schedules" },
-  { id: 3, teamCode: "DAL", opponentCode: "NYG", homeAway: "away", seasonPhase: "preseason", weekLabel: "Week 2", kickoffAt: new Date("2026-08-20T17:00:00.000Z"), broadcast: null, sourceUrl: "https://nfl.com/schedules" },
-  { id: 4, teamCode: "MIA", opponentCode: "NYJ", homeAway: "home", seasonPhase: "preseason", weekLabel: "Week 3", kickoffAt: new Date("2026-08-24T17:00:00.000Z"), broadcast: null, sourceUrl: "https://nfl.com/schedules" },
+  { id: 1, teamCode: "CLE", opponentCode: "BUF", homeAway: "home", seasonPhase: "preseason", weekLabel: "Week 2", kickoffAt: new Date("2026-08-22T17:00:00.000Z"), broadcast: null, sourceUrl: "https://nfl.com/schedules", daznUrl: null },
+  { id: 2, teamCode: "BUF", opponentCode: "PIT", homeAway: "away", seasonPhase: "regular", weekLabel: "Week 1", kickoffAt: new Date("2026-09-13T17:00:00.000Z"), broadcast: "CBS", sourceUrl: "https://nfl.com/schedules", daznUrl: null },
+  { id: 3, teamCode: "DAL", opponentCode: "NYG", homeAway: "away", seasonPhase: "preseason", weekLabel: "Week 2", kickoffAt: new Date("2026-08-20T17:00:00.000Z"), broadcast: null, sourceUrl: "https://nfl.com/schedules", daznUrl: null },
+  { id: 4, teamCode: "MIA", opponentCode: "NYJ", homeAway: "home", seasonPhase: "preseason", weekLabel: "Week 3", kickoffAt: new Date("2026-08-24T17:00:00.000Z"), broadcast: null, sourceUrl: "https://nfl.com/schedules", daznUrl: null },
 ];
 
 describe("league calendar presentation", () => {

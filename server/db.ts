@@ -133,8 +133,10 @@ export async function replaceOfficialGamesForTeam(teamCode: string, items: Inser
   if (items.length === 0) return;
   const db = await getDb();
   if (!db) throw new Error("Database is not available for official schedule cache");
+  const existingLinks = await db.select({ externalId: officialGames.externalId, daznUrl: officialGames.daznUrl, daznSourceUrl: officialGames.daznSourceUrl, daznMatchedAt: officialGames.daznMatchedAt }).from(officialGames).where(eq(officialGames.teamCode, teamCode));
+  const daznByExternalId = new Map(existingLinks.map((link) => [link.externalId, link]));
   await db.delete(officialGames).where(eq(officialGames.teamCode, teamCode));
-  await upsertOfficialGames(items);
+  await upsertOfficialGames(items.map((item) => ({ ...item, ...(daznByExternalId.get(item.externalId) ?? {}) })));
 }
 
 export async function upsertOfficialRosterEntries(items: InsertOfficialRosterEntry[]) {
@@ -203,4 +205,18 @@ export async function getOfficialLeagueDashboard() {
   });
   const lastUpdatedAt = [standings[0]?.fetchedAt, results[0]?.fetchedAt, calendar[0]?.fetchedAt].filter((value): value is Date => Boolean(value)).sort((a, b) => b.getTime() - a.getTime())[0];
   return { standings, results, calendar, lastUpdatedAt };
+}
+
+export async function getOfficialGamesForDaznMatching() {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(officialGames).orderBy(asc(officialGames.kickoffAt));
+}
+
+export async function upsertOfficialGameDaznLinks(links: Array<{ externalId: string; daznUrl: string; sourceUrl: string }>) {
+  if (!links.length) return;
+  const db = await getDb();
+  if (!db) throw new Error("Database is not available for DAZN link cache");
+  const matchedAt = new Date();
+  for (const link of links) await db.update(officialGames).set({ daznUrl: link.daznUrl, daznSourceUrl: link.sourceUrl, daznMatchedAt: matchedAt }).where(eq(officialGames.externalId, link.externalId));
 }

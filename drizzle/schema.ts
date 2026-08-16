@@ -59,10 +59,15 @@ export const officialGames = mysqlTable("official_games", {
   venue: varchar("venue", { length: 191 }),
   broadcast: varchar("broadcast", { length: 191 }),
   sourceUrl: varchar("source_url", { length: 1024 }).notNull(),
+  /** Optional individual DAZN event URL, filled only from a published structured source. */
+  daznUrl: varchar("dazn_url", { length: 1024 }),
+  daznSourceUrl: varchar("dazn_source_url", { length: 1024 }),
+  daznMatchedAt: timestamp("dazn_matched_at"),
   fetchedAt: timestamp("fetched_at").defaultNow().notNull(),
 }, (table) => [
   uniqueIndex("official_games_external_id_uq").on(table.externalId),
   index("official_games_team_kickoff_idx").on(table.teamCode, table.kickoffAt),
+  index("official_games_dazn_url_idx").on(table.daznUrl),
 ]);
 
 export type OfficialGame = typeof officialGames.$inferSelect;

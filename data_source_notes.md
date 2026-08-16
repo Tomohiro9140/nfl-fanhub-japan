@@ -84,3 +84,9 @@ DAZN公式のNFL Game Passランディングページと日本語ヘルプペー
 ### Schedule Desk 2列化／DAZN導線のモバイル確認
 
 390×844pxビューポートで、推しチームの全日程が2列グリッドで描画されることを確認した。各カードには略称の対戦、日時、週・放送局を圧縮して表示し、1列表示時よりページ高を抑えつつ横はみ出しを起こしていない。GAME TICKETの「観戦する」には`DAZN NFL GAME PASS · APP / BROWSER`を明示した。モバイルでは同一タブでDAZN公式URLへ遷移するため、端末に設定されたUniversal Link/App Linkがある場合はOSの標準挙動でDAZNアプリを起動できる。PCでは新しいブラウザタブで同URLを開く。個別試合ページ固定遷移は、DAZNから公開された試合ID対応表がないため未実装とする。
+
+## カウントダウン・DAZNリンク同期基盤の検証（2026-08-16）
+
+GAME TICKETとSCHEDULE DESKの各カードに、クライアント側で1秒ごとに更新される`STARTS IN DD D HH:MM:SS`カウントダウンを追加した。開始時刻を過ぎた場合は負の値ではなく`KICKOFF PASSED`へ切り替え、時刻が無効な場合は`TIME TBA`を返す回帰テストを追加した。390×844pxの実データ表示では、GAME TICKETの中央日時下と2列のSchedule Deskカード内にカウントダウンが収まり、横はみ出しは確認されなかった。
+
+DAZNの競技ページから公開JSON-LDの`SportsEvent`だけを解析し、両チーム名と開始時刻（±36時間）が一意に一致する場合のみ`official_games.dazn_url`へ保存する仕組みを追加した。現時点のDAZN公式競技ページで実行した結果は`candidates: 0`、`linked: 0`であり、未公開のURLを推測して登録することはない。既存Heartbeatの6時間更新で同じ安全な照合処理を実行する。
