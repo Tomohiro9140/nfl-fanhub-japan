@@ -183,3 +183,7 @@ Buffaloの390px幅実データ画面で、STATUS RADARからActiveおよびALL�
 ## PFTチーム更新と結果カードの圧縮（2026-08-16）
 
 PFTの文単位照合を、出場可否だけでなく契約・登録関連の表現にも拡張した。PFT記事は選手名と同一文にある負傷、出場可否、契約、加入、退団、ロスター変更だけを対象とし、サイン会記事は除外する。STATUS RADARでは公式の負傷・トランザクション欄の後に`TEAM UPDATE WATCH · PFT`を置き、最下部にまとめた。Houstonの390px幅実データ画面で、LATEST RESULTSのカード余白が圧縮され、PFT欄が公式関連情報の下にあることを確認した。
+
+## 視聴・配信案内の誤分類除外（2026-08-16）
+
+`how to watch`、`how to stream`、`watch live`、`stream live`、`broadcast guide`などの視聴・配信案内を、見出しまたは公式URLで検出した場合は負傷・トランザクション分類から除外する。分類対象はRSS本文のキーワードではなく、記事見出しと正規URLに主題語があるものに限定した。既存キャッシュでは19件の視聴・配信案内を`news`へ戻した。Tampa Bayの390px幅実データ画面で、How to Watch／How to Stream記事が`INJURY OR TRANSACTION RELATED`に現れず、実在するTransactions記事のみが表示されることを確認した。

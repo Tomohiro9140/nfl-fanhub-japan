@@ -66,20 +66,28 @@ function field(item: string, name: string) {
   return match ? stripMarkup(match[1]) : "";
 }
 
-function isInjuryRelated(title: string, summary: string) {
-  const text = `${title} ${summary}`;
-  return /\b(?:injury|injured|questionable|doubtful|inactive|ir|pup|medical)\b|practice report|(?<!stood\s)\bout\b/i.test(text);
+function isViewingGuide(title: string, sourceUrl?: string) {
+  const text = `${title} ${sourceUrl ?? ""}`;
+  return /\b(?:how to watch|how to stream|ways to watch|ways to stream|watch live|stream live|watch on|tune in|broadcast guide|streaming guide|radio broadcast|tv schedule)\b/i.test(text);
 }
 
-function isTransactionRelated(title: string, summary: string) {
-  const text = `${title} ${summary}`;
-  if (/\b(?:autographs?|signature event|signed poster|signed memorabilia)\b/i.test(text)) return false;
+function isInjuryRelated(title: string, sourceUrl?: string) {
+  const text = `${title} ${sourceUrl ?? ""}`;
+  if (isViewingGuide(title, sourceUrl)) return false;
+  return /\b(?:injury|injured|questionable|doubtful|inactive|inactives|medical)\b|\b(?:ir|pup)\b|practice report/i.test(text)
+    || /(?<!stood\s)\bout\b/i.test(title);
+}
+
+function isTransactionRelated(title: string, sourceUrl?: string) {
+  const text = `${title} ${sourceUrl ?? ""}`;
+  if (isViewingGuide(title, sourceUrl) || /\b(?:autographs?|signature event|signed poster|signed memorabilia)\b/i.test(text)) return false;
   return /\b(?:transactions?|roster moves?|sign(?:ed|s)?|released?|waived|waivers?|claimed|claim|trade(?:d)?|contract(?: extension)?|extensions?|activated?|designated (?:for|to return)|placed on (?:injured reserve|ir|pup))\b/i.test(text);
 }
 
-export function classifyOfficialFeedItem(title: string, summary: string): "news" | "injury" | "transaction" {
-  if (isInjuryRelated(title, summary)) return "injury";
-  return isTransactionRelated(title, summary) ? "transaction" : "news";
+/** Classifies official items from their headline and canonical URL; summary text is display-only. */
+export function classifyOfficialFeedItem(title: string, _summary: string, sourceUrl?: string): "news" | "injury" | "transaction" {
+  if (isInjuryRelated(title, sourceUrl)) return "injury";
+  return isTransactionRelated(title, sourceUrl) ? "transaction" : "news";
 }
 
 export function getOfficialSources(teamCode: string): OfficialSource[] {
@@ -112,7 +120,7 @@ export function parseOfficialTeamRss(xml: string, teamCode: string, source: Offi
       sourceUrl: url,
       title,
       summary,
-      category: classifyOfficialFeedItem(title, rawSummary),
+      category: classifyOfficialFeedItem(title, rawSummary, url),
       publishedAt: Number.isNaN(published.getTime()) ? now : published,
       fetchedAt: now,
     });

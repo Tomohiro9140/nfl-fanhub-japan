@@ -32,6 +32,16 @@ describe("official team feed parsing", () => {
     expect(classifyOfficialFeedItem("Player signs autographs for fans", "A signature event at the team store.")).toBe("news");
   });
 
+  it("does not classify viewing or streaming guides because their summary mentions injury terms", () => {
+    expect(classifyOfficialFeedItem("How to Watch: Buccaneers at Jets", "Read the injury report and watch live coverage.", "https://www.buccaneers.com/news/how-to-watch-buccaneers-at-jets")).toBe("news");
+    expect(classifyOfficialFeedItem("How to Stream 2026 Bucs Preseason Games", "The streaming guide includes IR and PUP roster notes.", "https://www.buccaneers.com/news/how-to-stream-bucs-preseason-games")).toBe("news");
+  });
+
+  it("keeps a direct practice report and roster transaction even when the summary is omitted", () => {
+    expect(classifyOfficialFeedItem("Practice Report: player listed as questionable", "", "https://example.com/news/practice-report")).toBe("injury");
+    expect(classifyOfficialFeedItem("Houston Texans Transactions", "", "https://example.com/news/transactions")).toBe("transaction");
+  });
+
   it("keeps all 32 teams addressable and exposes both official source links", () => {
     expect(supportedOfficialTeamCodes).toHaveLength(32);
     expect(getOfficialSources("SEA")).toHaveLength(2);
