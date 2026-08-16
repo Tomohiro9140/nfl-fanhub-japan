@@ -50,3 +50,11 @@ NFL公式の[Injuriesページ](https://www.nfl.com/injuries/)では、対象チ
 NFL公式の[2026年チーム別日程](https://www.nfl.com/schedules/2026/by-team)は全32チームの選択導線を提供する。各チーム公式のScheduleページには、試合ごとのホーム／アウェー、対戦相手、現地開始時刻、会場、配信局が掲載される。たとえば[Bills公式Schedule](https://www.buffalobills.com/schedule/)は、2026年レギュラーシーズンWeek 1の`AT Texans`（Sun 09/13、1:00 PM EDT）およびプレシーズン次戦の`AT Browns`（Sat 08/22、1:00 PM EDT）を掲載している。ページHTMLは各試合に`data-gametime`とschema.orgの`SportsEvent`（startDate、homeTeam、awayTeam）を含むため、サーバー側で構造化して保存できる。
 
 [Bills公式Roster](https://www.buffalobills.com/team/players-roster/)は、Active／Reserve-Injured／Reserve-Non-Football Injury／Reserve-PUPなどの区分を分け、各選手名・背番号・ポジションを表形式で公開する。HTMLには`nfl-o-roster__player-name`と各行のポジションセルが含まれるため、公式ロスターのスナップショットとして解析できる。各チームサイトは同じNFLクラブサイト構造を採るため、`https://www.<team-domain>/schedule/`と`https://www.<team-domain>/team/players-roster/`をチームコードに応じて取得する方針とする。
+
+### NFL公式リーグ日程を優先する構成
+
+NFL公式のチーム別日程ページ（例：[Buffalo Bills 2026 Schedule](https://www.nfl.com/schedules/2026/by-team/buffalo-bills)）は、プレシーズンからレギュラーシーズンまでのWeek、対戦、ホーム／アウェー、日付、開始時刻、放送局を掲載する。2026年のBillsページでは、Week 2の`Bills at Browns, Saturday, August 22nd, 1:00 PM, NFLN`、レギュラーシーズンWeek 1の`Bills at Texans, Sunday, September 13th, 1:00 PM, CBS`などを確認した。Week 18のように公式にTBDとされる日程は、確定日時として保存せず、TBDのまま扱う。
+
+ブラウザで確認した公式ページのネットワーク経路には、チーム別ページ`/schedules/2026/by-team/<team-slug>`と、NFL公式の`api.nfl.com/experience/v1/gamedetails/season/2026/team/<team-id>`が含まれる。実装では、公開チーム別ページをリーグ公式の優先日程ソースとし、チーム公式Scheduleは照合・フォールバックに位置付ける。
+
+2026年8月15日23:53 UTCに、NFL公式の全32チーム別日程ページを初回同期した。32チームすべてでリーグ公式日程の解析に成功し、今季の将来試合は合計544件保存された。DB集計では、将来試合を持つチームは32、NFL公式`nfl.com/schedules/`を参照する保存済み試合は544件であり、次戦表示がチーム公式Scheduleの取得待ちに依存しない状態になった。

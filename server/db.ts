@@ -124,9 +124,17 @@ export async function upsertOfficialGames(items: InsertOfficialGame[]) {
   if (!db) throw new Error("Database is not available for official schedule cache");
   for (const item of items) {
     await db.insert(officialGames).values(item).onDuplicateKeyUpdate({
-      set: { opponentCode: item.opponentCode, homeAway: item.homeAway, seasonPhase: item.seasonPhase, weekLabel: item.weekLabel, kickoffAt: item.kickoffAt, venue: item.venue, broadcast: item.broadcast, fetchedAt: item.fetchedAt },
+      set: { opponentCode: item.opponentCode, homeAway: item.homeAway, seasonPhase: item.seasonPhase, weekLabel: item.weekLabel, kickoffAt: item.kickoffAt, venue: item.venue, broadcast: item.broadcast, sourceUrl: item.sourceUrl, fetchedAt: item.fetchedAt },
     });
   }
+}
+
+export async function replaceOfficialGamesForTeam(teamCode: string, items: InsertOfficialGame[]) {
+  if (items.length === 0) return;
+  const db = await getDb();
+  if (!db) throw new Error("Database is not available for official schedule cache");
+  await db.delete(officialGames).where(eq(officialGames.teamCode, teamCode));
+  await upsertOfficialGames(items);
 }
 
 export async function upsertOfficialRosterEntries(items: InsertOfficialRosterEntry[]) {

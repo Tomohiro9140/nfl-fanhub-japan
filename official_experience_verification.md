@@ -37,3 +37,23 @@ New Orleans Saintsは `neworleanssaints.com` を使用し、次戦 `NO @ LAR` �
 ## STATUS RADARとGAME NOTESの補足
 
 `STATUS RADAR`には、公式Rosterの選手と区分に加えて、チーム公式・NFL公式Injury Report由来の負傷関連項目、公開日時、公式原文リンクを表示する。`GAME NOTES`は取得時刻をヘッダーに表示し、データ未取得時には各行で待機理由と「次回公式取得後に参照リンクが利用可能になる」ことを明示する。固定の分析文・固定選手ステータスは表示しない。
+
+## NFL公式リーグ日程の優先とフォールバック確認
+
+2026年8月16日にNFL公式の全32チーム別日程を初回同期し、将来試合544件を保存した。32チームすべてでNFL公式`nfl.com/schedules/`を参照する次戦が保存され、Buffaloでは`BUF @ CLE · 8/23(日) 02:00 JST`が通常モバイル画面に`NFL OFFICIAL SCHEDULE`として表示された。
+
+リーグ公式日程が未取得の場合を実証するため、Arizonaのリーグ公式日程キャッシュをチーム公式Schedule由来の18件へ一時的に切り替えた。通常モバイル画面では`ARI VS DAL · 8/23(土) 11:00 JST`と`TEAM OFFICIAL SCHEDULE`を確認した。その後、Arizonaの日程はNFL公式の18件へ復元した。
+
+さらにArizonaの試合キャッシュを一時的に空にして通常モバイル画面を確認した。`OFFICIAL SCHEDULE PENDING`と「NFL公式リーグ日程とチーム公式Scheduleを確認後に表示します。」が出て、固定値は表示されなかった。確認後、NFL公式日程を再取得して復元した。
+
+### 通常モバイル画面の抽出証跡
+
+フォールバック状態の通常モバイル画面から、`ARI VS DAL`、`8/23(日) 11:00`、`BROADCAST TBA · TEAM OFFICIAL SCHEDULE`、公式リンク`https://www.azcardinals.com/schedule/`を抽出した。同じ画面の`GAME NOTES`にも`ARI VS DAL`と`OFFICIAL SOURCE`が表示され、チーム公式日程の保存結果と一致した。
+
+空キャッシュ状態の通常モバイル画面から、`ARI / NEXT GAME`、`OFFICIAL SCHEDULE PENDING`、`NFL公式リーグ日程とチーム公式Scheduleを確認後に表示します。`、`次戦情報をNFL公式リーグ日程から取得中です`、`OFFICIAL SCHEDULE PENDING`（GAME NOTES）を抽出した。対戦相手・開始時刻・会場などの固定値は表示されなかった。確認直後にArizonaのNFL公式日程18件を再取得し、通常状態へ復元した。
+
+### teamSnapshot APIと通常UIの対応付け
+
+Arizonaをチーム公式フォールバックへ切り替えた同一時点で、`teamSnapshot.byTeam` APIの`nextGame.sourceUrl`は`https://www.azcardinals.com/schedule/`を返した。通常モバイルUIも`ARI VS DAL`、`8/23(日) 11:00`、`TEAM OFFICIAL SCHEDULE`、同じ公式Scheduleリンクを表示した。
+
+Arizonaの`official_games`を空にした同一時点では、同APIが`nextGame:null`を返した。通常モバイルUIは`OFFICIAL SCHEDULE PENDING`と「NFL公式リーグ日程とチーム公式Scheduleを確認後に表示します。」を表示し、対戦カード・日時・会場は表示しなかった。いずれの検証後も`refreshOfficialTeamData.mjs ARI`でNFL公式リーグ日程18件へ復元した。
