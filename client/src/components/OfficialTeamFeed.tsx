@@ -38,7 +38,6 @@ export function OfficialTeamFeed({ favorite }: { favorite: FavoriteTeam }) {
       if (generatedSummary) setWarmedSummaries((current) => ({ ...current, [result.itemId]: generatedSummary }));
     },
   });
-  const englishExcerpt = trpc.officialFeed.englishExcerpt.useMutation();
 
   useEffect(() => {
     const candidates = news.filter((item) => !item.japaneseSummary && !warmedItemIds.current.has(item.id));
@@ -62,7 +61,6 @@ export function OfficialTeamFeed({ favorite }: { favorite: FavoriteTeam }) {
     setActiveItem(item);
     setDetailLanguage("ja");
     japaneseSummary.reset();
-    englishExcerpt.reset();
     if (!item.japaneseSummary && !warmedSummaries[item.id] && !warmedItemIds.current.has(item.id)) {
       warmedItemIds.current.add(item.id);
       japaneseSummary.mutate({ itemId: item.id });
@@ -70,13 +68,6 @@ export function OfficialTeamFeed({ favorite }: { favorite: FavoriteTeam }) {
   };
 
   const activeJapaneseSummary = activeItem ? activeItem.japaneseSummary || warmedSummaries[activeItem.id] || (japaneseSummary.data?.itemId === activeItem.id ? japaneseSummary.data.summary : null) : null;
-  const activeEnglishExcerpt = activeItem && englishExcerpt.data?.itemId === activeItem.id ? englishExcerpt.data : undefined;
-  const showEnglishExcerpt = () => {
-    if (!activeItem) return;
-    setDetailLanguage("en");
-    if (!activeEnglishExcerpt) englishExcerpt.mutate({ itemId: activeItem.id });
-  };
-
   return (
     <section id="updates" className="scroll-mt-24">
       <div className="flex items-center gap-2 font-mono text-[10px] font-semibold tracking-[0.2em] text-[#64748b]"><span className="text-[#10213a]">02</span><span>{favorite.code} OFFICIAL FEED</span><span className="h-px flex-1 bg-[#d9d5cc]" /></div>
@@ -90,8 +81,8 @@ export function OfficialTeamFeed({ favorite }: { favorite: FavoriteTeam }) {
       <Dialog open={Boolean(activeItem)} onOpenChange={(open) => !open && setActiveItem(null)}>
         <DialogContent className="border-[#d7d1c4] bg-[#f5f2ea] p-5 sm:max-w-lg">
           <DialogHeader className="text-left"><p className="font-mono text-[10px] font-bold tracking-[.16em] text-[#e85d2a]">{activeItem?.category === "injury" ? "INJURY WATCH" : "OFFICIAL TEAM NEWS"}</p><DialogTitle className="pr-7 font-display text-2xl font-extrabold leading-[.95] tracking-[.04em]">{activeItem?.title}</DialogTitle><DialogDescription className="font-mono text-[10px]">{activeItem ? `${activeItem.sourceName} · ${displayDate(activeItem.publishedAt)} JST` : ""}</DialogDescription></DialogHeader>
-          <div className="mt-4 grid grid-cols-2 gap-1 rounded-sm border border-[#d7d1c4] bg-white p-1"><button type="button" aria-pressed={detailLanguage === "ja"} onClick={() => setDetailLanguage("ja")} className={`min-h-9 font-mono text-[10px] font-bold tracking-[.08em] ${detailLanguage === "ja" ? "bg-[#10213a] text-white" : "text-[#526173]"}`}>日本語要約</button><button type="button" aria-pressed={detailLanguage === "en"} onClick={showEnglishExcerpt} className={`min-h-9 font-mono text-[10px] font-bold tracking-[.08em] ${detailLanguage === "en" ? "bg-[#10213a] text-white" : "text-[#526173]"}`}>ENGLISH EXCERPT</button></div>
-          <div className="mt-3 border-y border-[#d7d1c4] py-4"><p className="mb-2 font-mono text-[9px] font-bold tracking-[.14em] text-[#e85d2a]">{detailLanguage === "ja" ? "日本語要約" : "英語原文（公式記事抜粋）"}</p><div className="whitespace-pre-line text-[14px] leading-6 text-[#334155]">{detailLanguage === "ja" ? (japaneseSummary.isPending && !activeJapaneseSummary ? "公式記事を読み込み、日本語要約を生成しています…" : activeJapaneseSummary || activeItem?.summary || "公式記事の要約が提供されていません。原文で詳細をご確認ください。") : (englishExcerpt.isPending ? "公式記事の英語原文を読み込んでいます…" : activeEnglishExcerpt?.excerpt || "英語原文の抜粋を取得できませんでした。公式サイトで全文をご確認ください。")}</div>{detailLanguage === "ja" && japaneseSummary.data && !japaneseSummary.data.generated && <p className="mt-3 text-[11px] leading-4 text-[#687587]">日本語要約を生成できなかったため、公式RSSの概要を表示しています。</p>}{detailLanguage === "en" && activeEnglishExcerpt?.truncated && <p className="mt-3 text-[11px] leading-4 text-[#687587]">長い原文は公式サイトで全文をご確認ください。</p>}</div>
+          <div className="mt-4 grid grid-cols-2 gap-1 rounded-sm border border-[#d7d1c4] bg-white p-1"><button type="button" aria-pressed={detailLanguage === "ja"} onClick={() => setDetailLanguage("ja")} className={`min-h-9 font-mono text-[10px] font-bold tracking-[.08em] ${detailLanguage === "ja" ? "bg-[#10213a] text-white" : "text-[#526173]"}`}>日本語要約</button><button type="button" aria-pressed={detailLanguage === "en"} onClick={() => setDetailLanguage("en")} className={`min-h-9 font-mono text-[10px] font-bold tracking-[.08em] ${detailLanguage === "en" ? "bg-[#10213a] text-white" : "text-[#526173]"}`}>ENGLISH SUMMARY</button></div>
+          <div className="mt-3 border-y border-[#d7d1c4] py-4"><p className="mb-2 font-mono text-[9px] font-bold tracking-[.14em] text-[#e85d2a]">{detailLanguage === "ja" ? "日本語要約" : "英語要約（公式RSS）"}</p><div className="whitespace-pre-line text-[14px] leading-6 text-[#334155]">{detailLanguage === "ja" ? (japaneseSummary.isPending && !activeJapaneseSummary ? "公式記事を読み込み、日本語要約を生成しています…" : activeJapaneseSummary || activeItem?.summary || "公式記事の要約が提供されていません。原文で詳細をご確認ください。") : activeItem?.summary || "英語要約が提供されていません。公式サイトで全文をご確認ください。"}</div>{detailLanguage === "ja" && japaneseSummary.data && !japaneseSummary.data.generated && <p className="mt-3 text-[11px] leading-4 text-[#687587]">日本語要約を生成できなかったため、公式RSSの概要を表示しています。</p>}{detailLanguage === "en" && <p className="mt-3 text-[11px] leading-4 text-[#687587]">詳しい内容は公式サイトで全文をご確認ください。</p>}</div>
           {activeItem && <a href={activeItem.sourceUrl} target="_blank" rel="noreferrer" className="inline-flex min-h-10 items-center justify-center gap-2 bg-[#10213a] px-4 font-sans text-[13px] font-bold text-white transition hover:bg-[#203a61] active:scale-[.97]">READ ON OFFICIAL SITE <ArrowUpRight className="h-4 w-4" /></a>}
         </DialogContent>
       </Dialog>
