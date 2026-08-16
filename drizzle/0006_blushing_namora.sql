@@ -1,0 +1,1 @@
+ALTER TABLE `official_feed_items` MODIFY COLUMN `category` enum('news','injury','transaction') NOT NULL DEFAULT 'news';

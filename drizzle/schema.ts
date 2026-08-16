@@ -35,7 +35,7 @@ export const officialFeedItems = mysqlTable("official_feed_items", {
   sourceUrl: varchar("source_url", { length: 1024 }).notNull(),
   title: text("title").notNull(),
   summary: text("summary"),
-  category: mysqlEnum("category", ["news", "injury"]).notNull().default("news"),
+  category: mysqlEnum("category", ["news", "injury", "transaction"]).notNull().default("news"),
   publishedAt: timestamp("published_at").notNull(),
   fetchedAt: timestamp("fetched_at").defaultNow().notNull(),
 }, (table) => [

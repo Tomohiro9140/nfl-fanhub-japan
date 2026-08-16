@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gt, gte, lt, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, gte, inArray, lt, sql } from "drizzle-orm";
 import { attachOfficialScore, findOfficialScoreForGame } from "./gameStatus";
 import { isNull } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
@@ -199,7 +199,7 @@ export async function getOfficialTeamSnapshot(teamCode: string) {
     .orderBy(asc(officialRosterEntries.rosterStatus), asc(officialRosterEntries.position), asc(officialRosterEntries.playerName)).limit(160);
   const officialInjuryWindowStart = new Date(now.getTime() - 45 * 24 * 60 * 60 * 1_000);
   const injuries = await db.select().from(officialFeedItems)
-    .where(and(eq(officialFeedItems.teamCode, teamCode), eq(officialFeedItems.category, "injury"), gte(officialFeedItems.publishedAt, officialInjuryWindowStart)))
+    .where(and(eq(officialFeedItems.teamCode, teamCode), inArray(officialFeedItems.category, ["injury", "transaction"]), gte(officialFeedItems.publishedAt, officialInjuryWindowStart)))
     .orderBy(sql`case when ${officialFeedItems.sourceKind} = 'team_official' then 0 else 1 end`, desc(officialFeedItems.publishedAt)).limit(3);
   const news = await db.select().from(officialFeedItems)
     .where(and(eq(officialFeedItems.teamCode, teamCode), eq(officialFeedItems.category, "news")))

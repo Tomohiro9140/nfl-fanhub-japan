@@ -175,3 +175,7 @@ PFT記事のページ全体を解析していた旧実装では、関連記事�
 ## Reserve専用フィルターと近接ジャンプの整理（2026-08-16）
 
 Buffaloの390px幅実データ画面で、STATUS RADARからActiveおよびALLのタグ・選手プレビューを外し、Reserve／Injuredなど非Activeの登録区分だけを表示することを確認した。タグを選択するまでは選手一覧を展開せず、限られたモバイル領域を節約する。モバイル・デスクトップの主要ナビゲーションから、近接しているLATEST RESULTSとネタバレ防止へのジャンプを削除し、HOME、NEWS、RADAR、LEAGUEだけを残した。
+
+## 公式トランザクション表示（2026-08-16）
+
+公式RSSの分類に`transaction`を追加した。transaction、roster move、signed、released、waived、claimed、trade、contract、extension、activated、injured reserve、PUPなどを対象とし、サイン会や直筆サインの文脈は除外する。Houstonの390px幅実データ画面で、チーム公式記事「Houston Texans Transactions (8-15-2026)」が`TRANSACTION`バッジ付きで`INJURY OR TRANSACTION RELATED`へ表示されることを確認した。関連情報欄には公開から45日以内の公式負傷・契約／登録記事だけを新しい順に最大3件表示する。

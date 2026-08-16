@@ -43,6 +43,13 @@
       "when": 1786855434254,
       "tag": "0005_volatile_rattler",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "5",
+      "when": 1786870086565,
+      "tag": "0006_blushing_namora",
+      "breakpoints": true
     }
   ]
 }

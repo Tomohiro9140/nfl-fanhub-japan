@@ -44,7 +44,7 @@ export type AgentOfficialFeedItem = {
   sourceUrl: string;
   sourceName: string;
   sourceKind: "team_official" | "nfl_official";
-  category: "news" | "injury";
+  category: "news" | "injury" | "transaction";
   publishedAt: string;
 };
 
@@ -69,6 +69,17 @@ function field(item: string, name: string) {
 function isInjuryRelated(title: string, summary: string) {
   const text = `${title} ${summary}`;
   return /\b(?:injury|injured|questionable|doubtful|inactive|ir|pup|medical)\b|practice report|(?<!stood\s)\bout\b/i.test(text);
+}
+
+function isTransactionRelated(title: string, summary: string) {
+  const text = `${title} ${summary}`;
+  if (/\b(?:autograph|signature event|signed poster|signed memorabilia)\b/i.test(text)) return false;
+  return /\b(?:transactions?|roster moves?|sign(?:ed|s)?|released?|waived|waivers?|claimed|claim|trade(?:d)?|contract(?: extension)?|extensions?|activated?|designated (?:for|to return)|placed on (?:injured reserve|ir|pup))\b/i.test(text);
+}
+
+export function classifyOfficialFeedItem(title: string, summary: string): "news" | "injury" | "transaction" {
+  if (isInjuryRelated(title, summary)) return "injury";
+  return isTransactionRelated(title, summary) ? "transaction" : "news";
 }
 
 export function getOfficialSources(teamCode: string): OfficialSource[] {
@@ -101,7 +112,7 @@ export function parseOfficialTeamRss(xml: string, teamCode: string, source: Offi
       sourceUrl: url,
       title,
       summary,
-      category: isInjuryRelated(title, rawSummary) ? "injury" : "news",
+      category: classifyOfficialFeedItem(title, rawSummary),
       publishedAt: Number.isNaN(published.getTime()) ? now : published,
       fetchedAt: now,
     });

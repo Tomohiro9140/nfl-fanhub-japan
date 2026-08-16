@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getOfficialSources, isFreshNflInjuryArticle, parseNflArticlePublishedAt, parseOfficialNflInjuryPage, parseOfficialTeamRss, scheduledTeamGroups, supportedOfficialTeamCodes } from "./officialFeeds";
+import { classifyOfficialFeedItem, getOfficialSources, isFreshNflInjuryArticle, parseNflArticlePublishedAt, parseOfficialNflInjuryPage, parseOfficialTeamRss, scheduledTeamGroups, supportedOfficialTeamCodes } from "./officialFeeds";
 
 const sampleRss = `<?xml version="1.0"?><rss><channel><item><title><![CDATA[Practice report: player listed as questionable]]></title><link>https://www.packers.com/news/practice-report</link><description><![CDATA[Official practice report with injury updates.]]></description><pubDate>Fri, 14 Aug 2026 21:12:14 GMT</pubDate></item><item><title>Team announces community event</title><link>https://www.packers.com/news/community-event</link><description>Official team news.</description><pubDate>Thu, 13 Aug 2026 21:12:14 GMT</pubDate></item></channel></rss>`;
 
@@ -24,6 +24,12 @@ describe("official team feed parsing", () => {
     const [source] = getOfficialSources("LAC");
     const [item] = parseOfficialTeamRss(rss, "LAC", source);
     expect(item).toMatchObject({ category: "news" });
+  });
+
+  it("classifies official roster and contract moves as transactions without mistaking autograph stories for moves", () => {
+    expect(classifyOfficialFeedItem("Houston Texans Transactions (8-15-2026)", "The Houston Texans made roster moves.")).toBe("transaction");
+    expect(classifyOfficialFeedItem("Packers announce roster move", "Green Bay releases QB Kyron Drones")).toBe("transaction");
+    expect(classifyOfficialFeedItem("Player signs autographs for fans", "A signature event at the team store.")).toBe("news");
   });
 
   it("keeps all 32 teams addressable and exposes both official source links", () => {

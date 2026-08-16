@@ -1,7 +1,7 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { OfficialGameNotes, OfficialGameTicket, OfficialHuddle } from "./OfficialGameExperience";
+import { OfficialGameNotes, OfficialGameTicket, OfficialHuddle, OfficialStatusRadar } from "./OfficialGameExperience";
 import { OfficialLatestResults, OfficialLeagueDashboard, type LeagueDashboard } from "./OfficialLeagueDashboard";
 import { SpoilerSwitch } from "@/pages/Home";
 import type { FavoriteTeam } from "@/lib/nflTeams";
@@ -54,5 +54,13 @@ describe("compact mobile result and schedule UI", () => {
     expect(notesMarkup).toContain("OFFICIAL STORYLINE");
     expect(notesMarkup).toContain("AVAILABILITY WATCH");
     expect(notesMarkup).not.toContain("NEXT GAME");
+  });
+
+  it("labels official transaction items separately inside the combined related-information panel", () => {
+    const snapshot = { nextGame: undefined, roster: [], rosterCounts: [], injuries: [{ id: 1, title: "Houston Texans Transactions (8-15-2026)", sourceName: "HOU Official News", sourceUrl: "https://www.houstontexans.com/news/transactions", publishedAt: kickoffAt, category: "transaction" as const }], news: [], sources: { schedule: null, roster: null, injury: null }, lastUpdatedAt: kickoffAt };
+    const markup = renderToStaticMarkup(createElement(OfficialStatusRadar, { favorite, snapshot, loading: false }));
+    expect(markup).toContain("INJURY OR TRANSACTION RELATED");
+    expect(markup).toContain("TRANSACTION");
+    expect(markup).toContain("Houston Texans Transactions");
   });
 });
