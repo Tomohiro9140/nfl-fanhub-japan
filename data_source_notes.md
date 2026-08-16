@@ -70,3 +70,7 @@ NFL公式の[Standings](https://www.nfl.com/standings/league/2026/reg)は、全3
 ## モバイル表示検証（2026-08-16）
 
 390×844pxの実機相当ビューポートでトップ画面を確認した。GAME TICKETでは通常チーム名（Buffalo Bills／Cleveland Browns）と開催日時を表示し、略称だけの対戦行と未確定会場は表示されなかった。SPOILER SAFEはYOUR HUDDLEの直上にあり、有効時のLATEST RESULTSは結果を`RESULT HIDDEN`として隠す設計になっている。LEAGUE DESKは同一幅内にDIVISION STANDINGS、LATEST RESULTS、横スクロール可能な週選択、週内の全試合を表示し、ページ全体・各主要カードに横はみ出しは確認されなかった。
+
+### LATEST RESULTS／SCHEDULE DESK変更後の確認
+
+同じ390×844pxビューポートで、LATEST RESULTSがSPOILER SAFEの直下に配置され、スイッチ有効時に得点ではなく`RESULT HIDDEN`を表示することを確認した。SCHEDULE DESKの初期タブは`MY TEAM / FULL SCHEDULE`で、Buffalo Billsの今季予定を時系列に並べ、対戦表記はすべて`BUF @ CLE`のような略称に統一した。`ALL GAMES / NEXT 7 DAYS`は現在時刻から7日未満にキックオフする全試合を返すロジックをテストで確認し、チーム視点のホーム／アウェー反転と略称表示も回帰テストで確認した。両タブのカードはモバイル1列表示で、対戦略称・日時・放送局が同一幅内に収まる設計である。
