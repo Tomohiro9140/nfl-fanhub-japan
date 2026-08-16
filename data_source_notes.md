@@ -187,3 +187,7 @@ PFTの文単位照合を、出場可否だけでなく契約・登録関連の�
 ## 視聴・配信案内の誤分類除外（2026-08-16）
 
 `how to watch`、`how to stream`、`watch live`、`stream live`、`broadcast guide`などの視聴・配信案内を、見出しまたは公式URLで検出した場合は負傷・トランザクション分類から除外する。分類対象はRSS本文のキーワードではなく、記事見出しと正規URLに主題語があるものに限定した。既存キャッシュでは19件の視聴・配信案内を`news`へ戻した。Tampa Bayの390px幅実データ画面で、How to Watch／How to Stream記事が`INJURY OR TRANSACTION RELATED`に現れず、実在するTransactions記事のみが表示されることを確認した。
+
+## 負傷主題の明示判定（2026-08-16）
+
+Buccaneers公式の「Jacob Parrish Prepping for Hybrid Role in Bucs' Secondary」は、記事本文に負傷と関係する語句が含まれていたことで旧キャッシュでは`injury`として残っていた。分類を見出し・正規URLの明示的な主題へ限定し、単独の`out`は負傷判定に使わないよう変更した。`sit out`、`ruled out`、`out with`、`out for`、`will not play`のように欠場を明示する見出しだけを保持する。全チームの既存関連キャッシュを新規則で再分類し、共有記事は`news`へ戻った。Tampa Bayの390px幅実データ画面では、関連情報欄に共有記事がなく、公式Transactions記事だけが残ることを確認した。

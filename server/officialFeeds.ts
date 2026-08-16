@@ -74,8 +74,9 @@ function isViewingGuide(title: string, sourceUrl?: string) {
 function isInjuryRelated(title: string, sourceUrl?: string) {
   const text = `${title} ${sourceUrl ?? ""}`;
   if (isViewingGuide(title, sourceUrl)) return false;
+  const explicitOut = /\b(?:sit|sits|sitting|ruled|remain|remains|held|miss|misses|missing|will be|is|was)\s+out\b|\bout\s+(?:for|with|due to|of practice|until|through)\b|\blisted as out\b|\bwill not play\b/i.test(title);
   return /\b(?:injury|injured|questionable|doubtful|inactive|inactives|medical)\b|\b(?:ir|pup)\b|practice report/i.test(text)
-    || /(?<!stood\s)\bout\b/i.test(title);
+    || explicitOut;
 }
 
 function isTransactionRelated(title: string, sourceUrl?: string) {

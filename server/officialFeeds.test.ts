@@ -26,6 +26,12 @@ describe("official team feed parsing", () => {
     expect(item).toMatchObject({ category: "news" });
   });
 
+  it("requires an explicit unavailability phrase instead of classifying generic out language as injury", () => {
+    expect(classifyOfficialFeedItem("Falcons Camp Report: Fans show out under the lights", "", "https://www.atlantafalcons.com/news/falcons-camp-report-fans-show-out-under-the-lights")).toBe("news");
+    expect(classifyOfficialFeedItem("Jacob Parrish Prepping for Hybrid Role in Bucs' Secondary", "The secondary has many moving parts.", "https://www.buccaneers.com/news/jacob-parrish-prepping-for-possible-dual-role-in-bucs-secondary")).toBe("news");
+    expect(classifyOfficialFeedItem("Carson Beck To Sit Out Game Against Raiders", "", "https://www.azcardinals.com/news/carson-beck-to-sit-out-game-against-raiders")).toBe("injury");
+  });
+
   it("classifies official roster and contract moves as transactions without mistaking autograph stories for moves", () => {
     expect(classifyOfficialFeedItem("Houston Texans Transactions (8-15-2026)", "The Houston Texans made roster moves.")).toBe("transaction");
     expect(classifyOfficialFeedItem("Packers announce roster move", "Green Bay releases QB Kyron Drones")).toBe("transaction");
