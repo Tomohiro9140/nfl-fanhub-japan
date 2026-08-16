@@ -90,3 +90,5 @@ DAZN公式のNFL Game Passランディングページと日本語ヘルプペー
 GAME TICKETとSCHEDULE DESKの各カードに、クライアント側で1秒ごとに更新される`STARTS IN DD D HH:MM:SS`カウントダウンを追加した。開始時刻を過ぎた場合は負の値ではなく`KICKOFF PASSED`へ切り替え、時刻が無効な場合は`TIME TBA`を返す回帰テストを追加した。390×844pxの実データ表示では、GAME TICKETの中央日時下と2列のSchedule Deskカード内にカウントダウンが収まり、横はみ出しは確認されなかった。
 
 DAZNの競技ページから公開JSON-LDの`SportsEvent`だけを解析し、両チーム名と開始時刻（±36時間）が一意に一致する場合のみ`official_games.dazn_url`へ保存する仕組みを追加した。現時点のDAZN公式競技ページで実行した結果は`candidates: 0`、`linked: 0`であり、未公開のURLを推測して登録することはない。既存Heartbeatの6時間更新で同じ安全な照合処理を実行する。
+
+公開済みバージョンに対し、認証済みHeartbeatを一時作成して`official-feed-refresh`を強制グループ0で実行した。HTTP 200で完了し、8チームの公式データ更新（`processed: 8`、`stored: 186`）、リーグ順位表32件、スコア16件の更新は成功した。DAZN競技ページへのサーバー側リクエストは403となったが、DAZN同期処理は`ok: false`、`linked: 0`として応答に記録され、既存の公式更新を失敗させなかった。検証用Heartbeatは実行後に削除し、通常の6時間ごとの更新ジョブだけを残している。
