@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getOfficialSources, parseOfficialNflInjuryPage, parseOfficialTeamRss, scheduledTeamGroups, supportedOfficialTeamCodes } from "./officialFeeds";
+import { getOfficialSources, isFreshNflInjuryArticle, parseNflArticlePublishedAt, parseOfficialNflInjuryPage, parseOfficialTeamRss, scheduledTeamGroups, supportedOfficialTeamCodes } from "./officialFeeds";
 
 const sampleRss = `<?xml version="1.0"?><rss><channel><item><title><![CDATA[Practice report: player listed as questionable]]></title><link>https://www.packers.com/news/practice-report</link><description><![CDATA[Official practice report with injury updates.]]></description><pubDate>Fri, 14 Aug 2026 21:12:14 GMT</pubDate></item><item><title>Team announces community event</title><link>https://www.packers.com/news/community-event</link><description>Official team news.</description><pubDate>Thu, 13 Aug 2026 21:12:14 GMT</pubDate></item></channel></rss>`;
 
@@ -50,6 +50,13 @@ describe("official team feed parsing", () => {
     const [, jetsSource] = getOfficialSources("NYJ");
     expect(parseOfficialNflInjuryPage(page, "LAR", ramsSource)).toHaveLength(0);
     expect(parseOfficialNflInjuryPage(page, "NYJ", jetsSource)).toHaveLength(0);
+  });
+
+  it("reads an NFL article publication date and rejects a historic injury roundup", () => {
+    const publishedAt = parseNflArticlePublishedAt(`{"datePublished":"2024-12-08T08:22:07.689Z"}`);
+    expect(publishedAt?.toISOString()).toBe("2024-12-08T08:22:07.689Z");
+    expect(isFreshNflInjuryArticle(publishedAt!, new Date("2026-08-16T00:00:00.000Z"))).toBe(false);
+    expect(isFreshNflInjuryArticle(new Date("2026-08-13T00:00:00.000Z"), new Date("2026-08-16T00:00:00.000Z"))).toBe(true);
   });
 
   it("uses the requested eight-team UTC schedule groups", () => {

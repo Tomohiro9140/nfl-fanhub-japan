@@ -1,4 +1,4 @@
-import { useState } from "react";
+import React, { useState } from "react";
 import { ArrowUpRight, ChevronRight, CircleAlert, Clock3, Newspaper, RefreshCw } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -12,12 +12,14 @@ function displayDate(value: Date) {
 
 export function OfficialTeamFeed({ favorite }: { favorite: FavoriteTeam }) {
   const [activeItem, setActiveItem] = useState<FeedItem | null>(null);
-  const shouldSimulateUnavailable = import.meta.env.DEV && new URLSearchParams(window.location.search).has("feedError");
+  const shouldSimulateUnavailable = typeof window !== "undefined" && import.meta.env.DEV && new URLSearchParams(window.location.search).has("feedError");
   const feed = trpc.officialFeed.byTeam.useQuery({ teamCode: shouldSimulateUnavailable ? "XXX" : favorite.code }, { refetchInterval: 15 * 60 * 1000, retry: 1 });
   const displayError = feed.isError || shouldSimulateUnavailable;
   const items = (shouldSimulateUnavailable ? [] : feed.data?.items ?? []) as FeedItem[];
-  const news = items.filter((item) => item.category === "news").slice(0, 2);
-  const injuries = items.filter((item) => item.category === "injury").slice(0, 3);
+  const byLatest = (left: FeedItem, right: FeedItem) => new Date(right.publishedAt).getTime() - new Date(left.publishedAt).getTime();
+  const freshCutoff = Date.now() - 45 * 24 * 60 * 60 * 1000;
+  const news = items.filter((item) => item.category === "news").sort(byLatest).slice(0, 3);
+  const injuries = items.filter((item) => item.category === "injury" && new Date(item.publishedAt).getTime() >= freshCutoff).sort(byLatest).slice(0, 3);
   const sourceLinks = feed.data?.sources ?? [];
 
   const openArticle = (item: FeedItem) => setActiveItem(item);

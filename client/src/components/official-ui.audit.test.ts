@@ -1,7 +1,7 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { OfficialGameTicket } from "./OfficialGameExperience";
+import { OfficialGameNotes, OfficialGameTicket, OfficialHuddle } from "./OfficialGameExperience";
 import { OfficialLatestResults, OfficialLeagueDashboard, type LeagueDashboard } from "./OfficialLeagueDashboard";
 import { SpoilerSwitch } from "@/pages/Home";
 import type { FavoriteTeam } from "@/lib/nflTeams";
@@ -42,5 +42,17 @@ describe("compact mobile result and schedule UI", () => {
     expect(switchMarkup).not.toContain("SPOILER SAFE");
     expect(leagueMarkup).toContain("PRE · WEEK 2");
     expect(leagueMarkup).not.toContain("STARTS IN");
+  });
+
+  it("uses the reclaimed huddle space for official updates and storylines instead of next-game detail", () => {
+    const snapshot = { nextGame: undefined, roster: [{ id: 1, playerName: "A Player", jerseyNumber: "1", position: "QB", rosterStatus: "active", sourceUrl: "https://www.buffalobills.com/roster", fetchedAt: kickoffAt }], rosterCounts: [{ status: "active", count: 53 }], injuries: [{ id: 1, title: "Official availability update", sourceName: "BUF Official News", sourceUrl: "https://www.buffalobills.com/news/injury", publishedAt: kickoffAt }], news: [{ id: 1, title: "Camp storyline", summary: "Official team context for the week.", sourceName: "BUF Official News", sourceUrl: "https://www.buffalobills.com/news/story", publishedAt: kickoffAt }], sources: { schedule: null, roster: null, injury: null }, lastUpdatedAt: kickoffAt };
+    const huddleMarkup = renderToStaticMarkup(createElement(OfficialHuddle, { favorite, snapshot }));
+    const notesMarkup = renderToStaticMarkup(createElement(OfficialGameNotes, { favorite, snapshot }));
+    expect(huddleMarkup).toContain("LATEST TEAM UPDATE");
+    expect(huddleMarkup).toContain("ROSTER SNAPSHOT");
+    expect(huddleMarkup).not.toContain("SOURCE STATUS");
+    expect(notesMarkup).toContain("OFFICIAL STORYLINE");
+    expect(notesMarkup).toContain("AVAILABILITY WATCH");
+    expect(notesMarkup).not.toContain("NEXT GAME");
   });
 });

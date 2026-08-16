@@ -5,6 +5,7 @@ import { refreshOfficialTeamData } from "./officialTeamData";
 
 const NFL_OFFICIAL_INJURY_URL = "https://www.nfl.com/injuries/";
 const refreshWindowMs = 15 * 60 * 1000;
+const nflInjuryMaxAgeMs = 45 * 24 * 60 * 60 * 1000;
 
 const teamDomains: Record<string, string> = {
   ARI: "azcardinals.com", ATL: "atlantafalcons.com", BAL: "baltimoreravens.com", BUF: "buffalobills.com",
@@ -135,6 +136,44 @@ export function parseOfficialNflInjuryPage(html: string, teamCode: string, sourc
   return results.slice(0, 3);
 }
 
+/** NFL injury index cards can surface historic stories; verify each linked article's published timestamp. */
+export function parseNflArticlePublishedAt(html: string) {
+  const raw = html.match(/"datePublished"\s*:\s*"([^"]+)"/)?.[1]
+    ?? html.match(/datePublished\\"\s*:\s*\\"([^\\]+)\\"/)?.[1];
+  if (!raw) return null;
+  const parsed = new Date(raw);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+export function isFreshNflInjuryArticle(publishedAt: Date, now = new Date()) {
+  const age = now.getTime() - publishedAt.getTime();
+  return age >= -24 * 60 * 60 * 1000 && age <= nflInjuryMaxAgeMs;
+}
+
+async function fetchNflArticlePublishedAt(url: string) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 12_000);
+  try {
+    const response = await fetch(url, { signal: controller.signal, headers: { Accept: "text/html", "User-Agent": "Mozilla/5.0 NFLFanHubJapan/1.0" } });
+    if (!response.ok) return null;
+    return parseNflArticlePublishedAt(await response.text());
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function retainFreshNflInjuryItems(items: InsertOfficialFeedItem[]): Promise<Array<InsertOfficialFeedItem & { publishedAt: Date; fetchedAt: Date }>> {
+  const now = new Date();
+  const retained: Array<InsertOfficialFeedItem & { publishedAt: Date; fetchedAt: Date }> = [];
+  for (const item of items) {
+    const publishedAt = await fetchNflArticlePublishedAt(item.sourceUrl);
+    if (publishedAt && isFreshNflInjuryArticle(publishedAt, now)) retained.push({ ...item, publishedAt, fetchedAt: now });
+  }
+  return retained;
+}
+
 async function fetchRss(url: string) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 12_000);
@@ -156,10 +195,10 @@ export async function refreshOfficialTeamFeed(teamCode: string) {
     fetchRss(teamSource.url),
     fetchRss(nflInjurySource.url),
   ]);
-  const items = [
-    ...(teamResult.status === "fulfilled" ? parseOfficialTeamRss(teamResult.value, teamCode, teamSource) : []),
-    ...(injuryResult.status === "fulfilled" ? parseOfficialNflInjuryPage(injuryResult.value, teamCode, nflInjurySource) : []),
-  ];
+  const teamItems = teamResult.status === "fulfilled" ? parseOfficialTeamRss(teamResult.value, teamCode, teamSource) : [];
+  const injuryCandidates = injuryResult.status === "fulfilled" ? parseOfficialNflInjuryPage(injuryResult.value, teamCode, nflInjurySource) : [];
+  const injuryItems = await retainFreshNflInjuryItems(injuryCandidates);
+  const items = [...teamItems, ...injuryItems];
   if (items.length === 0) throw new Error(`No RSS items found for ${teamCode}`);
   await upsertOfficialFeedItems(items);
   return items.length;
