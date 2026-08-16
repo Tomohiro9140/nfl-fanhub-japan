@@ -1,4 +1,5 @@
-import { ArrowUpRight, CalendarDays, CircleAlert, Clock3, FileText, ShieldCheck, Tv, UsersRound } from "lucide-react";
+import { ArrowUpRight, CircleAlert, Clock3, FileText, Tv, UsersRound } from "lucide-react";
+import React from "react";
 import { getTeamByCode, type FavoriteTeam } from "@/lib/nflTeams";
 import { confirmedVenue } from "@/lib/gameVenue";
 import { daznNflGamePassUrl, daznWatchTarget } from "@/lib/daznWatch";
@@ -24,15 +25,11 @@ function sourceTime(value?: Date) {
   return value ? new Intl.DateTimeFormat("ja-JP", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit", timeZone: "Asia/Tokyo" }).format(new Date(value)) : "—";
 }
 
-function scheduleSourceLabel(sourceUrl?: string | null) {
-  return sourceUrl?.includes("nfl.com/schedules/") ? "NFL OFFICIAL SCHEDULE" : "TEAM OFFICIAL SCHEDULE";
-}
-
 function EmptyOfficial({ label, copy }: { label: string; copy: string }) {
   return <div className="border border-dashed border-white/30 bg-white/5 p-3 text-[12px] leading-5 text-[#d9e3f3]"><CircleAlert className="mr-1 inline h-3.5 w-3.5 text-[#ffc1a7]" /> <strong>{label}</strong><br />{copy}</div>;
 }
 
-export function OfficialGameTicket({ favorite, snapshot, loading, spoilerMode }: { favorite: FavoriteTeam; snapshot?: TeamSnapshot; loading: boolean; spoilerMode: boolean }) {
+export function OfficialGameTicket({ favorite, snapshot, loading }: { favorite: FavoriteTeam; snapshot?: TeamSnapshot; loading: boolean }) {
   const game = snapshot?.nextGame;
   const opponent = getTeamByCode(game?.opponentCode ?? null);
   const watchTarget = typeof navigator === "undefined" ? "_blank" : daznWatchTarget(navigator.userAgent);
@@ -40,11 +37,10 @@ export function OfficialGameTicket({ favorite, snapshot, loading, spoilerMode }:
   return <section data-layout-scope="hero" className="ticket-cut ticket-paper relative overflow-hidden rounded-[18px] bg-[#0a1931] text-[#fffaf0] shadow-[0_24px_50px_rgba(10,25,49,0.2)]">
     <div className="absolute inset-0 bg-[radial-gradient(circle_at_92%_5%,rgba(56,189,248,.19),transparent_30%),linear-gradient(115deg,#0a1931,#112a4b)]" />
     <div className="relative p-4 sm:p-5">
-      <div className="flex items-start justify-between gap-4"><div><p className="font-mono text-[10px] font-bold tracking-[.18em] text-[#ffc1a7]">GAME TICKET / {game ? (game.weekLabel ?? game.seasonPhase.toUpperCase()) : "OFFICIAL SCHEDULE"}</p><p className="mt-2 font-display text-2xl font-extrabold tracking-[.08em] text-white">NEXT GAME</p></div><CalendarDays className="mt-1 h-5 w-5 text-[#ffc1a7]" /></div>
-      {loading ? <p className="mt-5 font-mono text-[11px] text-[#d9e3f3]">LOADING OFFICIAL SCHEDULE…</p> : game && opponent ? <><div className="mt-4 grid grid-cols-[1fr_auto_1fr] items-center gap-3"><div><p className="font-display text-base font-bold leading-tight">{favorite.name}</p></div><div className="border-x border-dashed border-white/25 px-3 text-center"><p className="font-mono text-[9px] font-semibold tracking-[.14em] text-[#a5b3c9]">JST</p><p className="mt-1 font-display text-lg font-extrabold leading-none">{fmtDate(game.kickoffAt)}</p><GameCountdown kickoffAt={game.kickoffAt} result={{ gameState: game.gameState, awayScore: game.awayScore, homeScore: game.homeScore }} className="mt-1 text-[9px]" />{confirmedVenue(game.venue) ? <p className="mt-1 text-[10px] text-[#ffc1a7]">{confirmedVenue(game.venue)}</p> : null}</div><div className="text-right"><p className="font-display text-base font-bold leading-tight">{opponent.name}</p></div></div><p className="mt-3 font-mono text-[9px] tracking-[.08em] text-[#d9e3f3]">{[game.broadcast, scheduleSourceLabel(game.sourceUrl)].filter(Boolean).join(" · ")}</p></> : <div className="mt-4"><EmptyOfficial label="OFFICIAL SCHEDULE PENDING" copy="NFL公式リーグ日程とチーム公式Scheduleを確認後に表示します。" /></div>}
-      <div className="ticket-rule mt-4 pt-3"><a href={watchUrl} target={watchTarget} rel="noreferrer" className="inline-flex min-h-10 w-full items-center justify-center gap-2 bg-[#e85d2a] px-3 font-sans text-[13px] font-bold text-white transition hover:bg-[#cf4f20] active:scale-[.97]" aria-label="DAZN NFL Game Passホームを開いて観戦する"><Tv className="h-4 w-4" /> 観戦する <ArrowUpRight className="h-4 w-4" /></a><p className="mt-1.5 text-center font-mono text-[9px] text-[#a5b3c9]">DAZN NFL GAME PASS HOME · APP / BROWSER</p></div>
+      <div><p className="font-mono text-[10px] font-bold tracking-[.18em] text-[#ffc1a7]">GAME TICKET / {game ? (game.weekLabel ?? game.seasonPhase.toUpperCase()) : "OFFICIAL SCHEDULE"}</p><p className="mt-2 font-display text-2xl font-extrabold tracking-[.08em] text-white">NEXT GAME</p></div>
+      {loading ? <p className="mt-5 font-mono text-[11px] text-[#d9e3f3]">LOADING OFFICIAL SCHEDULE…</p> : game && opponent ? <><div className="mt-4 grid grid-cols-[1fr_auto_1fr] items-center gap-3"><div><p className="font-display text-base font-bold leading-tight">{favorite.name}</p></div><div className="border-x border-dashed border-white/25 px-3 text-center"><p className="font-mono text-[9px] font-semibold tracking-[.14em] text-[#a5b3c9]">JST</p><p className="mt-1 font-display text-lg font-extrabold leading-none">{fmtDate(game.kickoffAt)}</p><GameCountdown kickoffAt={game.kickoffAt} result={{ gameState: game.gameState, awayScore: game.awayScore, homeScore: game.homeScore }} className="mt-1 text-[9px]" />{confirmedVenue(game.venue) ? <p className="mt-1 text-[10px] text-[#ffc1a7]">{confirmedVenue(game.venue)}</p> : null}</div><div className="text-right"><p className="font-display text-base font-bold leading-tight">{opponent.name}</p></div></div>{game.broadcast ? <p className="mt-3 font-mono text-[9px] tracking-[.08em] text-[#d9e3f3]">{game.broadcast}</p> : null}</> : <div className="mt-4"><EmptyOfficial label="OFFICIAL SCHEDULE PENDING" copy="NFL公式リーグ日程とチーム公式Scheduleを確認後に表示します。" /></div>}
+      <div className="ticket-rule mt-4 pt-3"><a href={watchUrl} target={watchTarget} rel="noreferrer" className="inline-flex min-h-10 w-full items-center justify-center gap-2 bg-[#e85d2a] px-3 font-sans text-[13px] font-bold text-white transition hover:bg-[#cf4f20] active:scale-[.97]" aria-label="DAZN NFL Game Passホームを開いて観戦する"><Tv className="h-4 w-4" /> 観戦する <ArrowUpRight className="h-4 w-4" /></a></div>
       {game && <a href={game.sourceUrl} target="_blank" rel="noreferrer" className="mt-2 inline-flex items-center gap-1 font-mono text-[9px] text-[#d9e3f3] underline underline-offset-2">OFFICIAL SCHEDULE <ArrowUpRight className="h-3 w-3" /></a>}
-      {spoilerMode && <p className="mt-2 flex items-center gap-1.5 text-[11px] text-[#d5f4ca]"><ShieldCheck className="h-3.5 w-3.5" /> SPOILER SAFE / 結果は非表示です</p>}
     </div>
   </section>;
 }

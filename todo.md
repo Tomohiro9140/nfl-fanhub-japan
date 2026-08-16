@@ -104,3 +104,10 @@
 - [x] LATEST RESULTSで個別NFL公式ハイライトURLの有無を判定する。
 - [x] 個別ハイライト紐付け済み試合へ、専用アイコン・バッジとアクセシブルな説明を追加する。
 - [x] 未紐付け試合の汎用ハイライト導線との視覚的区別、ネタバレ防止、モバイル表示を検証する。
+- [x] LATEST RESULTSの個別動画バッジを「リンク済」へ変更し、WATCH HIGHLIGHTSと同一行に整列する。
+- [x] Game Ticket内のネタバレ防止表示、右上アイコン、NFL OFFICIAL SCHEDULE、APP／BROWSER注記を削除する。
+- [x] SPOILER SAFEの画面表記を「ネタバレ防止」へ変更する。
+- [x] Schedule Deskの各試合カードからカウントダウンを削除する。
+- [x] 上記のモバイル表示・ネタバレ防止・不要要素の削除を検証する。
+- [x] LATEST RESULTSの「リンク済」バッジとWATCH HIGHLIGHTSが同一の横並びコンテナにあることをDOM監査で確認する。
+- [x] Game Ticketの不要表示削除、ネタバレ防止の日本語表記、Schedule Deskのカウントダウン削除をDOM監査で確認する。

@@ -1,0 +1,46 @@
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { describe, expect, it } from "vitest";
+import { OfficialGameTicket } from "./OfficialGameExperience";
+import { OfficialLatestResults, OfficialLeagueDashboard, type LeagueDashboard } from "./OfficialLeagueDashboard";
+import { SpoilerSwitch } from "@/pages/Home";
+import type { FavoriteTeam } from "@/lib/nflTeams";
+
+const favorite: FavoriteTeam = { code: "BUF", name: "Buffalo Bills", conference: "AFC", division: "East", tone: "blue" };
+const kickoffAt = new Date("2026-08-23T06:00:00.000Z");
+
+const dashboard: LeagueDashboard = {
+  standings: [],
+  results: [{ id: 1, awayTeamCode: "CAR", homeTeamCode: "BUF", awayScore: 14, homeScore: 29, gameState: "FINAL", gameUrl: "https://www.nfl.com/games/panthers-at-bills-2026-pre-1", nflHighlightUrl: "https://www.nfl.com/videos/panthers-vs-bills-highlights-preseason-week-1", daznUrl: null, sourceUrl: "https://www.nfl.com/scores", fetchedAt: kickoffAt }],
+  calendar: [{ id: 1, teamCode: "BUF", opponentCode: "CLE", homeAway: "away", seasonPhase: "preseason", weekLabel: "PRESEASON WEEK 2", kickoffAt, broadcast: null, sourceUrl: "https://www.nfl.com/schedules", daznUrl: null, gameState: null, awayScore: null, homeScore: null }],
+};
+
+describe("compact mobile result and schedule UI", () => {
+  it("keeps the individual-video badge and highlight link in one horizontal row", () => {
+    const markup = renderToStaticMarkup(createElement(OfficialLatestResults, { favorite, dashboard, loading: false, spoilerMode: true }));
+    expect(markup).toMatch(/flex items-center justify-end gap-1\.5[^>]*>[\s\S]*リンク済[\s\S]*WATCH HIGHLIGHTS/);
+    expect(markup).toContain("RESULT HIDDEN");
+  });
+
+  it("removes the requested Game Ticket chrome while retaining the watch action", () => {
+    const markup = renderToStaticMarkup(createElement(OfficialGameTicket, {
+      favorite,
+      loading: false,
+      snapshot: { nextGame: { opponentCode: "CLE", homeAway: "away", seasonPhase: "preseason", weekLabel: "PRESEASON WEEK 2", kickoffAt, venue: null, broadcast: null, sourceUrl: "https://www.nfl.com/schedules", daznUrl: null, gameState: null, awayScore: null, homeScore: null }, roster: [], rosterCounts: [], injuries: [], news: [], sources: { schedule: null, roster: null, injury: null } },
+    }));
+    expect(markup).toContain("観戦する");
+    expect(markup).not.toContain("APP / BROWSER");
+    expect(markup).not.toContain("SPOILER SAFE");
+    expect(markup).not.toContain("NFL OFFICIAL SCHEDULE");
+    expect(markup).not.toContain("calendar-days");
+  });
+
+  it("uses the Japanese spoiler label and omits schedule-card countdown text", () => {
+    const switchMarkup = renderToStaticMarkup(createElement(SpoilerSwitch, { spoilerMode: true, onToggle: () => undefined }));
+    const leagueMarkup = renderToStaticMarkup(createElement(OfficialLeagueDashboard, { favorite, dashboard, loading: false }));
+    expect(switchMarkup).toContain("ネタバレ防止");
+    expect(switchMarkup).not.toContain("SPOILER SAFE");
+    expect(leagueMarkup).toContain("PRE · WEEK 2");
+    expect(leagueMarkup).not.toContain("STARTS IN");
+  });
+});
