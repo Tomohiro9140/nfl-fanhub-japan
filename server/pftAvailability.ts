@@ -5,7 +5,7 @@ import { TEAM_NAMES } from "./officialTeamData";
 
 const PFT_RUMOR_MILL_URL = "https://www.nbcsports.com/nfl/profootballtalk/rumor-mill";
 const PFT_SOURCE_NAME = "ProFootballTalk (NBC Sports)";
-const MAX_ARTICLES_PER_REFRESH = 5;
+const MAX_ARTICLES_PER_REFRESH = 1;
 const PFT_CRAWL_DELAY_MS = 10_000;
 
 type RosterMatch = { teamCode: string; playerName: string };
@@ -82,8 +82,9 @@ const pause = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 export async function refreshPftAvailabilityInsights(seedUrls: string[] = []) {
   const roster = await getOfficialRosterEntriesForPftMatching();
   if (!roster.length) return { scanned: 0, stored: 0, skipped: "roster-empty" as const };
-  const indexHtml = await fetchText(PFT_RUMOR_MILL_URL);
-  const urls = Array.from(new Set(seedUrls.concat(extractPftAvailabilityUrls(indexHtml)))).slice(0, MAX_ARTICLES_PER_REFRESH);
+  const urls = seedUrls.length
+    ? Array.from(new Set(seedUrls))
+    : extractPftAvailabilityUrls(await fetchText(PFT_RUMOR_MILL_URL)).slice(0, MAX_ARTICLES_PER_REFRESH);
   const insights: InsertExternalAvailabilityInsight[] = [];
   for (let index = 0; index < urls.length; index += 1) {
     const url = urls[index];

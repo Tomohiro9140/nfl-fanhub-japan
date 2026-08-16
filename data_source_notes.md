@@ -162,4 +162,4 @@ ESPNのrobots.txtはGPTBotおよびChatGPT-Userを明示的に禁止している
 
 ## PFT出場可否インサイトの初回同期（2026-08-16）
 
-PFT Rumor Millの公開ページを一度取得し、最大5本の記事ページを10秒以上の間隔で確認する処理を追加した。記事本文は保存せず、公式ロスターに存在するチーム・選手名と出場可否表現が一致した場合だけ、見出し、状態ラベル、公開時刻、原記事URLを保存する。Patriotsを一時選択した390px幅画面で、STATUS RADARの`AVAILABILITY WATCH · PFT`にBen Brownの多週離脱情報が表示されることを確認した。Brownは公式ロスターではActiveのまま表示しつつ、PFT補完では`OUT · MULTI-WEEK`として区別される。
+PFT Rumor Millの公開ページを低頻度で確認し、最新の出場可否記事1本だけを取得する処理を追加した。記事本文は保存せず、公式ロスターに存在するチーム・選手名と出場可否表現が同一文脈に一致した場合だけ、見出し、状態ラベル、公開時刻、原記事URLを保存する。初期の最大5本取得はHeartbeatの短い実行上限を超過したため、通常更新では最新1本へ制限した。Patriotsを一時選択した390px幅画面で、STATUS RADARの`AVAILABILITY WATCH · PFT`にBen Brownの多週離脱情報が表示されることを確認した。Brownは公式ロスターではActiveのまま表示しつつ、PFT補完では`OUT · MULTI-WEEK`として区別される。
