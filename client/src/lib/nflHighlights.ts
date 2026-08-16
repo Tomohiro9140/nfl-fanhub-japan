@@ -4,3 +4,7 @@ export const nflGameHighlightsUrl = "https://www.nfl.com/videos/channel/game-hig
 export function officialHighlightsHref(individualHighlightUrl?: string | null) {
   return individualHighlightUrl && /^https:\/\/www\.nfl\.com\/videos\//.test(individualHighlightUrl) ? individualHighlightUrl : nflGameHighlightsUrl;
 }
+
+export function hasIndividualOfficialHighlight(individualHighlightUrl?: string | null) {
+  return officialHighlightsHref(individualHighlightUrl) !== nflGameHighlightsUrl;
+}
