@@ -55,4 +55,10 @@ describe("mobile team page information hierarchy", () => {
     expect(markup).not.toContain("JST · OFFICIAL DATA");
     expect(markup).not.toContain("OFFICIAL CACHE");
   });
+
+  it("integrates game-day status into the ticket and places roster moves after the availability radar", () => {
+    const markup = renderToStaticMarkup(createElement(Home));
+    expect(markup).not.toContain("GAME-DAY STATUS");
+    expect(markup.indexOf("STATUS RADAR")).toBeLessThan(markup.indexOf("ROSTER MOVE DIGEST"));
+  });
 });

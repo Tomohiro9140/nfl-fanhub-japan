@@ -198,3 +198,6 @@
 - [x] 公式の契約・解雇・登録変更を短く要約するRoster Move Digestを追加する。
 - [x] STATUS RADARを出場可否・負傷中心へ再整理し、ロスター変更との重複をなくす。
 - [x] 新セクションの公式性、重複排除、スマホ幅の情報密度をテスト・検証する。
+- [x] Game-Day Statusの対戦カードを省略し、公式ゲーム状態・インアクティブ導線だけをGAME TICKETへ統合する。
+- [x] Roster Move DigestをSTATUS RADARの下へ移動し、モバイルの情報順序を整える。
+- [x] GAME TICKETの情報密度と、RADAR・Digestの順序をモバイル幅で検証する。

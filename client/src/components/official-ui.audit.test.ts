@@ -1,7 +1,7 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { OfficialGameDayStatus, OfficialGameNotes, OfficialGameTicket, OfficialHuddle, OfficialRosterMoveDigest, OfficialStatusRadar } from "./OfficialGameExperience";
+import { OfficialGameNotes, OfficialGameTicket, OfficialHuddle, OfficialRosterMoveDigest, OfficialStatusRadar } from "./OfficialGameExperience";
 import { OfficialLatestResults, OfficialLeagueDashboard, type LeagueDashboard } from "./OfficialLeagueDashboard";
 import { SpoilerSwitch } from "@/pages/Home";
 import type { FavoriteTeam } from "@/lib/nflTeams";
@@ -68,14 +68,15 @@ describe("compact mobile result and schedule UI", () => {
     expect(notesMarkup).not.toContain("NEXT GAME");
   });
 
-  it("separates official game-day state and concise roster moves from the availability radar", () => {
-    const snapshot = { nextGame: undefined, gameDayStatus: { opponentCode: "CLE", homeAway: "away" as const, weekLabel: "PRESEASON WEEK 2", kickoffAt, gameState: "LIVE", awayScore: 10, homeScore: 7, sourceUrl: "https://www.nfl.com/games/bills-at-browns", fetchedAt: kickoffAt }, roster: [], rosterCounts: [], injuries: [{ id: 1, title: "Official injury item", sourceName: "BUF Official News", sourceUrl: "https://www.buffalobills.com/news/injury", publishedAt: kickoffAt, category: "injury" as const }], rosterMoves: [{ id: 2, title: "Bills sign Example Player", sourceName: "BUF Official News", sourceUrl: "https://www.buffalobills.com/news/transaction", publishedAt: kickoffAt, category: "transaction" as const }], news: [], sources: { schedule: null, roster: null, injury: null, moves: "https://www.buffalobills.com/news/transaction" }, lastUpdatedAt: kickoffAt };
-    const gameDayMarkup = renderToStaticMarkup(createElement(OfficialGameDayStatus, { favorite, snapshot, loading: false }));
+  it("integrates game-day state into the ticket and keeps concise roster moves out of the availability radar", () => {
+    const snapshot = { nextGame: { opponentCode: "CLE", homeAway: "away" as const, seasonPhase: "preseason" as const, weekLabel: "PRESEASON WEEK 2", kickoffAt, venue: null, broadcast: null, gameState: "LIVE", awayScore: 10, homeScore: 7, sourceUrl: "https://www.nfl.com/games/bills-at-browns", daznUrl: null, fetchedAt: kickoffAt }, gameDayStatus: { opponentCode: "CLE", homeAway: "away" as const, weekLabel: "PRESEASON WEEK 2", kickoffAt, gameState: "LIVE", awayScore: 10, homeScore: 7, sourceUrl: "https://www.nfl.com/games/bills-at-browns", fetchedAt: kickoffAt }, roster: [], rosterCounts: [], injuries: [{ id: 1, title: "Official injury item", sourceName: "BUF Official News", sourceUrl: "https://www.buffalobills.com/news/injury", publishedAt: kickoffAt, category: "injury" as const }], rosterMoves: [{ id: 2, title: "Bills sign Example Player", sourceName: "BUF Official News", sourceUrl: "https://www.buffalobills.com/news/transaction", publishedAt: kickoffAt, category: "transaction" as const }], news: [], sources: { schedule: null, roster: null, injury: null, moves: "https://www.buffalobills.com/news/transaction" }, lastUpdatedAt: kickoffAt };
+    const ticketMarkup = renderToStaticMarkup(createElement(OfficialGameTicket, { favorite, snapshot, loading: false }));
     const digestMarkup = renderToStaticMarkup(createElement(OfficialRosterMoveDigest, { snapshot, loading: false }));
     const radarMarkup = renderToStaticMarkup(createElement(OfficialStatusRadar, { favorite, snapshot, loading: false }));
-    expect(gameDayMarkup).toContain("GAME-DAY STATUS");
-    expect(gameDayMarkup).toContain("OFFICIAL INACTIVES");
-    expect(gameDayMarkup).toContain("LIVE");
+    expect(ticketMarkup).toContain("GAME STATUS");
+    expect(ticketMarkup).toContain("INACTIVES");
+    expect(ticketMarkup).toContain("GAME CENTER");
+    expect(ticketMarkup).toContain("LIVE");
     expect(digestMarkup).toContain("ROSTER MOVE DIGEST");
     expect(digestMarkup).toContain("Bills sign Example Player");
     expect(radarMarkup).toContain("INJURY RELATED");
