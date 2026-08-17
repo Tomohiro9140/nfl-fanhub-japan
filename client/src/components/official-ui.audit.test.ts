@@ -16,9 +16,10 @@ const dashboard: LeagueDashboard = {
 };
 
 describe("compact mobile result and schedule UI", () => {
-  it("keeps the individual-video badge and highlight link in one horizontal row", () => {
+  it("renders only the individual highlight action when a video is registered", () => {
     const markup = renderToStaticMarkup(createElement(OfficialLatestResults, { favorite, dashboard, loading: false, spoilerMode: true }));
-    expect(markup).toMatch(/flex items-center justify-end gap-1\.5[^>]*>[\s\S]*リンク済[\s\S]*WATCH HIGHLIGHTS/);
+    expect(markup).toContain("WATCH HIGHLIGHTS");
+    expect(markup).not.toContain("リンク済");
     expect(markup).toContain("RESULT HIDDEN");
   });
 
@@ -94,7 +95,7 @@ describe("compact mobile result and schedule UI", () => {
     expect(normalMarkup).toContain("FINAL SCORE");
     expect(normalMarkup).toMatch(/>10<\/span><span> — <\/span><span[^>]*>7<\/span>/);
     expect(normalMarkup).toContain("WATCH HIGHLIGHTS");
-    expect(normalMarkup).toContain("VIEWED · SHOW NEXT");
+    expect(normalMarkup).toContain("ON TO THE NEXT GAME");
 
     const nextGameMarkup = renderToStaticMarkup(createElement(OfficialGameTicket, {
       favorite,
