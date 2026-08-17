@@ -21,6 +21,8 @@ describe("compact mobile result and schedule UI", () => {
     expect(markup).toContain("WATCH HIGHLIGHTS");
     expect(markup).not.toContain("リンク済");
     expect(markup).toContain("RESULT HIDDEN");
+    const revealedMarkup = renderToStaticMarkup(createElement(OfficialLatestResults, { favorite, dashboard, loading: false, spoilerMode: false }));
+    expect(revealedMarkup).not.toContain(">FINAL<");
   });
 
   it("removes the requested Game Ticket chrome while retaining the watch action", () => {

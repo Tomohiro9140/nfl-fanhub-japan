@@ -54,7 +54,7 @@ export function OfficialLatestResults({ favorite, dashboard, loading, spoilerMod
                   </a>
                   <div className="min-w-[106px] self-center text-right">
                     <p className="font-mono text-[26px] font-black leading-[.85] tracking-[-.06em]">{spoilerMode ? "—" : `${game.awayScore ?? "—"} - ${game.homeScore ?? "—"}`}</p>
-                    <p className="mt-1 font-mono text-[8px] font-bold tracking-[.08em] text-[#64748b]">{spoilerMode ? "RESULT HIDDEN" : game.gameState}</p>
+                    {spoilerMode ? <p className="mt-1 font-mono text-[8px] font-bold tracking-[.08em] text-[#64748b]">RESULT HIDDEN</p> : game.gameState !== "FINAL" ? <p className="mt-1 font-mono text-[8px] font-bold tracking-[.08em] text-[#64748b]">{game.gameState}</p> : null}
                   </div>
                 </div>
               );
