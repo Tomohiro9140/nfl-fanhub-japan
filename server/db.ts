@@ -171,6 +171,14 @@ export async function upsertOfficialRosterEntries(items: InsertOfficialRosterEnt
   }
 }
 
+export async function replaceOfficialRosterEntriesForTeam(teamCode: string, items: InsertOfficialRosterEntry[]) {
+  if (items.length === 0) return;
+  const db = await getDb();
+  if (!db) throw new Error("Database is not available for official roster cache");
+  await db.delete(officialRosterEntries).where(eq(officialRosterEntries.teamCode, teamCode));
+  await upsertOfficialRosterEntries(items);
+}
+
 export async function getOfficialRosterEntriesForPftMatching() {
   const db = await getDb();
   if (!db) return [];

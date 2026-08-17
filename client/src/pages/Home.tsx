@@ -26,8 +26,7 @@ export function SpoilerSwitch({ spoilerMode, onToggle }: { spoilerMode: boolean;
   const toggleClass = ["relative h-7 w-12 rounded-full p-1 transition", spoilerMode ? "bg-[#3d6b2c]" : "bg-[#cbd5e1]"].join(" ");
   const knobClass = ["block h-5 w-5 rounded-full bg-white shadow-sm transition-transform", spoilerMode ? "translate-x-5" : "translate-x-0"].join(" ");
   return <section id="safe" data-layout-scope="spoiler" className={panelClass}>
-    <div className="flex items-center gap-3"><div className={iconClass}>{spoilerMode ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}</div><div className="min-w-0 flex-1"><p className="font-display text-base font-bold leading-none tracking-wide">ネタバレ防止</p><p className="mt-1 text-[11px] text-[#687587]">{spoilerMode ? "結果・スコア・結果が分かる画像を隠しています" : "試合結果を通常どおり表示しています"}</p></div><button onClick={onToggle} className={toggleClass} aria-pressed={spoilerMode} aria-label="ネタバレ防止モードを切り替える"><span className={knobClass} /></button></div>
-    <div className="mt-2 flex items-center gap-2 rounded-xl border border-[#cfe6c4] bg-white/80 px-3 py-1.5 text-[11px] text-[#426237]"><ShieldCheck className="h-3.5 w-3.5 shrink-0" /> 視聴が終わるまで、この設定を維持します。</div>
+    <div className="flex items-center gap-3"><div className={iconClass}>{spoilerMode ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}</div><p className="min-w-0 flex-1 font-display text-base font-bold leading-none tracking-wide">ネタバレ防止</p><button onClick={onToggle} className={toggleClass} aria-pressed={spoilerMode} aria-label="ネタバレ防止モードを切り替える"><span className={knobClass} /></button></div>
   </section>;
 }
 

@@ -54,6 +54,8 @@ describe("mobile team page information hierarchy", () => {
     expect(markup).toContain("FAN/HUBのフィールドノートロゴ");
     expect(markup).not.toContain("JST · OFFICIAL DATA");
     expect(markup).not.toContain("OFFICIAL CACHE");
+    expect(markup).not.toContain("結果・スコア・結果が分かる画像を隠しています");
+    expect(markup).not.toContain("視聴が終わるまで、この設定を維持します。");
   });
 
   it("integrates game-day status into the ticket and places roster moves after the availability radar", () => {

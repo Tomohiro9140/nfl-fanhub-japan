@@ -25,6 +25,8 @@ describe("compact mobile result and schedule UI", () => {
     expect(revealedMarkup).not.toContain(">FINAL<");
     expect(revealedMarkup).toContain("font-extrabold text-[#10213a]");
     expect(markup).not.toContain("font-extrabold text-[#10213a]");
+    expect(revealedMarkup).toContain("py-2.5");
+    expect(revealedMarkup).toContain("leading-[1.25]");
   });
 
   it("removes the requested Game Ticket chrome while retaining the watch action", () => {

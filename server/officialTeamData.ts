@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import type { InsertOfficialGame, InsertOfficialRosterEntry } from "../drizzle/schema";
-import { replaceOfficialGamesForTeam, upsertOfficialRosterEntries } from "./db";
+import { replaceOfficialGamesForTeam, replaceOfficialRosterEntriesForTeam } from "./db";
 
 export const TEAM_DOMAINS: Record<string, string> = {
   ARI: "azcardinals.com", ATL: "atlantafalcons.com", BAL: "baltimoreravens.com", BUF: "buffalobills.com", CAR: "panthers.com", CHI: "chicagobears.com", CIN: "bengals.com", CLE: "clevelandbrowns.com", DAL: "dallascowboys.com", DEN: "denverbroncos.com", DET: "detroitlions.com", GB: "packers.com", HOU: "houstontexans.com", IND: "colts.com", JAX: "jaguars.com", KC: "chiefs.com", LAC: "chargers.com", LAR: "therams.com", LV: "raiders.com", MIA: "miamidolphins.com", MIN: "vikings.com", NE: "patriots.com", NO: "neworleanssaints.com", NYG: "giants.com", NYJ: "newyorkjets.com", PHI: "philadelphiaeagles.com", PIT: "steelers.com", SF: "49ers.com", SEA: "seahawks.com", TB: "buccaneers.com", TEN: "titansonline.com", WAS: "commanders.com",
@@ -10,9 +10,29 @@ export const TEAM_NAMES: Record<string, string> = {
   ARI: "Arizona Cardinals", ATL: "Atlanta Falcons", BAL: "Baltimore Ravens", BUF: "Buffalo Bills", CAR: "Carolina Panthers", CHI: "Chicago Bears", CIN: "Cincinnati Bengals", CLE: "Cleveland Browns", DAL: "Dallas Cowboys", DEN: "Denver Broncos", DET: "Detroit Lions", GB: "Green Bay Packers", HOU: "Houston Texans", IND: "Indianapolis Colts", JAX: "Jacksonville Jaguars", KC: "Kansas City Chiefs", LAC: "Los Angeles Chargers", LAR: "Los Angeles Rams", LV: "Las Vegas Raiders", MIA: "Miami Dolphins", MIN: "Minnesota Vikings", NE: "New England Patriots", NO: "New Orleans Saints", NYG: "New York Giants", NYJ: "New York Jets", PHI: "Philadelphia Eagles", PIT: "Pittsburgh Steelers", SF: "San Francisco 49ers", SEA: "Seattle Seahawks", TB: "Tampa Bay Buccaneers", TEN: "Tennessee Titans", WAS: "Washington Commanders",
 };
 
-function text(value: string) {
-  return value.replace(/<[^>]+>/g, " ").replace(/&nbsp;/g, " ").replace(/&amp;/g, "&").replace(/\s+/g, " ").trim();
+function decodeCodePoint(value: string, radix: number) {
+  const codePoint = Number.parseInt(value, radix);
+  return Number.isFinite(codePoint) && codePoint >= 0 && codePoint <= 0x10ffff ? String.fromCodePoint(codePoint) : `&#${radix === 16 ? "x" : ""}${value};`;
 }
+
+/** Decode official HTML text consistently so entity-encoded player names never reach the roster cache. */
+export function normalizeOfficialText(value: string) {
+  const withoutTags = value.replace(/<[^>]+>/g, " ");
+  const decodeEntitiesOnce = (input: string) => input
+    .replace(/&#x([0-9a-f]+);?/gi, (_, hex: string) => decodeCodePoint(hex, 16))
+    .replace(/&#(\d+);?/g, (_, decimal: string) => decodeCodePoint(decimal, 10))
+    .replace(/&(nbsp|amp|apos|quot|lt|gt);/gi, (_, name: string) => ({ nbsp: " ", amp: "&", apos: "'", quot: '"', lt: "<", gt: ">" })[name.toLowerCase()] ?? _);
+  let decodedEntities = withoutTags;
+  for (let pass = 0; pass < 3; pass += 1) {
+    const next = decodeEntitiesOnce(decodedEntities);
+    if (next === decodedEntities) break;
+    decodedEntities = next;
+  }
+  const repaired = /[ÃÂâ]/.test(decodedEntities) ? Buffer.from(decodedEntities, "latin1").toString("utf8") : decodedEntities;
+  return (repaired.includes("�") ? decodedEntities : repaired).normalize("NFC").replace(/[\u0000-\u001f\u007f]/g, " ").replace(/\s+/g, " ").trim();
+}
+
+const text = normalizeOfficialText;
 
 function hash(value: string) {
   return createHash("sha256").update(value).digest("hex");
@@ -129,14 +149,14 @@ export function parseOfficialRosterPage(html: string, teamCode: string, sourceUr
   const entries: InsertOfficialRosterEntry[] = [];
   for (let index = 0; index < statusStarts.length; index += 1) {
     const match = statusStarts[index];
-    const status = text(match[1]);
+    const status = normalizeOfficialText(match[1]);
     const end = statusStarts[index + 1]?.index ?? html.length;
     const section = html.slice(match.index, end);
     for (const rowMatch of Array.from(section.matchAll(/<tr[^>]*>([\s\S]*?)<\/tr>/gi))) {
       const row = rowMatch[1];
-      const playerName = text(row.match(/nfl-o-roster__player-name[^>]*>[\s\S]*?<a[^>]*>([\s\S]*?)<\/a>/i)?.[1] ?? "");
+      const playerName = normalizeOfficialText(row.match(/nfl-o-roster__player-name[^>]*>[\s\S]*?<a[^>]*>([\s\S]*?)<\/a>/i)?.[1] ?? "");
       if (!playerName) continue;
-      const cells = Array.from(row.matchAll(/<td[^>]*>([\s\S]*?)<\/td>/gi), (cell) => text(cell[1] ?? ""));
+      const cells = Array.from(row.matchAll(/<td[^>]*>([\s\S]*?)<\/td>/gi), (cell) => normalizeOfficialText(cell[1] ?? ""));
       entries.push({ externalId: hash(`${teamCode}:${playerName}:${status}`), teamCode, playerName, jerseyNumber: cells[1] || null, position: cells[2] || "—", rosterStatus: status || "Active", sourceUrl, fetchedAt: new Date() });
     }
   }
@@ -167,6 +187,6 @@ export async function refreshOfficialTeamData(teamCode: string) {
   const roster = rosterResult.status === "fulfilled" ? parseOfficialRosterPage(await rosterResult.value, teamCode, rosterUrl) : [];
   const preferredGames = selectPreferredSchedule(leagueGames, teamGames);
   if (preferredGames.length > 0) await replaceOfficialGamesForTeam(teamCode, preferredGames);
-  if (roster.length > 0) await upsertOfficialRosterEntries(roster);
+  if (roster.length > 0) await replaceOfficialRosterEntriesForTeam(teamCode, roster);
   return { games: preferredGames.length, leagueGames: leagueGames.length, roster: roster.length, errors: [leagueResult, scheduleResult, rosterResult].filter((result) => result.status === "rejected").length };
 }

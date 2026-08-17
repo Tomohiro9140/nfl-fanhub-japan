@@ -52,10 +52,10 @@ export function OfficialLatestResults({ favorite, dashboard, loading, spoilerMod
               const awayWon = !spoilerMode && hasOfficialScore && awayScore > homeScore;
               const homeWon = !spoilerMode && hasOfficialScore && homeScore > awayScore;
               return (
-                <div key={game.id} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 py-2">
-                  <a href={game.gameUrl} target="_blank" rel="noreferrer" className="min-w-0 self-center text-[13px] leading-[1.15]">
+                <div key={game.id} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 py-2.5">
+                  <a href={game.gameUrl} target="_blank" rel="noreferrer" className="min-w-0 self-center text-[13px] leading-[1.25]">
                     <p className={`truncate ${awayWon ? "font-extrabold text-[#10213a]" : "font-bold"}`}>{away?.name ?? game.awayTeamCode}</p>
-                    <p className={`mt-0.5 truncate ${homeWon ? "font-extrabold text-[#10213a]" : "font-bold"}`}>@ {home?.name ?? game.homeTeamCode}</p>
+                    <p className={`mt-1 truncate ${homeWon ? "font-extrabold text-[#10213a]" : "font-bold"}`}>@ {home?.name ?? game.homeTeamCode}</p>
                   </a>
                   <div className="min-w-[106px] self-center text-right">
                     <p className="font-mono text-[26px] font-black leading-[.85] tracking-[-.06em]">{spoilerMode ? "—" : `${game.awayScore ?? "—"} - ${game.homeScore ?? "—"}`}</p>
