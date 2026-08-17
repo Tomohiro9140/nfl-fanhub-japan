@@ -25,8 +25,53 @@ export function OfficialLatestResults({ favorite, dashboard, loading, spoilerMod
     const favoriteGames = dashboard?.results.filter((game) => game.awayTeamCode === favorite.code || game.homeTeamCode === favorite.code) ?? [];
     return (favoriteGames.length ? favoriteGames : dashboard?.results ?? []).slice(0, 3);
   }, [dashboard, favorite]);
+  const footerHighlightGame = resultGames.find((game) => hasIndividualOfficialHighlight(game.nflHighlightUrl));
+  const footerHighlightAway = footerHighlightGame ? nflTeams.find((team) => team.code === footerHighlightGame.awayTeamCode) : undefined;
+  const footerHighlightHome = footerHighlightGame ? nflTeams.find((team) => team.code === footerHighlightGame.homeTeamCode) : undefined;
 
-  return <section id="results" data-layout-scope="latest-results" className="scroll-mt-24"><div className="mb-1.5 flex items-center gap-2 font-mono text-[10px] font-semibold tracking-[0.2em] text-[#64748b]"><span className="text-[#10213a]">01</span><span>LATEST RESULTS</span><span className="h-px flex-1 bg-[#d9d5cc]" /></div><div className="memo-slip border border-[#ded8cc] bg-[#fffdf8] px-3 py-2 shadow-[0_10px_30px_rgba(34,42,53,.05)]"><div><p className="font-mono text-[9px] font-bold tracking-[.14em] text-[#64748b]">OFFICIAL SCORES</p><h2 className="mt-0.5 font-display text-[19px] font-extrabold leading-none tracking-wide">LATEST RESULTS</h2></div>{loading ? <p className="py-2.5 text-center font-mono text-[10px] text-[#64748b]">LOADING OFFICIAL SCORES…</p> : resultGames.length ? <div className="mt-1.5 divide-y divide-[#e9e3d6]">{resultGames.map((game) => { const away = nflTeams.find((team) => team.code === game.awayTeamCode); const home = nflTeams.find((team) => team.code === game.homeTeamCode); const hasIndividualHighlight = hasIndividualOfficialHighlight(game.nflHighlightUrl); return <div key={game.id} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 py-2"><a href={game.gameUrl} target="_blank" rel="noreferrer" className="min-w-0 self-center text-[12px] font-bold"><p className="truncate">{away?.name ?? game.awayTeamCode}</p><p className="mt-0.5 truncate">@ {home?.name ?? game.homeTeamCode}</p></a><div className="min-w-[106px] self-center text-right"><p className="font-mono text-[26px] font-black leading-[.85] tracking-[-.06em]">{spoilerMode ? "—" : `${game.awayScore ?? "—"} - ${game.homeScore ?? "—"}`}</p><p className="mt-1 font-mono text-[8px] font-bold tracking-[.08em] text-[#64748b]">{spoilerMode ? "RESULT HIDDEN" : game.gameState}</p></div><div className="col-span-2 flex justify-end pt-0.5">{hasIndividualHighlight ? <a href={game.nflHighlightUrl ?? "https://www.nfl.com/videos/"} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 whitespace-nowrap font-mono text-[8px] font-bold tracking-[.06em] text-[#a84420] underline decoration-[#e85d2a] decoration-2 underline-offset-2" aria-label={`${away?.name ?? game.awayTeamCode}対${home?.name ?? game.homeTeamCode}のNFL公式ハイライトを開く`}>WATCH HIGHLIGHTS <ChevronRight className="h-3 w-3" /></a> : <span className="font-mono text-[8px] font-bold tracking-[.06em] text-[#8a96a5]">HIGHLIGHTS · 準備中</span>}</div></div>; })}</div> : <p className="mt-1.5 border border-dashed border-[#d7d1c4] bg-white p-2 text-[11px] leading-5 text-[#687587]">NFL公式スコアの初回同期を待っています。</p>}<a href="https://www.nfl.com/scores" target="_blank" rel="noreferrer" className="mt-1.5 inline-flex items-center gap-1 text-[10px] font-bold underline decoration-[#e85d2a] decoration-2 underline-offset-3">OFFICIAL SCORES <ChevronRight className="h-3 w-3" /></a></div></section>;
+  return (
+    <section id="results" data-layout-scope="latest-results" className="scroll-mt-24">
+      <div className="mb-1.5 flex items-center gap-2 font-mono text-[10px] font-semibold tracking-[0.2em] text-[#64748b]">
+        <span className="text-[#10213a]">01</span><span>LATEST RESULTS</span><span className="h-px flex-1 bg-[#d9d5cc]" />
+      </div>
+      <div className="memo-slip border border-[#ded8cc] bg-[#fffdf8] px-3 py-2 shadow-[0_10px_30px_rgba(34,42,53,.05)]">
+        <div>
+          <p className="font-mono text-[9px] font-bold tracking-[.14em] text-[#64748b]">OFFICIAL SCORES</p>
+          <h2 className="mt-0.5 font-display text-[19px] font-extrabold leading-none tracking-wide">LATEST RESULTS</h2>
+        </div>
+        {loading ? (
+          <p className="py-2.5 text-center font-mono text-[10px] text-[#64748b]">LOADING OFFICIAL SCORES…</p>
+        ) : resultGames.length ? (
+          <div className="mt-1.5 divide-y divide-[#e9e3d6]">
+            {resultGames.map((game) => {
+              const away = nflTeams.find((team) => team.code === game.awayTeamCode);
+              const home = nflTeams.find((team) => team.code === game.homeTeamCode);
+              return (
+                <div key={game.id} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 py-2">
+                  <a href={game.gameUrl} target="_blank" rel="noreferrer" className="min-w-0 self-center text-[12px] font-bold">
+                    <p className="truncate">{away?.name ?? game.awayTeamCode}</p>
+                    <p className="mt-0.5 truncate">@ {home?.name ?? game.homeTeamCode}</p>
+                  </a>
+                  <div className="min-w-[106px] self-center text-right">
+                    <p className="font-mono text-[26px] font-black leading-[.85] tracking-[-.06em]">{spoilerMode ? "—" : `${game.awayScore ?? "—"} - ${game.homeScore ?? "—"}`}</p>
+                    <p className="mt-1 font-mono text-[8px] font-bold tracking-[.08em] text-[#64748b]">{spoilerMode ? "RESULT HIDDEN" : game.gameState}</p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <p className="mt-1.5 border border-dashed border-[#d7d1c4] bg-white p-2 text-[11px] leading-5 text-[#687587]">NFL公式スコアの初回同期を待っています。</p>
+        )}
+        <div className="mt-1.5 flex items-center justify-between gap-3">
+          <a href="https://www.nfl.com/scores" target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-[10px] font-bold underline decoration-[#e85d2a] decoration-2 underline-offset-3">OFFICIAL SCORES <ChevronRight className="h-3 w-3" /></a>
+          {!loading && resultGames.length ? footerHighlightGame ? (
+            <a href={footerHighlightGame.nflHighlightUrl ?? "https://www.nfl.com/videos/"} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 whitespace-nowrap font-mono text-[8px] font-bold tracking-[.06em] text-[#a84420] underline decoration-[#e85d2a] decoration-2 underline-offset-2" aria-label={`${footerHighlightAway?.name ?? footerHighlightGame.awayTeamCode}対${footerHighlightHome?.name ?? footerHighlightGame.homeTeamCode}のNFL公式ハイライトを開く`}>WATCH HIGHLIGHTS <ChevronRight className="h-3 w-3" /></a>
+          ) : <span className="font-mono text-[8px] font-bold tracking-[.06em] text-[#8a96a5]">HIGHLIGHTS · 準備中</span> : <span aria-hidden="true" />}
+        </div>
+      </div>
+    </section>
+  );
 }
 
 export function OfficialLeagueDashboard({ favorite, dashboard, loading }: { favorite: FavoriteTeam; dashboard?: LeagueDashboard; loading: boolean }) {

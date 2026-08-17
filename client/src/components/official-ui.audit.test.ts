@@ -115,7 +115,7 @@ describe("compact mobile result and schedule UI", () => {
     expect(radarMarkup).toContain("OUT");
     expect(resultMarkup).toContain("px-3 py-2");
     expect(resultMarkup).toContain("text-[26px]");
-    expect(resultMarkup).toContain("col-span-2 flex justify-end");
+    expect(resultMarkup).toContain("mt-1.5 flex items-center justify-between");
     expect(resultMarkup).toContain("self-center");
     expect(resultMarkup).not.toContain("lucide-trophy");
   });
