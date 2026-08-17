@@ -3,7 +3,7 @@ import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { publicProcedure, router } from "./_core/trpc";
 import { getFreshOfficialTeamFeed, refreshOfficialTeamFeed } from "./officialFeeds";
-import { getOfficialFeedItemById, getOfficialLeagueDashboard, getOfficialTeamSnapshot, saveOfficialFeedEnglishSummary, saveOfficialFeedJapaneseSummary } from "./db";
+import { getOfficialFeedItemById, getOfficialLeagueCalendar, getOfficialLeagueDashboardSummary, getOfficialTeamSnapshot, saveOfficialFeedEnglishSummary, saveOfficialFeedJapaneseSummary } from "./db";
 import { generateOfficialNewsEnglishSummary, generateOfficialNewsJapaneseSummary } from "./newsJapaneseSummary";
 import { z } from "zod";
 
@@ -65,7 +65,8 @@ export const appRouter = router({
     }),
   }),
   leagueDashboard: router({
-    summary: publicProcedure.query(() => getOfficialLeagueDashboard()),
+    summary: publicProcedure.query(() => getOfficialLeagueDashboardSummary()),
+    calendar: publicProcedure.input(z.object({ teamCode: z.string().length(2).or(z.string().length(3)) })).query(({ input }) => getOfficialLeagueCalendar(input.teamCode.toUpperCase())),
   }),
 });
 

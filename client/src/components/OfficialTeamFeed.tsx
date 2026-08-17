@@ -54,7 +54,8 @@ export function OfficialTeamFeed({ favorite }: { favorite: FavoriteTeam }) {
   const [warmedSummaries, setWarmedSummaries] = useState<Record<number, string>>({});
   const warmedItemIds = useRef(new Set<number>());
   const shouldSimulateUnavailable = typeof window !== "undefined" && import.meta.env.DEV && new URLSearchParams(window.location.search).has("feedError");
-  const feed = trpc.officialFeed.byTeam.useQuery({ teamCode: shouldSimulateUnavailable ? "XXX" : favorite.code }, { refetchInterval: 15 * 60 * 1000, retry: 1 });
+  const feedInput = useMemo(() => ({ teamCode: shouldSimulateUnavailable ? "XXX" : favorite.code }), [shouldSimulateUnavailable, favorite.code]);
+  const feed = trpc.officialFeed.byTeam.useQuery(feedInput, { refetchInterval: 15 * 60 * 1000, staleTime: 15 * 60 * 1000, refetchOnWindowFocus: false, refetchOnReconnect: false, retry: 1 });
   const displayError = feed.isError || shouldSimulateUnavailable;
   const items = (shouldSimulateUnavailable ? [] : feed.data?.items ?? []) as FeedItem[];
   const news = useMemo(() => selectLatestNews(items), [items]);
@@ -83,7 +84,7 @@ export function OfficialTeamFeed({ favorite }: { favorite: FavoriteTeam }) {
   });
 
   useEffect(() => {
-    const candidates = news.filter((item) => !item.japaneseSummary && !warmedItemIds.current.has(item.id));
+    const candidates = news.filter((item) => !externalSourceKinds.has(item.sourceKind) && !item.japaneseSummary && !warmedItemIds.current.has(item.id)).slice(0, 2);
     if (!candidates.length) return;
     const timer = window.setTimeout(() => {
       void (async () => {
@@ -96,7 +97,7 @@ export function OfficialTeamFeed({ favorite }: { favorite: FavoriteTeam }) {
           }
         }
       })();
-    }, 700);
+    }, 1_500);
     return () => window.clearTimeout(timer);
   }, [favorite.code, newsSignature]);
 

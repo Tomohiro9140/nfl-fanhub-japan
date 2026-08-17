@@ -15,7 +15,10 @@ const { snapshot, league } = vi.hoisted(() => ({
 vi.mock("@/lib/trpc", () => ({
   trpc: {
     teamSnapshot: { byTeam: { useQuery: () => ({ data: snapshot, isError: false, isLoading: false }) } },
-    leagueDashboard: { summary: { useQuery: () => ({ data: league, isError: false, isLoading: false }) } },
+    leagueDashboard: {
+      summary: { useQuery: () => ({ data: league, isError: false, isLoading: false }) },
+      calendar: { useQuery: () => ({ data: { calendar: [] }, isError: false, isLoading: false }) },
+    },
     officialFeed: {
       byTeam: { useQuery: () => ({ data: { items: [], sources: [] }, isError: false, isLoading: false, isFetching: false, refetch: () => undefined }) },
       japaneseSummary: { useMutation: () => ({ data: undefined, isPending: false, mutate: () => undefined, mutateAsync: async () => undefined, reset: () => undefined }) },

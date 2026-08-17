@@ -1,6 +1,7 @@
 import { and, asc, desc, eq, gt, gte, inArray, lt, sql } from "drizzle-orm";
 import { attachOfficialScore, findOfficialScoreForGame } from "./gameStatus";
 import { isOfficialFinal, selectGameTicketGame } from "./gameTicketWindow";
+import { selectRelevantCalendarGames } from "./leagueDashboardPayload";
 import { isNull } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import { ExternalAvailabilityInsight, InsertExternalAvailabilityInsight, InsertOfficialFeedItem, InsertOfficialGame, InsertOfficialRosterEntry, InsertOfficialScoreboardGame, InsertOfficialStanding, InsertUser, externalAvailabilityInsights, officialFeedItems, officialGames, officialRosterEntries, officialScoreboardGames, officialStandings, users } from "../drizzle/schema";
@@ -101,7 +102,7 @@ export async function getOfficialFeedItems(teamCode: string) {
       desc(officialFeedItems.publishedAt),
       sql`case when ${officialFeedItems.sourceKind} = 'team_official' then 0 when ${officialFeedItems.sourceKind} = 'nfl_official' then 1 when ${officialFeedItems.sourceKind} = 'pft' then 2 else 3 end`,
     )
-    .limit(96);
+    .limit(24);
 }
 
 export async function getOfficialFeedItemById(id: number) {
@@ -210,15 +211,22 @@ export async function getOfficialTeamSnapshot(teamCode: string, skipGameUrl?: st
   if (!db) return { nextGame: undefined, roster: [], rosterCounts: [], injuries: [], news: [], sources: { schedule: null, roster: null, injury: null }, lastUpdatedAt: undefined };
   const now = new Date();
   const activeWindowStart = new Date(now.getTime() - 6 * 60 * 60 * 1_000);
-  const activeGame = (await db.select().from(officialGames)
-    .where(and(eq(officialGames.teamCode, teamCode), gte(officialGames.kickoffAt, activeWindowStart), lt(officialGames.kickoffAt, now)))
-    .orderBy(desc(officialGames.kickoffAt)).limit(1))[0];
-  const recentlyFinishedGames = await db.select().from(officialGames)
-    .where(and(eq(officialGames.teamCode, teamCode), lt(officialGames.kickoffAt, now)))
-    .orderBy(desc(officialGames.kickoffAt)).limit(4);
-  const scheduledGame = (await db.select().from(officialGames)
-    .where(and(eq(officialGames.teamCode, teamCode), gt(officialGames.kickoffAt, now)))
-    .orderBy(asc(officialGames.kickoffAt)).limit(1))[0];
+  const officialInjuryWindowStart = new Date(now.getTime() - 45 * 24 * 60 * 60 * 1_000);
+  const rosterMoveWindowStart = new Date(now.getTime() - 21 * 24 * 60 * 60 * 1_000);
+  const externalInsightWindowStart = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1_000);
+  const [activeGameRows, recentlyFinishedGames, scheduledGameRows, completedScoreboardRows, roster, injuries, rosterMoves, news, externalInsights] = await Promise.all([
+    db.select().from(officialGames).where(and(eq(officialGames.teamCode, teamCode), gte(officialGames.kickoffAt, activeWindowStart), lt(officialGames.kickoffAt, now))).orderBy(desc(officialGames.kickoffAt)).limit(1),
+    db.select().from(officialGames).where(and(eq(officialGames.teamCode, teamCode), lt(officialGames.kickoffAt, now))).orderBy(desc(officialGames.kickoffAt)).limit(4),
+    db.select().from(officialGames).where(and(eq(officialGames.teamCode, teamCode), gt(officialGames.kickoffAt, now))).orderBy(asc(officialGames.kickoffAt)).limit(1),
+    db.select({ externalId: officialScoreboardGames.externalId, seasonPhase: officialScoreboardGames.seasonPhase, weekLabel: officialScoreboardGames.weekLabel, awayTeamCode: officialScoreboardGames.awayTeamCode, homeTeamCode: officialScoreboardGames.homeTeamCode, awayScore: officialScoreboardGames.awayScore, homeScore: officialScoreboardGames.homeScore, gameState: officialScoreboardGames.gameState, finalRecordedAt: officialScoreboardGames.finalRecordedAt, gameUrl: officialScoreboardGames.gameUrl, nflHighlightUrl: officialScoreboardGames.nflHighlightUrl, fetchedAt: officialScoreboardGames.fetchedAt }).from(officialScoreboardGames).orderBy(desc(officialScoreboardGames.finalRecordedAt), desc(officialScoreboardGames.fetchedAt)).limit(80),
+    db.select({ id: officialRosterEntries.id, playerName: officialRosterEntries.playerName, jerseyNumber: officialRosterEntries.jerseyNumber, position: officialRosterEntries.position, rosterStatus: officialRosterEntries.rosterStatus, sourceUrl: officialRosterEntries.sourceUrl, fetchedAt: officialRosterEntries.fetchedAt }).from(officialRosterEntries).where(eq(officialRosterEntries.teamCode, teamCode)).orderBy(asc(officialRosterEntries.rosterStatus), asc(officialRosterEntries.position), asc(officialRosterEntries.playerName)).limit(160),
+    db.select({ id: officialFeedItems.id, title: officialFeedItems.title, sourceName: officialFeedItems.sourceName, sourceUrl: officialFeedItems.sourceUrl, publishedAt: officialFeedItems.publishedAt, category: officialFeedItems.category, fetchedAt: officialFeedItems.fetchedAt }).from(officialFeedItems).where(and(eq(officialFeedItems.teamCode, teamCode), eq(officialFeedItems.category, "injury"), gte(officialFeedItems.publishedAt, officialInjuryWindowStart))).orderBy(sql`case when ${officialFeedItems.sourceKind} = 'team_official' then 0 else 1 end`, desc(officialFeedItems.publishedAt)).limit(3),
+    db.select({ id: officialFeedItems.id, title: officialFeedItems.title, sourceName: officialFeedItems.sourceName, sourceUrl: officialFeedItems.sourceUrl, publishedAt: officialFeedItems.publishedAt, category: officialFeedItems.category, fetchedAt: officialFeedItems.fetchedAt }).from(officialFeedItems).where(and(eq(officialFeedItems.teamCode, teamCode), eq(officialFeedItems.category, "transaction"), gte(officialFeedItems.publishedAt, rosterMoveWindowStart))).orderBy(sql`case when ${officialFeedItems.sourceKind} = 'team_official' then 0 else 1 end`, desc(officialFeedItems.publishedAt)).limit(3),
+    db.select({ id: officialFeedItems.id, title: officialFeedItems.title, summary: officialFeedItems.summary, sourceName: officialFeedItems.sourceName, sourceUrl: officialFeedItems.sourceUrl, publishedAt: officialFeedItems.publishedAt, fetchedAt: officialFeedItems.fetchedAt }).from(officialFeedItems).where(and(eq(officialFeedItems.teamCode, teamCode), eq(officialFeedItems.category, "news"))).orderBy(sql`case when ${officialFeedItems.sourceKind} = 'team_official' then 0 else 1 end`, desc(officialFeedItems.publishedAt)).limit(2),
+    db.select({ id: externalAvailabilityInsights.id, playerName: externalAvailabilityInsights.playerName, statusLabel: externalAvailabilityInsights.statusLabel, headline: externalAvailabilityInsights.headline, sourceName: externalAvailabilityInsights.sourceName, sourceUrl: externalAvailabilityInsights.sourceUrl, publishedAt: externalAvailabilityInsights.publishedAt, fetchedAt: externalAvailabilityInsights.fetchedAt }).from(externalAvailabilityInsights).where(and(eq(externalAvailabilityInsights.teamCode, teamCode), gte(externalAvailabilityInsights.publishedAt, externalInsightWindowStart))).orderBy(desc(externalAvailabilityInsights.publishedAt)).limit(3),
+  ]);
+  const activeGame = activeGameRows[0];
+  const scheduledGame = scheduledGameRows[0];
   const scoreFor = async (game: typeof officialGames.$inferSelect | undefined) => {
     if (!game) return undefined;
     const scoreboard = await db.select().from(officialScoreboardGames)
@@ -227,8 +235,7 @@ export async function getOfficialTeamSnapshot(teamCode: string, skipGameUrl?: st
     return attachOfficialScore(game, scoreboard);
   };
   const [activeWithScore, scheduledWithScore, ...recentWithScores] = await Promise.all([scoreFor(activeGame), scoreFor(scheduledGame), ...recentlyFinishedGames.map(scoreFor)]);
-  const completedScoreboardGames = (await db.select().from(officialScoreboardGames)
-    .orderBy(desc(officialScoreboardGames.finalRecordedAt), desc(officialScoreboardGames.fetchedAt)).limit(80))
+  const completedScoreboardGames = completedScoreboardRows
     .filter((score) => (score.awayTeamCode === teamCode || score.homeTeamCode === teamCode) && isOfficialFinal(score));
   const scoreboardCompletedCandidates = completedScoreboardGames.map((score) => ({
     externalId: `scoreboard:${score.externalId}`,
@@ -254,22 +261,6 @@ export async function getOfficialTeamSnapshot(teamCode: string, skipGameUrl?: st
   const latestCompletedGame = [...completedScheduleCandidates, ...scoreboardCompletedCandidates]
     .sort((left, right) => right.kickoffAt.getTime() - left.kickoffAt.getTime())[0];
   const nextGame = selectGameTicketGame({ now, activeGame: activeWithScore, latestCompletedGame, scheduledGame: scheduledWithScore, skipReplayWindow: Boolean(skipGameUrl && latestCompletedGame?.sourceUrl === skipGameUrl) });
-  const roster = await db.select().from(officialRosterEntries)
-    .where(eq(officialRosterEntries.teamCode, teamCode))
-    .orderBy(asc(officialRosterEntries.rosterStatus), asc(officialRosterEntries.position), asc(officialRosterEntries.playerName)).limit(160);
-  const officialInjuryWindowStart = new Date(now.getTime() - 45 * 24 * 60 * 60 * 1_000);
-  const injuries = await db.select().from(officialFeedItems)
-    .where(and(eq(officialFeedItems.teamCode, teamCode), eq(officialFeedItems.category, "injury"), gte(officialFeedItems.publishedAt, officialInjuryWindowStart)))
-    .orderBy(sql`case when ${officialFeedItems.sourceKind} = 'team_official' then 0 else 1 end`, desc(officialFeedItems.publishedAt)).limit(3);
-  const rosterMoves = await db.select().from(officialFeedItems)
-    .where(and(eq(officialFeedItems.teamCode, teamCode), eq(officialFeedItems.category, "transaction"), gte(officialFeedItems.publishedAt, new Date(now.getTime() - 21 * 24 * 60 * 60 * 1_000))))
-    .orderBy(sql`case when ${officialFeedItems.sourceKind} = 'team_official' then 0 else 1 end`, desc(officialFeedItems.publishedAt)).limit(3);
-  const news = await db.select().from(officialFeedItems)
-    .where(and(eq(officialFeedItems.teamCode, teamCode), eq(officialFeedItems.category, "news")))
-    .orderBy(sql`case when ${officialFeedItems.sourceKind} = 'team_official' then 0 else 1 end`, desc(officialFeedItems.publishedAt)).limit(2);
-  const externalInsights = await db.select().from(externalAvailabilityInsights)
-    .where(and(eq(externalAvailabilityInsights.teamCode, teamCode), gte(externalAvailabilityInsights.publishedAt, new Date(now.getTime() - 14 * 24 * 60 * 60 * 1_000))))
-    .orderBy(desc(externalAvailabilityInsights.publishedAt)).limit(3);
   const rosterCounts = Array.from(roster.reduce((counts, entry) => {
     counts.set(entry.rosterStatus, (counts.get(entry.rosterStatus) ?? 0) + 1);
     return counts;
@@ -325,23 +316,36 @@ export async function upsertOfficialScoreboardHighlights(links: Array<{ external
   for (const link of links) await db.update(officialScoreboardGames).set({ nflHighlightUrl: link.nflHighlightUrl, nflHighlightSourceUrl: link.sourceUrl, nflHighlightMatchedAt: matchedAt }).where(eq(officialScoreboardGames.externalId, link.externalId));
 }
 
-export async function getOfficialLeagueDashboard() {
+export async function getOfficialLeagueDashboardSummary() {
   const db = await getDb();
-  if (!db) return { standings: [], results: [], calendar: [], lastUpdatedAt: undefined };
-  const standings = await db.select().from(officialStandings).orderBy(desc(officialStandings.pct), desc(officialStandings.wins), asc(officialStandings.losses));
-  const rawResults = await db.select().from(officialScoreboardGames).orderBy(desc(officialScoreboardGames.fetchedAt)).limit(24);
-  const games = await db.select().from(officialGames).orderBy(asc(officialGames.kickoffAt));
+  if (!db) return { standings: [], results: [], lastUpdatedAt: undefined };
+  const [standings, rawResults, games] = await Promise.all([
+    db.select({ teamCode: officialStandings.teamCode, wins: officialStandings.wins, losses: officialStandings.losses, ties: officialStandings.ties, pct: officialStandings.pct, pointsFor: officialStandings.pointsFor, pointsAgainst: officialStandings.pointsAgainst, sourceUrl: officialStandings.sourceUrl, fetchedAt: officialStandings.fetchedAt }).from(officialStandings).orderBy(desc(officialStandings.pct), desc(officialStandings.wins), asc(officialStandings.losses)),
+    db.select({ id: officialScoreboardGames.id, weekLabel: officialScoreboardGames.weekLabel, awayTeamCode: officialScoreboardGames.awayTeamCode, homeTeamCode: officialScoreboardGames.homeTeamCode, awayScore: officialScoreboardGames.awayScore, homeScore: officialScoreboardGames.homeScore, gameState: officialScoreboardGames.gameState, gameUrl: officialScoreboardGames.gameUrl, nflHighlightUrl: officialScoreboardGames.nflHighlightUrl, sourceUrl: officialScoreboardGames.sourceUrl, fetchedAt: officialScoreboardGames.fetchedAt }).from(officialScoreboardGames).orderBy(desc(officialScoreboardGames.fetchedAt)).limit(24),
+    db.select({ teamCode: officialGames.teamCode, opponentCode: officialGames.opponentCode, weekLabel: officialGames.weekLabel, daznUrl: officialGames.daznUrl }).from(officialGames),
+  ]);
   const relatedGame = (awayTeamCode: string, homeTeamCode: string, weekLabel: string | null) => games.find((game) => findOfficialScoreForGame([{ awayTeamCode, homeTeamCode, weekLabel, gameState: "", awayScore: null, homeScore: null }], game));
   const results = rawResults.map((result) => ({ ...result, daznUrl: relatedGame(result.awayTeamCode, result.homeTeamCode, result.weekLabel)?.daznUrl ?? null }));
-  const seen = new Set<string>();
-  const calendar = games.filter((game) => {
-    const key = `${game.kickoffAt.toISOString()}:${[game.teamCode, game.opponentCode].sort().join("-")}`;
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  }).map((game) => attachOfficialScore(game, rawResults));
-  const lastUpdatedAt = [standings[0]?.fetchedAt, results[0]?.fetchedAt, calendar[0]?.fetchedAt].filter((value): value is Date => Boolean(value)).sort((a, b) => b.getTime() - a.getTime())[0];
-  return { standings, results, calendar, lastUpdatedAt };
+  const lastUpdatedAt = [standings[0]?.fetchedAt, results[0]?.fetchedAt].filter((value): value is Date => Boolean(value)).sort((a, b) => b.getTime() - a.getTime())[0];
+  return { standings, results, lastUpdatedAt };
+}
+
+export async function getOfficialLeagueCalendar(teamCode: string) {
+  const db = await getDb();
+  if (!db) return { calendar: [], lastUpdatedAt: undefined };
+  const [games, rawResults] = await Promise.all([
+    db.select({ id: officialGames.id, teamCode: officialGames.teamCode, opponentCode: officialGames.opponentCode, homeAway: officialGames.homeAway, seasonPhase: officialGames.seasonPhase, weekLabel: officialGames.weekLabel, kickoffAt: officialGames.kickoffAt, broadcast: officialGames.broadcast, sourceUrl: officialGames.sourceUrl, daznUrl: officialGames.daznUrl, fetchedAt: officialGames.fetchedAt }).from(officialGames).orderBy(asc(officialGames.kickoffAt)),
+    db.select({ weekLabel: officialScoreboardGames.weekLabel, awayTeamCode: officialScoreboardGames.awayTeamCode, homeTeamCode: officialScoreboardGames.homeTeamCode, awayScore: officialScoreboardGames.awayScore, homeScore: officialScoreboardGames.homeScore, gameState: officialScoreboardGames.gameState, nflHighlightUrl: officialScoreboardGames.nflHighlightUrl }).from(officialScoreboardGames).orderBy(desc(officialScoreboardGames.fetchedAt)).limit(24),
+  ]);
+  const calendar = selectRelevantCalendarGames(games, teamCode, new Date()).map((game) => attachOfficialScore(game, rawResults));
+  const lastUpdatedAt = calendar.map((game) => game.fetchedAt).filter((value): value is Date => Boolean(value)).sort((a, b) => b.getTime() - a.getTime())[0];
+  return { calendar, lastUpdatedAt };
+}
+
+export async function getOfficialLeagueDashboard() {
+  const [summary, calendar] = await Promise.all([getOfficialLeagueDashboardSummary(), getOfficialLeagueCalendar("XXX")]);
+  const lastUpdatedAt = [summary.lastUpdatedAt, calendar.lastUpdatedAt].filter((value): value is Date => Boolean(value)).sort((a, b) => b.getTime() - a.getTime())[0];
+  return { ...summary, calendar: calendar.calendar, lastUpdatedAt };
 }
 
 export async function getOfficialGamesForDaznMatching() {

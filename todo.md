@@ -249,3 +249,6 @@
 - [x] STATUS RADARの選手名を文字化けなく正規化し、全チームの特殊文字・不正エンコーディングへ対応する。
 - [x] MIAを含む長い名称・特殊文字の実データでモバイル表示を検証する。
 - [x] UTC 18時グループ（NYJ、PHI、PIT、SF、SEA、TB、TEN、WAS）のチーム公式RSSを再収集し、鮮度を満たす21件をofficial_feed_itemsへUPSERTして保存結果を照合する。
+- [x] モバイル初回表示のAPI応答・描画順序・不要な再取得を測定し、遅延の主因を特定する。
+- [x] GAME TICKET、LATEST NEWS、STATUS RADAR、LEAGUE DESKの読み込みをモバイル優先で最適化する。
+- [x] 性能改善の回帰テスト、型チェック、本番ビルド、モバイル実画面を検証する。
