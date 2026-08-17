@@ -25,3 +25,19 @@ NFL公式負傷ページは負傷記事を集約するが、一覧には過去�
 `Game-Day Status`はGAME TICKET直下に置き、既存の公式日程・公式スコアキャッシュから `UPCOMING`、`GAME DAY`、`LIVE`、`FINAL` を短く表示する。公式インアクティブ一覧と公式Game Centerへのリンクだけを併設し、未公開時に推測した欠場者は表示しない。
 
 `Roster Move Digest`は最新21日間の `transaction` 分類のチーム公式記事を最大3件に限定して、LATEST NEWSとSTATUS RADARの間に置く。STATUS RADARはReserveタグ、公式負傷記事、出場可否に関するPFT文脈だけへ限定し、契約・登録変更の重複を除く。
+
+## 補助ソースの導入原則
+
+大規模メディアを補助ソースとして検討する場合も、全文の自動転載や無許可スクレイピングは行わない。公開RSS・正式API・利用規約で許された短いリンクカードだけを候補とし、チーム公式・NFL公式の事実情報を上書きしない。ブラウズ環境ではESPNとCBS Sportsの直接ページ取得に制約があったため、導入判断は各社の公開フィード・ライセンス条件を個別に再確認してから行う。
+
+## 大規模メディア候補の役割分担（2026-08-17）
+
+PFTはロスター・契約・負傷・リーグニュースを短い記事単位で連続掲載しており、既存のSTATUS RADARにおける補助文脈として適している。ただし同サイト自身が「news and rumors」を掲げるため、公式確認前の事実をステータスやスコアへ反映してはならない。[PFT](https://www.nbcsports.com/nfl/profootballtalk)
+
+Yahoo Sportsはニュース、スコア、日程、順位、スタッツ、チーム、選手、負傷者を一つのNFLハブで提供する。速報の発見や外部リンク先としては有用だが、当アプリでは試合結果・日程・出場可否の正本をNFL公式のまま維持する。[Yahoo Sports NFL](https://sports.yahoo.com/nfl/)
+
+CBS Sportsはニュース、スコア、プレシーズン分析、負傷・契約・ロスター記事を幅広く掲載する。記事の見どころ・外部リンク候補には適するが、同ページは正確性や試合結果を保証しない旨を明記しているため、公式データより優先する自動更新元には使わない。[CBS Sports NFL](https://www.cbssports.com/nfl/)
+
+Pro-Football-Referenceは現役・歴史的な選手、チーム、得点、リーダー、日程・結果、スタッツに強く、試合後の「Stat Note」や選手比較の参照先として適する。速報ニュースの代替ではなく、履歴・比較データの外部リンク専用とする。[Pro-Football-Reference](https://www.pro-football-reference.com/)
+
+Spotracは契約、サラリーキャップ、フリーエージェント、トランザクション、トレード、延長、罰金・出場停止を体系化している。オフシーズンの契約背景リンクには有用だが、契約完了のアプリ内表示はチーム公式発表で確認してから行う。[Spotrac NFL](https://www.spotrac.com/nfl)
