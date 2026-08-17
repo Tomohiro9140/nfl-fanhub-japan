@@ -46,11 +46,16 @@ export function OfficialLatestResults({ favorite, dashboard, loading, spoilerMod
             {resultGames.map((game) => {
               const away = nflTeams.find((team) => team.code === game.awayTeamCode);
               const home = nflTeams.find((team) => team.code === game.homeTeamCode);
+              const hasOfficialScore = typeof game.awayScore === "number" && typeof game.homeScore === "number";
+              const awayScore = game.awayScore ?? 0;
+              const homeScore = game.homeScore ?? 0;
+              const awayWon = !spoilerMode && hasOfficialScore && awayScore > homeScore;
+              const homeWon = !spoilerMode && hasOfficialScore && homeScore > awayScore;
               return (
                 <div key={game.id} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 py-2">
-                  <a href={game.gameUrl} target="_blank" rel="noreferrer" className="min-w-0 self-center text-[13px] font-bold leading-[1.15]">
-                    <p className="truncate">{away?.name ?? game.awayTeamCode}</p>
-                    <p className="mt-0.5 truncate">@ {home?.name ?? game.homeTeamCode}</p>
+                  <a href={game.gameUrl} target="_blank" rel="noreferrer" className="min-w-0 self-center text-[13px] leading-[1.15]">
+                    <p className={`truncate ${awayWon ? "font-extrabold text-[#10213a]" : "font-bold"}`}>{away?.name ?? game.awayTeamCode}</p>
+                    <p className={`mt-0.5 truncate ${homeWon ? "font-extrabold text-[#10213a]" : "font-bold"}`}>@ {home?.name ?? game.homeTeamCode}</p>
                   </a>
                   <div className="min-w-[106px] self-center text-right">
                     <p className="font-mono text-[26px] font-black leading-[.85] tracking-[-.06em]">{spoilerMode ? "—" : `${game.awayScore ?? "—"} - ${game.homeScore ?? "—"}`}</p>

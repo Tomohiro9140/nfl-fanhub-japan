@@ -23,6 +23,8 @@ describe("compact mobile result and schedule UI", () => {
     expect(markup).toContain("RESULT HIDDEN");
     const revealedMarkup = renderToStaticMarkup(createElement(OfficialLatestResults, { favorite, dashboard, loading: false, spoilerMode: false }));
     expect(revealedMarkup).not.toContain(">FINAL<");
+    expect(revealedMarkup).toContain("font-extrabold text-[#10213a]");
+    expect(markup).not.toContain("font-extrabold text-[#10213a]");
   });
 
   it("removes the requested Game Ticket chrome while retaining the watch action", () => {
