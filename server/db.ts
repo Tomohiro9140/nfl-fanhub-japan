@@ -236,6 +236,7 @@ export async function getOfficialTeamSnapshot(teamCode: string, skipGameUrl?: st
     daznUrl: null,
     daznSourceUrl: null,
     daznMatchedAt: null,
+    nflHighlightUrl: score.nflHighlightUrl,
     fetchedAt: score.fetchedAt,
     gameState: score.gameState,
     awayScore: score.awayScore,

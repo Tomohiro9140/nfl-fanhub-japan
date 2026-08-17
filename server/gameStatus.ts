@@ -1,5 +1,5 @@
 export type ScheduledGameForScore = { teamCode: string; opponentCode: string; weekLabel: string | null };
-export type OfficialScoreForMatch = { awayTeamCode: string; homeTeamCode: string; weekLabel: string | null; gameState: string; awayScore: number | null; homeScore: number | null };
+export type OfficialScoreForMatch = { awayTeamCode: string; homeTeamCode: string; weekLabel: string | null; gameState: string; awayScore: number | null; homeScore: number | null; nflHighlightUrl?: string | null };
 
 function matchupKey(firstTeam: string, secondTeam: string) {
   return [firstTeam, secondTeam].sort().join("-");
@@ -19,5 +19,5 @@ export function findOfficialScoreForGame<T extends OfficialScoreForMatch>(scores
 /** Adds nullable official score fields without inventing a result when no official score is available. */
 export function attachOfficialScore<T extends ScheduledGameForScore, U extends OfficialScoreForMatch>(game: T, scores: U[]) {
   const score = findOfficialScoreForGame(scores, game);
-  return { ...game, gameState: score?.gameState ?? null, awayScore: score?.awayScore ?? null, homeScore: score?.homeScore ?? null };
+  return { ...game, gameState: score?.gameState ?? null, awayScore: score?.awayScore ?? null, homeScore: score?.homeScore ?? null, nflHighlightUrl: score?.nflHighlightUrl ?? null };
 }
