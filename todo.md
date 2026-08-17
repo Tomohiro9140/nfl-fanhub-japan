@@ -226,3 +226,7 @@
 - [x] チーム公式・PFT・CBS Sportsのチーム関連ニュースをLATEST NEWSへ統合する。
 - [x] 記事ごとにOFFICIAL、PFT、CBSの情報源アイコンとラベルを表示する。
 - [x] 外部記事のチーム関連性、公式記事の優先表示、モバイルでの情報源識別をテスト・検証する。
+- [x] LATEST NEWSのOFFICIAL情報源バッジをカード内に収め、右方向にはみ出さないよう修正する。
+- [x] LATEST RESULTSのハイライト導線を右下へ移動し、試合スコアを対戦チーム名2行分程度の高さへ拡大する。
+- [x] GAME TICKETのGAME STATUSと、Inactives・Game Center・Official Scheduleのリンク群を改行で分ける。
+- [x] 情報源バッジ、結果スコア、右下ハイライト、ゲーム状態リンク群を390px幅で検証する。

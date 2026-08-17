@@ -69,4 +69,11 @@ describe("official feed mobile content selection", () => {
     expect(markup).not.toContain("Current injury older");
     expect(markup).not.toContain("Historic injury hidden");
   });
+
+  it("keeps every source mark inside a fixed non-wrapping card slot", () => {
+    const markup = renderToStaticMarkup(createElement(OfficialTeamFeed, { favorite }));
+    expect(markup).toContain("w-[58px]");
+    expect(markup).toContain("overflow-hidden");
+    expect(markup).toContain("whitespace-nowrap");
+  });
 });

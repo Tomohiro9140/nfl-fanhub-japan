@@ -114,7 +114,18 @@ describe("compact mobile result and schedule UI", () => {
     expect(radarMarkup.indexOf("INJURY RELATED")).toBeLessThan(radarMarkup.indexOf("AVAILABILITY WATCH · PFT"));
     expect(radarMarkup).toContain("OUT");
     expect(resultMarkup).toContain("px-3 py-2");
-    expect(resultMarkup).toContain("py-1.5");
+    expect(resultMarkup).toContain("text-[26px]");
+    expect(resultMarkup).toContain("mt-2");
     expect(resultMarkup).not.toContain("lucide-trophy");
+  });
+
+  it("separates the game state from its official links while retaining an in-ticket schedule action", () => {
+    const snapshot = { nextGame: { opponentCode: "CLE", homeAway: "away" as const, seasonPhase: "preseason" as const, weekLabel: "PRESEASON WEEK 2", kickoffAt, venue: null, broadcast: null, gameState: "LIVE", awayScore: 10, homeScore: 7, sourceUrl: "https://www.nfl.com/schedules", daznUrl: null, fetchedAt: kickoffAt }, roster: [], rosterCounts: [], injuries: [], news: [], sources: { schedule: null, roster: null, injury: null } };
+    const markup = renderToStaticMarkup(createElement(OfficialGameTicket, { favorite, snapshot, loading: false }));
+    expect(markup).toContain("GAME STATUS");
+    expect(markup).toContain("INACTIVES");
+    expect(markup).toContain("GAME CENTER");
+    expect(markup).toContain("OFFICIAL SCHEDULE");
+    expect(markup).toContain("mt-2 flex flex-wrap items-center");
   });
 });

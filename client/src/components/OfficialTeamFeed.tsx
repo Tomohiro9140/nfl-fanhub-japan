@@ -21,7 +21,7 @@ function SourceMark({ kind }: { kind: SourceKind }) {
   const label = sourceLabel(kind);
   const Icon = kind === "pft" ? Radio : kind === "cbs" ? Tv : BadgeCheck;
   const tone = kind === "pft" ? "border-[#bfd0e8] bg-[#eff5fb] text-[#23527d]" : kind === "cbs" ? "border-[#e7c5bf] bg-[#fff4ef] text-[#a34220]" : "border-[#cfe6c4] bg-[#f0f8eb] text-[#426237]";
-  return <span className={`mt-0.5 inline-flex w-12 shrink-0 items-center gap-1 border px-1 py-0.5 font-mono text-[8px] font-bold tracking-[.08em] ${tone}`}><Icon className="h-2.5 w-2.5" />{label}</span>;
+  return <span className={`mt-0.5 inline-flex h-5 w-[58px] shrink-0 items-center justify-center gap-1 overflow-hidden whitespace-nowrap border px-1 font-mono text-[8px] font-bold tracking-[.08em] ${tone}`}><Icon className="h-2.5 w-2.5 shrink-0" />{label}</span>;
 }
 
 /** Keeps official stories foremost while reserving room for one PFT and one CBS team story when available. */
