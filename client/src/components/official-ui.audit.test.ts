@@ -99,7 +99,9 @@ describe("compact mobile result and schedule UI", () => {
     expect(spoilerMarkup).toContain("LAST GAME");
     expect(spoilerMarkup).toContain("ネタバレ防止中");
     expect(spoilerMarkup).not.toContain("OFFICIAL SCORE 10 — 7");
+    expect(spoilerMarkup).toContain("min-h-[272px]");
     expect(normalMarkup).toContain("FINAL SCORE");
+    expect(normalMarkup).toContain("min-h-[272px]");
     expect(normalMarkup).toMatch(/>10<\/span><span> — <\/span><span[^>]*>7<\/span>/);
     expect(normalMarkup).toContain("WATCH HIGHLIGHTS");
     expect(normalMarkup).toContain("ON TO THE NEXT GAME");
