@@ -1,7 +1,7 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { OfficialGameNotes, OfficialGameTicket, OfficialHuddle, OfficialStatusRadar } from "./OfficialGameExperience";
+import { OfficialGameDayStatus, OfficialGameNotes, OfficialGameTicket, OfficialHuddle, OfficialRosterMoveDigest, OfficialStatusRadar } from "./OfficialGameExperience";
 import { OfficialLatestResults, OfficialLeagueDashboard, type LeagueDashboard } from "./OfficialLeagueDashboard";
 import { SpoilerSwitch } from "@/pages/Home";
 import type { FavoriteTeam } from "@/lib/nflTeams";
@@ -68,20 +68,27 @@ describe("compact mobile result and schedule UI", () => {
     expect(notesMarkup).not.toContain("NEXT GAME");
   });
 
-  it("labels official transaction items separately inside the combined related-information panel", () => {
-    const snapshot = { nextGame: undefined, roster: [], rosterCounts: [], injuries: [{ id: 1, title: "Houston Texans Transactions (8-15-2026)", sourceName: "HOU Official News", sourceUrl: "https://www.houstontexans.com/news/transactions", publishedAt: kickoffAt, category: "transaction" as const }], news: [], sources: { schedule: null, roster: null, injury: null }, lastUpdatedAt: kickoffAt };
-    const markup = renderToStaticMarkup(createElement(OfficialStatusRadar, { favorite, snapshot, loading: false }));
-    expect(markup).toContain("INJURY OR TRANSACTION RELATED");
-    expect(markup).toContain("TRANSACTION");
-    expect(markup).toContain("Houston Texans Transactions");
+  it("separates official game-day state and concise roster moves from the availability radar", () => {
+    const snapshot = { nextGame: undefined, gameDayStatus: { opponentCode: "CLE", homeAway: "away" as const, weekLabel: "PRESEASON WEEK 2", kickoffAt, gameState: "LIVE", awayScore: 10, homeScore: 7, sourceUrl: "https://www.nfl.com/games/bills-at-browns", fetchedAt: kickoffAt }, roster: [], rosterCounts: [], injuries: [{ id: 1, title: "Official injury item", sourceName: "BUF Official News", sourceUrl: "https://www.buffalobills.com/news/injury", publishedAt: kickoffAt, category: "injury" as const }], rosterMoves: [{ id: 2, title: "Bills sign Example Player", sourceName: "BUF Official News", sourceUrl: "https://www.buffalobills.com/news/transaction", publishedAt: kickoffAt, category: "transaction" as const }], news: [], sources: { schedule: null, roster: null, injury: null, moves: "https://www.buffalobills.com/news/transaction" }, lastUpdatedAt: kickoffAt };
+    const gameDayMarkup = renderToStaticMarkup(createElement(OfficialGameDayStatus, { favorite, snapshot, loading: false }));
+    const digestMarkup = renderToStaticMarkup(createElement(OfficialRosterMoveDigest, { snapshot, loading: false }));
+    const radarMarkup = renderToStaticMarkup(createElement(OfficialStatusRadar, { favorite, snapshot, loading: false }));
+    expect(gameDayMarkup).toContain("GAME-DAY STATUS");
+    expect(gameDayMarkup).toContain("OFFICIAL INACTIVES");
+    expect(gameDayMarkup).toContain("LIVE");
+    expect(digestMarkup).toContain("ROSTER MOVE DIGEST");
+    expect(digestMarkup).toContain("Bills sign Example Player");
+    expect(radarMarkup).toContain("INJURY RELATED");
+    expect(radarMarkup).not.toContain("INJURY OR TRANSACTION RELATED");
+    expect(radarMarkup).not.toContain("Bills sign Example Player");
   });
 
-  it("keeps the expanded PFT team update watch below official related items, removes the result icon, and uses tighter result spacing", () => {
-    const snapshot = { nextGame: undefined, roster: [], rosterCounts: [], injuries: [{ id: 1, title: "Official injury item", sourceName: "Team Official", sourceUrl: "https://example.com/injury", publishedAt: kickoffAt, category: "injury" as const }], externalInsights: [{ id: 1, playerName: "Example Player", statusLabel: "TRANSACTION", headline: "Team signs Example Player", sourceName: "ProFootballTalk (NBC Sports)", sourceUrl: "https://example.com/pft", publishedAt: kickoffAt }], news: [], sources: { schedule: null, roster: null, injury: null }, lastUpdatedAt: kickoffAt };
+  it("keeps the availability-only PFT watch below official injury items, removes the result icon, and uses tighter result spacing", () => {
+    const snapshot = { nextGame: undefined, roster: [], rosterCounts: [], injuries: [{ id: 1, title: "Official injury item", sourceName: "Team Official", sourceUrl: "https://example.com/injury", publishedAt: kickoffAt, category: "injury" as const }], externalInsights: [{ id: 1, playerName: "Example Player", statusLabel: "OUT", headline: "Example Player expected to miss time", sourceName: "ProFootballTalk (NBC Sports)", sourceUrl: "https://example.com/pft", publishedAt: kickoffAt }], news: [], sources: { schedule: null, roster: null, injury: null }, lastUpdatedAt: kickoffAt };
     const radarMarkup = renderToStaticMarkup(createElement(OfficialStatusRadar, { favorite, snapshot, loading: false }));
     const resultMarkup = renderToStaticMarkup(createElement(OfficialLatestResults, { favorite, dashboard, loading: false, spoilerMode: false }));
-    expect(radarMarkup.indexOf("INJURY OR TRANSACTION RELATED")).toBeLessThan(radarMarkup.indexOf("TEAM UPDATE WATCH · PFT"));
-    expect(radarMarkup).toContain("TRANSACTION");
+    expect(radarMarkup.indexOf("INJURY RELATED")).toBeLessThan(radarMarkup.indexOf("AVAILABILITY WATCH · PFT"));
+    expect(radarMarkup).toContain("OUT");
     expect(resultMarkup).toContain("px-3 py-2");
     expect(resultMarkup).toContain("py-1.5");
     expect(resultMarkup).not.toContain("lucide-trophy");

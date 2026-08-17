@@ -217,7 +217,10 @@ export async function getOfficialTeamSnapshot(teamCode: string) {
     .orderBy(asc(officialRosterEntries.rosterStatus), asc(officialRosterEntries.position), asc(officialRosterEntries.playerName)).limit(160);
   const officialInjuryWindowStart = new Date(now.getTime() - 45 * 24 * 60 * 60 * 1_000);
   const injuries = await db.select().from(officialFeedItems)
-    .where(and(eq(officialFeedItems.teamCode, teamCode), inArray(officialFeedItems.category, ["injury", "transaction"]), gte(officialFeedItems.publishedAt, officialInjuryWindowStart)))
+    .where(and(eq(officialFeedItems.teamCode, teamCode), eq(officialFeedItems.category, "injury"), gte(officialFeedItems.publishedAt, officialInjuryWindowStart)))
+    .orderBy(sql`case when ${officialFeedItems.sourceKind} = 'team_official' then 0 else 1 end`, desc(officialFeedItems.publishedAt)).limit(3);
+  const rosterMoves = await db.select().from(officialFeedItems)
+    .where(and(eq(officialFeedItems.teamCode, teamCode), eq(officialFeedItems.category, "transaction"), gte(officialFeedItems.publishedAt, new Date(now.getTime() - 21 * 24 * 60 * 60 * 1_000))))
     .orderBy(sql`case when ${officialFeedItems.sourceKind} = 'team_official' then 0 else 1 end`, desc(officialFeedItems.publishedAt)).limit(3);
   const news = await db.select().from(officialFeedItems)
     .where(and(eq(officialFeedItems.teamCode, teamCode), eq(officialFeedItems.category, "news")))
@@ -229,9 +232,20 @@ export async function getOfficialTeamSnapshot(teamCode: string) {
     counts.set(entry.rosterStatus, (counts.get(entry.rosterStatus) ?? 0) + 1);
     return counts;
   }, new Map<string, number>()).entries()).map(([status, count]) => ({ status, count }));
-  const lastUpdatedAt = [nextGame?.fetchedAt, ...roster.map((entry) => entry.fetchedAt), ...injuries.map((entry) => entry.fetchedAt), ...externalInsights.map((entry) => entry.fetchedAt)]
+  const lastUpdatedAt = [nextGame?.fetchedAt, ...roster.map((entry) => entry.fetchedAt), ...injuries.map((entry) => entry.fetchedAt), ...rosterMoves.map((entry) => entry.fetchedAt), ...externalInsights.map((entry) => entry.fetchedAt)]
     .filter((value): value is Date => Boolean(value)).sort((a, b) => b.getTime() - a.getTime())[0];
-  return { nextGame, roster, rosterCounts, injuries, news, externalInsights, sources: { schedule: nextGame?.sourceUrl ?? null, roster: roster[0]?.sourceUrl ?? null, injury: injuries[0]?.sourceUrl ?? null }, lastUpdatedAt };
+  const gameDayStatus = nextGame ? {
+    opponentCode: nextGame.opponentCode,
+    homeAway: nextGame.homeAway,
+    weekLabel: nextGame.weekLabel,
+    kickoffAt: nextGame.kickoffAt,
+    gameState: nextGame.gameState,
+    awayScore: nextGame.awayScore,
+    homeScore: nextGame.homeScore,
+    sourceUrl: nextGame.sourceUrl,
+    fetchedAt: nextGame.fetchedAt,
+  } : undefined;
+  return { nextGame, gameDayStatus, roster, rosterCounts, injuries, rosterMoves, news, externalInsights, sources: { schedule: nextGame?.sourceUrl ?? null, roster: roster[0]?.sourceUrl ?? null, injury: injuries[0]?.sourceUrl ?? null, moves: rosterMoves[0]?.sourceUrl ?? null, gameDay: nextGame?.sourceUrl ?? null }, lastUpdatedAt };
 }
 
 export async function upsertOfficialStandings(items: InsertOfficialStanding[]) {
