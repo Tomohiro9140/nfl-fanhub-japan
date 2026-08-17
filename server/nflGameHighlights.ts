@@ -32,6 +32,19 @@ export function nflHighlightUrlForGame(game: HighlightableGame) {
   return `https://www.nfl.com/videos/${away}-vs-${home}-highlights-${phase}-week-${week}`;
 }
 
+/**
+ * NFL occasionally publishes preseason game pages without the `highlights`
+ * segment. Try that official alternate only after the established convention.
+ */
+export function nflHighlightUrlCandidatesForGame(game: HighlightableGame) {
+  const primary = nflHighlightUrlForGame(game);
+  const away = teamVideoSlug(game.awayTeamCode);
+  const home = teamVideoSlug(game.homeTeamCode);
+  const week = weekNumber(game.weekLabel);
+  if (!primary || !away || !home || !week || game.seasonPhase !== "preseason") return primary ? [primary] : [];
+  return [primary, `https://www.nfl.com/videos/${away}-vs-${home}-preseason-week-${week}`];
+}
+
 /** Validates both teams and the season/week in NFL-published page markup before storing a generated URL. */
 export function isVerifiedNflHighlightPage(html: string, game: HighlightableGame) {
   const away = TEAM_NAMES[game.awayTeamCode];
@@ -60,10 +73,11 @@ async function fetchOfficialHighlightPage(url: string) {
 export async function refreshOfficialGameHighlights() {
   const games = await getOfficialScoreboardGamesForHighlightMatching();
   const verified = await Promise.all(games.map(async (game) => {
-    const nflHighlightUrl = nflHighlightUrlForGame(game);
-    if (!nflHighlightUrl) return null;
-    const html = await fetchOfficialHighlightPage(nflHighlightUrl);
-    return html && isVerifiedNflHighlightPage(html, game) ? { externalId: game.externalId, nflHighlightUrl, sourceUrl: nflHighlightSourceUrl } : null;
+    for (const nflHighlightUrl of nflHighlightUrlCandidatesForGame(game)) {
+      const html = await fetchOfficialHighlightPage(nflHighlightUrl);
+      if (html && isVerifiedNflHighlightPage(html, game)) return { externalId: game.externalId, nflHighlightUrl, sourceUrl: nflHighlightSourceUrl };
+    }
+    return null;
   }));
   const links = verified.filter((link): link is NflHighlightLink => Boolean(link));
   await upsertOfficialScoreboardHighlights(links);

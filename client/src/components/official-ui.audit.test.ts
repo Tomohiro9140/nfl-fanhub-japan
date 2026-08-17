@@ -86,6 +86,7 @@ describe("compact mobile result and schedule UI", () => {
     expect(ticketMarkup).toContain("LIVE");
     expect(digestMarkup).toContain("ROSTER MOVE DIGEST");
     expect(digestMarkup).toContain("Bills sign Example Player");
+    expect(digestMarkup).toContain("flex items-center gap-2");
     expect(radarMarkup).toContain("INJURY RELATED");
     expect(radarMarkup).not.toContain("INJURY OR TRANSACTION RELATED");
     expect(radarMarkup).not.toContain("Bills sign Example Player");
