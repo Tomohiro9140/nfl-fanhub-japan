@@ -248,3 +248,4 @@
 - [x] 長いチーム名でもLATEST RESULTSの文字が切れないよう、行高と区切り線の余白を調整する。
 - [x] STATUS RADARの選手名を文字化けなく正規化し、全チームの特殊文字・不正エンコーディングへ対応する。
 - [x] MIAを含む長い名称・特殊文字の実データでモバイル表示を検証する。
+- [x] UTC 18時グループ（NYJ、PHI、PIT、SF、SEA、TB、TEN、WAS）のチーム公式RSSを再収集し、鮮度を満たす21件をofficial_feed_itemsへUPSERTして保存結果を照合する。
