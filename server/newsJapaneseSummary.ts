@@ -1,10 +1,10 @@
 import { invokeLLM } from "./_core/llm";
 
-type OfficialNewsForSummary = {
+type NewsForSummary = {
   title: string;
   summary: string | null;
   sourceUrl: string;
-  sourceKind: "team_official" | "nfl_official";
+  sourceKind: "team_official" | "nfl_official" | "pft" | "cbs";
 };
 
 const MAX_ARTICLE_CHARS = 14_000;
@@ -42,7 +42,7 @@ export function extractOfficialArticleText(html: string) {
 }
 
 /** Fetches official article text into a short-lived memory cache only; it is never persisted. */
-export async function getOfficialArticleText(item: OfficialNewsForSummary) {
+export async function getOfficialArticleText(item: NewsForSummary) {
   if (item.sourceKind !== "team_official" && item.sourceKind !== "nfl_official") return undefined;
   const cached = transientArticleCache.get(item.sourceUrl);
   if (cached && cached.expiresAt > Date.now()) return cached.text;
@@ -61,7 +61,7 @@ export async function getOfficialArticleText(item: OfficialNewsForSummary) {
   return articleText;
 }
 
-export async function getOfficialNewsEnglishExcerpt(item: OfficialNewsForSummary) {
+export async function getOfficialNewsEnglishExcerpt(item: NewsForSummary) {
   const text = await getOfficialArticleText(item);
   if (!text) return undefined;
   return { excerpt: text.slice(0, DISPLAY_EXCERPT_CHARS), truncated: text.length > DISPLAY_EXCERPT_CHARS };
@@ -89,7 +89,7 @@ function parseEnglishSummary(content: string | null | undefined) {
   }
 }
 
-export async function generateOfficialNewsJapaneseSummary(item: OfficialNewsForSummary) {
+export async function generateOfficialNewsJapaneseSummary(item: NewsForSummary) {
   const articleText = await getOfficialArticleText(item);
   if (!articleText) return undefined;
 
@@ -123,7 +123,7 @@ export async function generateOfficialNewsJapaneseSummary(item: OfficialNewsForS
   return parseSummary(typeof content === "string" ? content : undefined);
 }
 
-export async function generateOfficialNewsEnglishSummary(item: OfficialNewsForSummary) {
+export async function generateOfficialNewsEnglishSummary(item: NewsForSummary) {
   const articleText = await getOfficialArticleText(item);
   if (!articleText) return undefined;
 

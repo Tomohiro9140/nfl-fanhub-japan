@@ -98,10 +98,10 @@ export async function getOfficialFeedItems(teamCode: string) {
   return db.select().from(officialFeedItems)
     .where(eq(officialFeedItems.teamCode, teamCode))
     .orderBy(
-      sql`case when ${officialFeedItems.sourceKind} = 'team_official' then 0 else 1 end`,
       desc(officialFeedItems.publishedAt),
+      sql`case when ${officialFeedItems.sourceKind} = 'team_official' then 0 when ${officialFeedItems.sourceKind} = 'nfl_official' then 1 when ${officialFeedItems.sourceKind} = 'pft' then 2 else 3 end`,
     )
-    .limit(24);
+    .limit(96);
 }
 
 export async function getOfficialFeedItemById(id: number) {

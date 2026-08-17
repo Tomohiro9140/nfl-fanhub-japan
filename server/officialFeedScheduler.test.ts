@@ -6,13 +6,15 @@ const mocks = vi.hoisted(() => ({
   refreshOfficialLeagueDashboard: vi.fn(),
   refreshDaznGameLinks: vi.fn(),
   refreshPftAvailabilityInsights: vi.fn(),
+  refreshExternalTeamNews: vi.fn(),
 }));
 
 vi.mock("./_core/sdk", () => ({ sdk: { authenticateRequest: mocks.authenticateRequest } }));
-vi.mock("./officialFeeds", () => ({ cacheAgentOfficialFeed: vi.fn(), refreshOfficialTeamFeedGroup: mocks.refreshOfficialTeamFeedGroup }));
+vi.mock("./officialFeeds", () => ({ cacheAgentOfficialFeed: vi.fn(), refreshOfficialTeamFeedGroup: mocks.refreshOfficialTeamFeedGroup, scheduledTeamGroups: [["ARI", "ATL", "BAL", "BUF", "CAR", "CHI", "CIN", "CLE"]] }));
 vi.mock("./officialLeagueData", () => ({ refreshOfficialLeagueDashboard: mocks.refreshOfficialLeagueDashboard }));
 vi.mock("./daznGameLinks", () => ({ refreshDaznGameLinks: mocks.refreshDaznGameLinks }));
 vi.mock("./pftAvailability", () => ({ refreshPftAvailabilityInsights: mocks.refreshPftAvailabilityInsights }));
+vi.mock("./externalTeamNews", () => ({ refreshExternalTeamNews: mocks.refreshExternalTeamNews }));
 
 import { refreshOfficialFeedHandler } from "./officialFeedScheduler";
 
@@ -23,6 +25,7 @@ describe("official feed Heartbeat with PFT availability", () => {
     mocks.refreshOfficialLeagueDashboard.mockResolvedValue({ standings: 32 });
     mocks.refreshDaznGameLinks.mockResolvedValue({ stored: 0 });
     mocks.refreshPftAvailabilityInsights.mockResolvedValue({ scanned: 1, stored: 1 });
+    mocks.refreshExternalTeamNews.mockResolvedValue({ stored: 2, sources: [] });
     const json = vi.fn();
     const status = vi.fn(() => ({ json }));
 
@@ -32,6 +35,7 @@ describe("official feed Heartbeat with PFT availability", () => {
     expect(mocks.refreshOfficialLeagueDashboard).toHaveBeenCalledTimes(1);
     expect(mocks.refreshDaznGameLinks).toHaveBeenCalledTimes(1);
     expect(mocks.refreshPftAvailabilityInsights).toHaveBeenCalledTimes(1);
-    expect(json).toHaveBeenCalledWith(expect.objectContaining({ ok: true, pft: { scanned: 1, stored: 1 } }));
+    expect(mocks.refreshExternalTeamNews).toHaveBeenCalledWith(["ARI", "ATL", "BAL", "BUF", "CAR", "CHI", "CIN", "CLE"]);
+    expect(json).toHaveBeenCalledWith(expect.objectContaining({ ok: true, pft: { scanned: 1, stored: 1 }, externalNews: { stored: 2, sources: [] } }));
   });
 });

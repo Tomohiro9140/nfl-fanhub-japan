@@ -25,12 +25,12 @@ export const users = mysqlTable("users", {
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
 
-/** Cached snippets from an official NFL team RSS feed. Full article bodies are not stored. */
+/** Cached snippets from official and approved public NFL news feeds. Full article bodies are not stored. */
 export const officialFeedItems = mysqlTable("official_feed_items", {
   id: int("id").autoincrement().primaryKey(),
   externalId: varchar("external_id", { length: 191 }).notNull(),
   teamCode: varchar("team_code", { length: 3 }).notNull(),
-  sourceKind: mysqlEnum("source_kind", ["team_official", "nfl_official"]).notNull(),
+  sourceKind: mysqlEnum("source_kind", ["team_official", "nfl_official", "pft", "cbs"]).notNull(),
   sourceName: varchar("source_name", { length: 128 }).notNull(),
   sourceUrl: varchar("source_url", { length: 1024 }).notNull(),
   title: text("title").notNull(),

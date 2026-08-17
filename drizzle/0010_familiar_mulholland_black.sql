@@ -1,0 +1,1 @@
+ALTER TABLE `official_feed_items` MODIFY COLUMN `source_kind` enum('team_official','nfl_official','pft','cbs') NOT NULL;

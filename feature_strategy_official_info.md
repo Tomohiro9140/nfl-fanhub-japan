@@ -41,3 +41,9 @@ CBS Sportsはニュース、スコア、プレシーズン分析、負傷・契�
 Pro-Football-Referenceは現役・歴史的な選手、チーム、得点、リーダー、日程・結果、スタッツに強く、試合後の「Stat Note」や選手比較の参照先として適する。速報ニュースの代替ではなく、履歴・比較データの外部リンク専用とする。[Pro-Football-Reference](https://www.pro-football-reference.com/)
 
 Spotracは契約、サラリーキャップ、フリーエージェント、トランザクション、トレード、延長、罰金・出場停止を体系化している。オフシーズンの契約背景リンクには有用だが、契約完了のアプリ内表示はチーム公式発表で確認してから行う。[Spotrac NFL](https://www.spotrac.com/nfl)
+
+## 統合ニュースデスク（2026-08-17）
+
+LATEST NEWSはチーム公式RSSを優先しつつ、承認済みの公開RSSであるPFT（`https://www.nbcsports.com/profootballtalk.rss`）とCBS Sports NFL（`https://www.cbssports.com/rss/headlines/nfl/`）から、推しチーム名・チーム別名に明確に一致する記事だけを補完する。各更新ではPFT・CBSともチームごとに最大2件、公開から7日以内、ベッティング・オッズ・ファンタジー・視聴案内を除外する。本文を保存せず、見出し、RSS概要、公開日時、原記事URLだけをリンクカードとしてキャッシュする。
+
+表示は最大5件で、まず公式記事を3件、続けてPFTとCBSを各1件確保し、不足がある場合だけ新しい記事で補完する。各カードはOFFICIAL、PFT、CBSのアイコンとラベルを表示し、外部記事の詳細画面には公式発表と区別する補足を表示する。PFT・CBSの公開RSSは既存Heartbeatの6時間ごとのチームグループ更新に組み込み、初回同期では49件（PFT 24件、CBS 25件）を保存した。
