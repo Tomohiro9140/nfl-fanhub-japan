@@ -48,7 +48,7 @@ export function OfficialLatestResults({ favorite, dashboard, loading, spoilerMod
               const home = nflTeams.find((team) => team.code === game.homeTeamCode);
               return (
                 <div key={game.id} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 py-2">
-                  <a href={game.gameUrl} target="_blank" rel="noreferrer" className="min-w-0 self-center text-[12px] font-bold">
+                  <a href={game.gameUrl} target="_blank" rel="noreferrer" className="min-w-0 self-center text-[13px] font-bold leading-[1.15]">
                     <p className="truncate">{away?.name ?? game.awayTeamCode}</p>
                     <p className="mt-0.5 truncate">@ {home?.name ?? game.homeTeamCode}</p>
                   </a>

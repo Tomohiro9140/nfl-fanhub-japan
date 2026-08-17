@@ -114,6 +114,7 @@ describe("compact mobile result and schedule UI", () => {
     expect(radarMarkup.indexOf("INJURY RELATED")).toBeLessThan(radarMarkup.indexOf("AVAILABILITY WATCH · PFT"));
     expect(radarMarkup).toContain("OUT");
     expect(resultMarkup).toContain("px-3 py-2");
+    expect(resultMarkup).toContain("text-[13px]");
     expect(resultMarkup).toContain("text-[26px]");
     expect(resultMarkup).toContain("mt-1.5 flex items-center justify-between");
     expect(resultMarkup).toContain("self-center");
