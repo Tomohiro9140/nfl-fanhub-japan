@@ -31,13 +31,16 @@ export function selectGameTicketGame<T extends GameTicketCandidate>({
   activeGame,
   latestCompletedGame,
   scheduledGame,
+  skipReplayWindow = false,
 }: {
   now: Date;
   activeGame?: T;
   latestCompletedGame?: T;
   scheduledGame?: T;
+  /** Set only after the viewer explicitly marks the held result as watched. */
+  skipReplayWindow?: boolean;
 }) {
   if (activeGame && !isOfficialFinal(activeGame)) return activeGame;
-  if (latestCompletedGame && isWithinJstReplayWindow(latestCompletedGame, now)) return latestCompletedGame;
+  if (!skipReplayWindow && latestCompletedGame && isWithinJstReplayWindow(latestCompletedGame, now)) return latestCompletedGame;
   return scheduledGame ?? activeGame ?? latestCompletedGame;
 }

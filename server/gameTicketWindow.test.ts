@@ -21,4 +21,9 @@ describe("JST replay window for Game Ticket", () => {
     const live = { kickoffAt: new Date("2026-08-16T10:00:00.000Z"), gameState: "LIVE", awayScore: 7, homeScore: 3 };
     expect(selectGameTicketGame({ now: new Date("2026-08-16T11:00:00.000Z"), activeGame: live, latestCompletedGame: completed, scheduledGame: upcoming })).toBe(live);
   });
+
+  it("lets a viewer explicitly skip the protected result and move to the next game before Wednesday", () => {
+    const beforeCutoff = new Date("2026-08-18T20:59:59.000Z");
+    expect(selectGameTicketGame({ now: beforeCutoff, latestCompletedGame: completed, scheduledGame: upcoming, skipReplayWindow: true })).toBe(upcoming);
+  });
 });

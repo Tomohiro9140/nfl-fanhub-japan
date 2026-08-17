@@ -197,7 +197,7 @@ export async function replaceExternalAvailabilityInsightsForSources(sourceUrls: 
   await upsertExternalAvailabilityInsights(items);
 }
 
-export async function getOfficialTeamSnapshot(teamCode: string) {
+export async function getOfficialTeamSnapshot(teamCode: string, skipGameUrl?: string) {
   const db = await getDb();
   if (!db) return { nextGame: undefined, roster: [], rosterCounts: [], injuries: [], news: [], sources: { schedule: null, roster: null, injury: null }, lastUpdatedAt: undefined };
   const now = new Date();
@@ -244,7 +244,7 @@ export async function getOfficialTeamSnapshot(teamCode: string) {
   const completedScheduleCandidates = recentWithScores.filter((game): game is NonNullable<typeof game> => Boolean(game) && isOfficialFinal(game));
   const latestCompletedGame = [...completedScheduleCandidates, ...scoreboardCompletedCandidates]
     .sort((left, right) => right.kickoffAt.getTime() - left.kickoffAt.getTime())[0];
-  const nextGame = selectGameTicketGame({ now, activeGame: activeWithScore, latestCompletedGame, scheduledGame: scheduledWithScore });
+  const nextGame = selectGameTicketGame({ now, activeGame: activeWithScore, latestCompletedGame, scheduledGame: scheduledWithScore, skipReplayWindow: Boolean(skipGameUrl && latestCompletedGame?.sourceUrl === skipGameUrl) });
   const roster = await db.select().from(officialRosterEntries)
     .where(eq(officialRosterEntries.teamCode, teamCode))
     .orderBy(asc(officialRosterEntries.rosterStatus), asc(officialRosterEntries.position), asc(officialRosterEntries.playerName)).limit(160);
