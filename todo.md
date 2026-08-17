@@ -230,3 +230,6 @@
 - [x] LATEST RESULTSのハイライト導線を右下へ移動し、試合スコアを対戦チーム名2行分程度の高さへ拡大する。
 - [x] GAME TICKETのGAME STATUSと、Inactives・Game Center・Official Scheduleのリンク群を改行で分ける。
 - [x] 情報源バッジ、結果スコア、右下ハイライト、ゲーム状態リンク群を390px幅で検証する。
+- [x] LATEST RESULTSのスコアを対戦チーム名2行の縦中央へ揃える。
+- [x] WATCH HIGHLIGHTSまたは準備中を結果カードの右下へ固定する。
+- [x] 390px幅でスコアと右下ハイライトの位置を実データで検証する。
