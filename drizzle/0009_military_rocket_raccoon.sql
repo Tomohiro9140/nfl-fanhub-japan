@@ -1,0 +1,1 @@
+ALTER TABLE `official_scoreboard_games` ADD `final_recorded_at` timestamp;

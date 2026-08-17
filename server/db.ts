@@ -219,7 +219,31 @@ export async function getOfficialTeamSnapshot(teamCode: string) {
     return attachOfficialScore(game, scoreboard);
   };
   const [activeWithScore, scheduledWithScore, ...recentWithScores] = await Promise.all([scoreFor(activeGame), scoreFor(scheduledGame), ...recentlyFinishedGames.map(scoreFor)]);
-  const latestCompletedGame = recentWithScores.find((game) => isOfficialFinal(game));
+  const completedScoreboardGames = (await db.select().from(officialScoreboardGames)
+    .orderBy(desc(officialScoreboardGames.finalRecordedAt), desc(officialScoreboardGames.fetchedAt)).limit(80))
+    .filter((score) => (score.awayTeamCode === teamCode || score.homeTeamCode === teamCode) && isOfficialFinal(score));
+  const scoreboardCompletedCandidates = completedScoreboardGames.map((score) => ({
+    externalId: `scoreboard:${score.externalId}`,
+    teamCode,
+    opponentCode: score.homeTeamCode === teamCode ? score.awayTeamCode : score.homeTeamCode,
+    homeAway: score.homeTeamCode === teamCode ? "home" as const : "away" as const,
+    seasonPhase: score.seasonPhase,
+    weekLabel: score.weekLabel,
+    kickoffAt: score.finalRecordedAt ?? score.fetchedAt,
+    venue: null,
+    broadcast: null,
+    sourceUrl: score.gameUrl,
+    daznUrl: null,
+    daznSourceUrl: null,
+    daznMatchedAt: null,
+    fetchedAt: score.fetchedAt,
+    gameState: score.gameState,
+    awayScore: score.awayScore,
+    homeScore: score.homeScore,
+  }));
+  const completedScheduleCandidates = recentWithScores.filter((game): game is NonNullable<typeof game> => Boolean(game) && isOfficialFinal(game));
+  const latestCompletedGame = [...completedScheduleCandidates, ...scoreboardCompletedCandidates]
+    .sort((left, right) => right.kickoffAt.getTime() - left.kickoffAt.getTime())[0];
   const nextGame = selectGameTicketGame({ now, activeGame: activeWithScore, latestCompletedGame, scheduledGame: scheduledWithScore });
   const roster = await db.select().from(officialRosterEntries)
     .where(eq(officialRosterEntries.teamCode, teamCode))
@@ -267,11 +291,15 @@ export async function upsertOfficialStandings(items: InsertOfficialStanding[]) {
 export async function replaceOfficialScoreboardGames(season: number, items: InsertOfficialScoreboardGame[]) {
   const db = await getDb();
   if (!db) throw new Error("Database is not available for official scoreboard cache");
-  const existingLinks = await db.select({ externalId: officialScoreboardGames.externalId, nflHighlightUrl: officialScoreboardGames.nflHighlightUrl, nflHighlightSourceUrl: officialScoreboardGames.nflHighlightSourceUrl, nflHighlightMatchedAt: officialScoreboardGames.nflHighlightMatchedAt }).from(officialScoreboardGames).where(eq(officialScoreboardGames.season, season));
-  const highlightsByExternalId = new Map(existingLinks.map((link) => [link.externalId, link]));
+  const existingLinks = await db.select({ externalId: officialScoreboardGames.externalId, nflHighlightUrl: officialScoreboardGames.nflHighlightUrl, nflHighlightSourceUrl: officialScoreboardGames.nflHighlightSourceUrl, nflHighlightMatchedAt: officialScoreboardGames.nflHighlightMatchedAt, finalRecordedAt: officialScoreboardGames.finalRecordedAt }).from(officialScoreboardGames).where(eq(officialScoreboardGames.season, season));
+  const existingByExternalId = new Map(existingLinks.map((link) => [link.externalId, link]));
   await db.delete(officialScoreboardGames).where(eq(officialScoreboardGames.season, season));
   if (!items.length) return;
-  for (const item of items) await db.insert(officialScoreboardGames).values({ ...item, ...(highlightsByExternalId.get(item.externalId) ?? {}) }).onDuplicateKeyUpdate({ set: { awayScore: item.awayScore, homeScore: item.homeScore, gameState: item.gameState, sourceUrl: item.sourceUrl, fetchedAt: item.fetchedAt } });
+  for (const item of items) {
+    const existing = existingByExternalId.get(item.externalId);
+    const finalRecordedAt = isOfficialFinal(item) ? existing?.finalRecordedAt ?? item.fetchedAt : null;
+    await db.insert(officialScoreboardGames).values({ ...item, ...(existing ?? {}), finalRecordedAt }).onDuplicateKeyUpdate({ set: { awayScore: item.awayScore, homeScore: item.homeScore, gameState: item.gameState, finalRecordedAt, sourceUrl: item.sourceUrl, fetchedAt: item.fetchedAt } });
+  }
 }
 
 export async function getOfficialScoreboardGamesForHighlightMatching() {

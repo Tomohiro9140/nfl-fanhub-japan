@@ -153,6 +153,8 @@ export const officialScoreboardGames = mysqlTable("official_scoreboard_games", {
   awayScore: int("away_score"),
   homeScore: int("home_score"),
   gameState: varchar("game_state", { length: 32 }).notNull(),
+  /** First time this game was confirmed FINAL/COMPLETED by the official scoreboard. */
+  finalRecordedAt: timestamp("final_recorded_at"),
   gameUrl: varchar("game_url", { length: 1024 }).notNull(),
   /** Individual NFL-published highlights URL, retained only after team/week verification. */
   nflHighlightUrl: varchar("nfl_highlight_url", { length: 1024 }),
