@@ -84,6 +84,16 @@ describe("compact mobile result and schedule UI", () => {
     expect(radarMarkup).not.toContain("Bills sign Example Player");
   });
 
+  it("labels a protected final as the last game while keeping its official score out of spoiler-safe markup", () => {
+    const snapshot = { nextGame: { opponentCode: "CLE", homeAway: "away" as const, seasonPhase: "preseason" as const, weekLabel: "PRESEASON WEEK 1", kickoffAt, venue: null, broadcast: null, gameState: "FINAL", awayScore: 10, homeScore: 7, sourceUrl: "https://www.nfl.com/games/bills-at-browns", daznUrl: null, fetchedAt: kickoffAt }, gameDayStatus: { opponentCode: "CLE", homeAway: "away" as const, weekLabel: "PRESEASON WEEK 1", kickoffAt, gameState: "FINAL", awayScore: 10, homeScore: 7, sourceUrl: "https://www.nfl.com/games/bills-at-browns", fetchedAt: kickoffAt }, roster: [], rosterCounts: [], injuries: [], news: [], sources: { schedule: null, roster: null, injury: null } };
+    const spoilerMarkup = renderToStaticMarkup(createElement(OfficialGameTicket, { favorite, snapshot, loading: false, spoilerMode: true }));
+    const normalMarkup = renderToStaticMarkup(createElement(OfficialGameTicket, { favorite, snapshot, loading: false, spoilerMode: false }));
+    expect(spoilerMarkup).toContain("LAST GAME");
+    expect(spoilerMarkup).toContain("ネタバレ防止中");
+    expect(spoilerMarkup).not.toContain("OFFICIAL SCORE 10 — 7");
+    expect(normalMarkup).toContain("OFFICIAL SCORE 10 — 7");
+  });
+
   it("keeps the availability-only PFT watch below official injury items, removes the result icon, and uses tighter result spacing", () => {
     const snapshot = { nextGame: undefined, roster: [], rosterCounts: [], injuries: [{ id: 1, title: "Official injury item", sourceName: "Team Official", sourceUrl: "https://example.com/injury", publishedAt: kickoffAt, category: "injury" as const }], externalInsights: [{ id: 1, playerName: "Example Player", statusLabel: "OUT", headline: "Example Player expected to miss time", sourceName: "ProFootballTalk (NBC Sports)", sourceUrl: "https://example.com/pft", publishedAt: kickoffAt }], news: [], sources: { schedule: null, roster: null, injury: null }, lastUpdatedAt: kickoffAt };
     const radarMarkup = renderToStaticMarkup(createElement(OfficialStatusRadar, { favorite, snapshot, loading: false }));

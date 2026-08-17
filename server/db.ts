@@ -1,5 +1,6 @@
 import { and, asc, desc, eq, gt, gte, inArray, lt, sql } from "drizzle-orm";
 import { attachOfficialScore, findOfficialScoreForGame } from "./gameStatus";
+import { isOfficialFinal, selectGameTicketGame } from "./gameTicketWindow";
 import { isNull } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import { ExternalAvailabilityInsight, InsertExternalAvailabilityInsight, InsertOfficialFeedItem, InsertOfficialGame, InsertOfficialRosterEntry, InsertOfficialScoreboardGame, InsertOfficialStanding, InsertUser, externalAvailabilityInsights, officialFeedItems, officialGames, officialRosterEntries, officialScoreboardGames, officialStandings, users } from "../drizzle/schema";
@@ -204,14 +205,22 @@ export async function getOfficialTeamSnapshot(teamCode: string) {
   const activeGame = (await db.select().from(officialGames)
     .where(and(eq(officialGames.teamCode, teamCode), gte(officialGames.kickoffAt, activeWindowStart), lt(officialGames.kickoffAt, now)))
     .orderBy(desc(officialGames.kickoffAt)).limit(1))[0];
+  const recentlyFinishedGames = await db.select().from(officialGames)
+    .where(and(eq(officialGames.teamCode, teamCode), lt(officialGames.kickoffAt, now)))
+    .orderBy(desc(officialGames.kickoffAt)).limit(4);
   const scheduledGame = (await db.select().from(officialGames)
     .where(and(eq(officialGames.teamCode, teamCode), gt(officialGames.kickoffAt, now)))
     .orderBy(asc(officialGames.kickoffAt)).limit(1))[0];
-  const matchedGame = activeGame ?? scheduledGame;
-  const scoreboard = matchedGame ? await db.select().from(officialScoreboardGames)
-    .where(and(eq(officialScoreboardGames.awayTeamCode, matchedGame.homeAway === "away" ? teamCode : matchedGame.opponentCode), eq(officialScoreboardGames.homeTeamCode, matchedGame.homeAway === "away" ? matchedGame.opponentCode : teamCode)))
-    .orderBy(desc(officialScoreboardGames.fetchedAt)).limit(1) : [];
-  const nextGame = matchedGame ? attachOfficialScore(matchedGame, scoreboard) : undefined;
+  const scoreFor = async (game: typeof officialGames.$inferSelect | undefined) => {
+    if (!game) return undefined;
+    const scoreboard = await db.select().from(officialScoreboardGames)
+      .where(and(eq(officialScoreboardGames.awayTeamCode, game.homeAway === "away" ? teamCode : game.opponentCode), eq(officialScoreboardGames.homeTeamCode, game.homeAway === "away" ? game.opponentCode : teamCode)))
+      .orderBy(desc(officialScoreboardGames.fetchedAt)).limit(1);
+    return attachOfficialScore(game, scoreboard);
+  };
+  const [activeWithScore, scheduledWithScore, ...recentWithScores] = await Promise.all([scoreFor(activeGame), scoreFor(scheduledGame), ...recentlyFinishedGames.map(scoreFor)]);
+  const latestCompletedGame = recentWithScores.find((game) => isOfficialFinal(game));
+  const nextGame = selectGameTicketGame({ now, activeGame: activeWithScore, latestCompletedGame, scheduledGame: scheduledWithScore });
   const roster = await db.select().from(officialRosterEntries)
     .where(eq(officialRosterEntries.teamCode, teamCode))
     .orderBy(asc(officialRosterEntries.rosterStatus), asc(officialRosterEntries.position), asc(officialRosterEntries.playerName)).limit(160);
