@@ -8,12 +8,16 @@ const atlasSource = readFileSync(resolve(process.cwd(), "client/src/pages/Atlas.
 const fieldlineSource = readFileSync(resolve(process.cwd(), "client/src/pages/Fieldline.tsx"), "utf8");
 
 describe("ATLAS and FIELDLINE integration routes", () => {
-  it("registers both public reference routes and preserves the original apps behind them", () => {
+  it("registers both public reference routes and preserves the original apps behind permanent URLs", () => {
     expect(appSource).toContain('path="/atlas"');
     expect(appSource).toContain('path="/fieldline"');
     expect(homeSource).toContain('ATLAS');
     expect(homeSource).toContain('FIELDLINE');
-    expect(atlasSource).toContain('https://3000-ituqp183l2vhyriklj7k9-6f5ac53f.sg1.manus.computer/');
-    expect(fieldlineSource).toContain('https://3000-im4jq1epwl9r74izjlp1y-9b5a11d5.sg1.manus.computer/');
+    expect(atlasSource).toContain('https://nflplayeratl-tus9mrqw.manus.space/');
+    expect(fieldlineSource).toContain('https://nflteamstats-4q87cnse.manus.space/');
+    expect(atlasSource).toContain('FAN/HUB HOME');
+    expect(fieldlineSource).toContain('FAN/HUB HOME');
+    expect(atlasSource).toContain('onLoad={() => setIsLoaded(true)}');
+    expect(fieldlineSource).toContain('onLoad={() => setIsLoaded(true)}');
   });
 });
