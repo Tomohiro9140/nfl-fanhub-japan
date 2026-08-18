@@ -7,6 +7,7 @@ import { NEWS_SUMMARIES_ENABLED } from "@shared/newsSummaryFeature";
 
 type SourceKind = "team_official" | "nfl_official" | "pft" | "cbs";
 type FeedItem = { id: number; title: string; summary: string | null; japaneseSummary: string | null; englishSummary: string | null; sourceUrl: string; sourceName: string; sourceKind: SourceKind; category: "news" | "injury" | "transaction"; publishedAt: Date; fetchedAt: Date };
+type CompletedGame = { gameState: string | null; gameDate?: string | null; finishedAt?: Date | null; kickoffAt: Date };
 const externalSourceKinds = new Set<SourceKind>(["pft", "cbs"]);
 
 function isRosterMoveNews(item: FeedItem) {
@@ -29,9 +30,17 @@ function SourceMark({ kind }: { kind: SourceKind }) {
   return <span className={`mt-0.5 inline-flex h-5 w-[58px] shrink-0 items-center justify-center gap-1 overflow-hidden whitespace-nowrap border px-1 font-mono text-[8px] font-bold tracking-[.08em] ${tone}`}><Icon className="h-2.5 w-2.5 shrink-0" />{label}</span>;
 }
 
+/** Uses a conservative official game-day boundary because post-game content itself can reveal the result. */
+export function spoilerNewsCutoff(game?: CompletedGame) {
+  if (!game || !/final|completed/i.test(game.gameState ?? "")) return null;
+  // Final schedule cards can drop their kickoff time. On that day, hide all fresh coverage rather than risk a post-game result leaking.
+  if (game.gameDate) return new Date(`${game.gameDate}T00:00:00.000Z`);
+  return game.finishedAt ? new Date(game.finishedAt) : null;
+}
+
 /** Keeps official stories foremost while reserving room for one PFT and one CBS team story when available. */
-export function selectLatestNews(items: FeedItem[]) {
-  const sorted = [...items].filter((item) => item.category === "news" && !isRosterMoveNews(item)).sort((left, right) => new Date(right.publishedAt).getTime() - new Date(left.publishedAt).getTime());
+export function selectLatestNews(items: FeedItem[], hideFrom?: Date | null) {
+  const sorted = [...items].filter((item) => item.category === "news" && !isRosterMoveNews(item) && (!hideFrom || new Date(item.publishedAt).getTime() < hideFrom.getTime())).sort((left, right) => new Date(right.publishedAt).getTime() - new Date(left.publishedAt).getTime());
   const official = sorted.filter((item) => !externalSourceKinds.has(item.sourceKind));
   const selected = [...official.slice(0, 3)];
   for (const kind of ["pft", "cbs"] as const) {
@@ -53,13 +62,14 @@ function displayDate(value: Date) {
   return new Intl.DateTimeFormat("ja-JP", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit", timeZone: "Asia/Tokyo" }).format(new Date(value));
 }
 
-export function OfficialTeamFeed({ favorite }: { favorite: FavoriteTeam }) {
+export function OfficialTeamFeed({ favorite, spoilerMode = false, completedGame }: { favorite: FavoriteTeam; spoilerMode?: boolean; completedGame?: CompletedGame }) {
   const shouldSimulateUnavailable = typeof window !== "undefined" && import.meta.env.DEV && new URLSearchParams(window.location.search).has("feedError");
   const feedInput = useMemo(() => ({ teamCode: shouldSimulateUnavailable ? "XXX" : favorite.code }), [shouldSimulateUnavailable, favorite.code]);
   const feed = trpc.officialFeed.byTeam.useQuery(feedInput, { refetchInterval: 15 * 60 * 1000, staleTime: 15 * 60 * 1000, refetchOnWindowFocus: false, refetchOnReconnect: false, retry: 1 });
   const displayError = feed.isError || shouldSimulateUnavailable;
   const items = (shouldSimulateUnavailable ? [] : feed.data?.items ?? []) as FeedItem[];
-  const news = useMemo(() => selectLatestNews(items), [items]);
+  const hideFrom = spoilerMode ? spoilerNewsCutoff(completedGame) : null;
+  const news = useMemo(() => selectLatestNews(items, hideFrom), [items, hideFrom]);
   return (
     <section id="updates" className="scroll-mt-24">
       <div className="flex items-center gap-2 font-mono text-[10px] font-semibold tracking-[0.2em] text-[#64748b]"><span className="text-[#10213a]">02</span><span>{favorite.code} NEWS DESK</span><span className="h-px flex-1 bg-[#d9d5cc]" /></div>

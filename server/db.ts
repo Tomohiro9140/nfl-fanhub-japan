@@ -245,7 +245,8 @@ export async function getOfficialTeamSnapshot(teamCode: string, skipGameUrl?: st
     const scoreboard = await db.select().from(officialScoreboardGames)
       .where(and(eq(officialScoreboardGames.awayTeamCode, game.homeAway === "away" ? teamCode : game.opponentCode), eq(officialScoreboardGames.homeTeamCode, game.homeAway === "away" ? game.opponentCode : teamCode)))
       .orderBy(desc(officialScoreboardGames.fetchedAt)).limit(1);
-    return attachOfficialScore(game, scoreboard);
+    const score = scoreboard[0];
+    return { ...attachOfficialScore(game, scoreboard), gameDate: score?.gameDate ?? null, finishedAt: score?.finalRecordedAt ?? null };
   };
   const [activeWithScore, scheduledWithScore, ...recentWithScores] = await Promise.all([scoreFor(activeGame), scoreFor(scheduledGame), ...recentlyFinishedGames.map(scoreFor)]);
   const completedScoreboardGames = completedScoreboardRows
@@ -271,6 +272,7 @@ export async function getOfficialTeamSnapshot(teamCode: string, skipGameUrl?: st
     gameState: score.gameState,
     awayScore: score.awayScore,
     homeScore: score.homeScore,
+    finishedAt: score.finalRecordedAt ?? score.fetchedAt,
   }));
   const completedScheduleCandidates = recentWithScores.filter((game): game is NonNullable<typeof game> => Boolean(game) && isOfficialFinal(game));
   const latestCompletedGame = [...completedScheduleCandidates, ...scoreboardCompletedCandidates]
@@ -290,6 +292,7 @@ export async function getOfficialTeamSnapshot(teamCode: string, skipGameUrl?: st
     gameState: nextGame.gameState,
     awayScore: nextGame.awayScore,
     homeScore: nextGame.homeScore,
+    finishedAt: "finishedAt" in nextGame ? nextGame.finishedAt ?? null : null,
     gameDate: "gameDate" in nextGame ? nextGame.gameDate ?? null : null,
     sourceUrl: nextGame.sourceUrl,
     fetchedAt: nextGame.fetchedAt,

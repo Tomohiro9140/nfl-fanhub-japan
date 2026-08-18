@@ -17,7 +17,7 @@ vi.mock("@/lib/trpc", () => ({
   },
 }));
 
-import { OfficialTeamFeed, selectLatestNews } from "./OfficialTeamFeed";
+import { OfficialTeamFeed, selectLatestNews, spoilerNewsCutoff } from "./OfficialTeamFeed";
 
 const favorite: FavoriteTeam = { code: "BUF", name: "Buffalo Bills", conference: "AFC", division: "East", tone: "blue" };
 const now = new Date();
@@ -46,6 +46,18 @@ describe("official feed mobile content selection", () => {
     const selected = selectLatestNews(mockedItems as never[]);
     expect(selected.map((item) => item.id)).toEqual([1, 2, 3, 11, 12]);
     expect(selected.map((item) => item.id)).not.toContain(13);
+  });
+
+  it("removes post-game articles before rendering any external links while spoiler protection is active", () => {
+    const finalConfirmedAt = new Date("2026-08-15T18:00:00.000Z");
+    const cutoff = spoilerNewsCutoff({ gameState: "FINAL", gameDate: "2026-08-15", finishedAt: finalConfirmedAt, kickoffAt: new Date("2026-08-15T18:00:00.000Z") });
+    const safe = { id: 30, sourceKind: "team_official", category: "news", title: "Pregame notebook", summary: null, sourceUrl: "https://www.buffalobills.com/news/pregame", sourceName: "BUF Official News", publishedAt: new Date("2026-08-14T23:59:00.000Z"), fetchedAt: now };
+    const hidden = { id: 31, sourceKind: "team_official", category: "news", title: "Postgame reaction", summary: null, sourceUrl: "https://www.buffalobills.com/news/postgame", sourceName: "BUF Official News", publishedAt: new Date("2026-08-15T05:00:00.000Z"), fetchedAt: now };
+    expect(selectLatestNews([safe, hidden] as never[], cutoff).map((item) => item.id)).toEqual([30]);
+    mockedItems.splice(0, mockedItems.length, safe, hidden);
+    const markup = renderToStaticMarkup(createElement(OfficialTeamFeed, { favorite, spoilerMode: true, completedGame: { gameState: "FINAL", gameDate: "2026-08-15", finishedAt: finalConfirmedAt, kickoffAt: new Date("2026-08-15T18:00:00.000Z") } }));
+    expect(markup).not.toContain("https://www.buffalobills.com/news/postgame");
+    expect(markup).not.toContain("Postgame reaction");
   });
 
   it("renders the source icons and five mixed news cards while moving injury status out of the news panel", () => {
