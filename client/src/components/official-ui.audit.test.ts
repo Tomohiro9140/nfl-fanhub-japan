@@ -83,7 +83,8 @@ describe("compact mobile result and schedule UI", () => {
     const radarMarkup = renderToStaticMarkup(createElement(OfficialStatusRadar, { favorite, snapshot, loading: false }));
     expect(ticketMarkup).toContain("GAME STATUS");
     expect(ticketMarkup).toContain("INACTIVES");
-    expect(ticketMarkup).toContain("GAME CENTER");
+    expect(ticketMarkup).toContain("NFL GAME CENTER");
+    expect(ticketMarkup).not.toContain("OFFICIAL SCHEDULE");
     expect(ticketMarkup).toContain("LIVE");
     expect(digestMarkup).toContain("ROSTER MOVE DIGEST");
     expect(digestMarkup).toContain("Bills sign Example Player");
@@ -134,13 +135,14 @@ describe("compact mobile result and schedule UI", () => {
     expect(resultMarkup).not.toContain("lucide-trophy");
   });
 
-  it("separates the game state from its official links while retaining an in-ticket schedule action", () => {
+  it("keeps exactly one official in-ticket link and labels a schedule URL clearly", () => {
     const snapshot = { nextGame: { opponentCode: "CLE", homeAway: "away" as const, seasonPhase: "preseason" as const, weekLabel: "PRESEASON WEEK 2", kickoffAt, venue: null, broadcast: null, gameState: "LIVE", awayScore: 10, homeScore: 7, sourceUrl: "https://www.nfl.com/schedules", daznUrl: null, fetchedAt: kickoffAt }, roster: [], rosterCounts: [], injuries: [], news: [], sources: { schedule: null, roster: null, injury: null } };
     const markup = renderToStaticMarkup(createElement(OfficialGameTicket, { favorite, snapshot, loading: false }));
     expect(markup).toContain("GAME STATUS");
     expect(markup).toContain("INACTIVES");
-    expect(markup).toContain("GAME CENTER");
+    expect(markup).not.toContain("GAME CENTER");
     expect(markup).toContain("OFFICIAL SCHEDULE");
     expect(markup).toContain("mt-2 flex flex-wrap items-center");
+    expect(markup.match(/href="https:\/\/www\.nfl\.com\/schedules"/g)).toHaveLength(1);
   });
 });
