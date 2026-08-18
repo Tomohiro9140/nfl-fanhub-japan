@@ -21,22 +21,30 @@ const teamMatchers: Record<string, string[]> = {
   SEA: ["seattle seahawks", "seahawks"], TB: ["tampa bay buccaneers", "buccaneers", "bucs"], TEN: ["tennessee titans", "titans"], WAS: ["washington commanders", "commanders"],
 };
 
-function decodeNumericEntities(value: string) {
-  return value.replace(/&#(?:x([0-9a-f]+)|([0-9]+));/gi, (entity, hexadecimal: string | undefined, decimal: string | undefined) => {
-    const codePoint = Number.parseInt(hexadecimal ?? decimal ?? "", hexadecimal ? 16 : 10);
-    return Number.isInteger(codePoint) && codePoint >= 0 && codePoint <= 0x10ffff ? String.fromCodePoint(codePoint) : entity;
-  });
+function decodeEntities(value: string) {
+  let decoded = value;
+  for (let pass = 0; pass < 3; pass += 1) {
+    const next = decoded
+      .replace(/&amp;/gi, "&")
+      .replace(/&quot;/gi, '"')
+      .replace(/&apos;|&rsquo;/gi, "'")
+      .replace(/&nbsp;/gi, " ")
+      .replace(/&lt;/gi, "<")
+      .replace(/&gt;/gi, ">")
+      .replace(/&#(?:x([0-9a-f]+)|([0-9]+));/gi, (entity, hexadecimal: string | undefined, decimal: string | undefined) => {
+        const codePoint = Number.parseInt(hexadecimal ?? decimal ?? "", hexadecimal ? 16 : 10);
+        return Number.isInteger(codePoint) && codePoint >= 0 && codePoint <= 0x10ffff ? String.fromCodePoint(codePoint) : entity;
+      });
+    if (next === decoded) break;
+    decoded = next;
+  }
+  return decoded;
 }
 
 function clean(value: string) {
-  return decodeNumericEntities(value)
+  return decodeEntities(value)
     .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1")
     .replace(/<[^>]+>/g, " ")
-    .replace(/&amp;/gi, "&")
-    .replace(/&quot;/gi, '"')
-    .replace(/&apos;|&rsquo;/gi, "'")
-    .replace(/&lt;/gi, "<")
-    .replace(/&gt;/gi, ">")
     .replace(/\s+/g, " ")
     .trim();
 }

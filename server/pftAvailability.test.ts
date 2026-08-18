@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { availabilityStatus, parsePftAvailabilityArticle, pftInsightStatus } from "./pftAvailability";
+import { availabilityStatus, hasPftHeadlineTeamContext, parsePftAvailabilityArticle, pftInsightStatus } from "./pftAvailability";
 
 const articleHtml = `<!doctype html><html><head><title>Christian Gonzalez remains out of practice Saturday | NBC Sports</title><script type="application/ld+json">{"datePublished":"2026-08-15T13:41:25.823Z"}</script></head><body><article>New England Patriots coach Mike Vrabel said Christian Gonzalez is physically unavailable and not ready to return. Vrabel also announced that reserve offensive lineman Ben Brown will miss the rest of the preseason with an injury.</article></body></html>`;
 
@@ -39,5 +39,12 @@ describe("PFT availability parsing", () => {
     const titansArticle = `<!doctype html><html><head><title>Titans TE Jaren Kanak, DE Jaylen Harrell out for season with injuries | NBC Sports</title><script type="application/ld+json">{"datePublished":"2026-08-15T22:36:43.000Z"}</script></head><body><article>The Titans lost a pair of players to season-ending injuries. Related story: New York Giants quarterback Jaxson Dart is out for the season.</article></body></html>`;
     const insights = parsePftAvailabilityArticle(titansArticle, "https://example.com/titans", [{ teamCode: "NYG", playerName: "Jaxson Dart" }]);
     expect(insights).toEqual([]);
+  });
+
+  it("identifies and rejects saved availability rows whose headline has no matching team context", () => {
+    const roster = [{ teamCode: "ATL", playerName: "Matthew Bergeron" }, { teamCode: "CLE", playerName: "Deshaun Watson" }, { teamCode: "TEN", playerName: "Jaren Kanak" }];
+    expect(hasPftHeadlineTeamContext("Titans TE Jaren Kanak, DE Jaylen Harrell out for season with injuries", "ATL", roster)).toBe(false);
+    expect(hasPftHeadlineTeamContext("Titans TE Jaren Kanak, DE Jaylen Harrell out for season with injuries", "CLE", roster)).toBe(false);
+    expect(hasPftHeadlineTeamContext("Titans TE Jaren Kanak, DE Jaylen Harrell out for season with injuries", "TEN", roster)).toBe(true);
   });
 });

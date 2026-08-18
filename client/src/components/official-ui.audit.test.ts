@@ -101,6 +101,8 @@ describe("compact mobile result and schedule UI", () => {
     expect(spoilerMarkup).toContain("ネタバレ防止中");
     expect(spoilerMarkup).not.toContain("OFFICIAL SCORE 10 — 7");
     expect(spoilerMarkup).toContain("min-h-[272px]");
+    expect(spoilerMarkup).toContain("flex min-h-[272px] flex-col");
+    expect(spoilerMarkup).toContain("mt-auto border-t border-white/15");
     expect(normalMarkup).toContain("FINAL SCORE");
     expect(normalMarkup).toContain("min-h-[272px]");
     expect(normalMarkup).toMatch(/>10<\/span><span> — <\/span><span[^>]*>7<\/span>/);

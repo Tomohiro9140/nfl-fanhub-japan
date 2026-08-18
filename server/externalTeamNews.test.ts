@@ -27,4 +27,11 @@ describe("external team news RSS", () => {
     expect(item.title).toBe("Giants' Jaxson Dart's update");
     expect(item.summary).toBe("Dart's report is available.");
   });
+
+  it("decodes a CBS apostrophe entity even when it is encoded a second time", () => {
+    const xml = `<?xml version="1.0"?><rss><channel><item><title>Falcons&amp;#039; James Pearce Jr. update</title><link>https://www.cbssports.com/nfl/news/falcons-pearce/</link><description>Pearce&amp;#039;s suspension report.</description><pubDate>Mon, 17 Aug 2026 03:00:00 +0000</pubDate></item></channel></rss>`;
+    const [item] = parseExternalTeamNewsRss(xml, externalNewsSources[1], ["ATL"], new Date("2026-08-17T08:00:00.000Z"));
+    expect(item.title).toBe("Falcons' James Pearce Jr. update");
+    expect(item.summary).toBe("Pearce's suspension report.");
+  });
 });

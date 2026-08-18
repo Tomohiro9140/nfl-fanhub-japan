@@ -32,6 +32,11 @@ describe("official team feed parsing", () => {
     expect(classifyOfficialFeedItem("Carson Beck To Sit Out Game Against Raiders", "", "https://www.azcardinals.com/news/carson-beck-to-sit-out-game-against-raiders")).toBe("injury");
   });
 
+  it("keeps team-wide camp reports in news even when the headline references an existing injury", () => {
+    expect(classifyOfficialFeedItem("Falcons Camp Report: With Divine Deablo working through injury, teammates step up", "", "https://www.atlantafalcons.com/news/falcons-camp-report-divine-deablo")).toBe("news");
+    expect(classifyOfficialFeedItem("Training Camp Observations: injury updates and roster competition", "", "https://www.panthers.com/news/training-camp-observations")).toBe("news");
+  });
+
   it("classifies official roster and contract moves as transactions without mistaking autograph stories for moves", () => {
     expect(classifyOfficialFeedItem("Houston Texans Transactions (8-15-2026)", "The Houston Texans made roster moves.")).toBe("transaction");
     expect(classifyOfficialFeedItem("Packers announce roster move", "Green Bay releases QB Kyron Drones")).toBe("transaction");

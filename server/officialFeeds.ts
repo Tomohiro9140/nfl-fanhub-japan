@@ -76,9 +76,13 @@ function isViewingGuide(title: string, sourceUrl?: string) {
   return /\b(?:how to watch|how to stream|ways to watch|ways to stream|watch live|stream live|watch on|tune in|broadcast guide|streaming guide|radio broadcast|tv schedule)\b/i.test(text);
 }
 
+function isTeamWideCampReport(title: string) {
+  return /\b(?:camp|training camp)\s+(?:report|observations?|notes)\b/i.test(title);
+}
+
 function isInjuryRelated(title: string, sourceUrl?: string) {
   const text = `${title} ${sourceUrl ?? ""}`;
-  if (isViewingGuide(title, sourceUrl)) return false;
+  if (isViewingGuide(title, sourceUrl) || isTeamWideCampReport(title)) return false;
   const explicitOut = /\b(?:sit|sits|sitting|ruled|remain|remains|held|miss|misses|missing|will be|is|was)\s+out\b|\bout\s+(?:for|with|due to|of practice|until|through)\b|\blisted as out\b|\bwill not play\b/i.test(title);
   return /\b(?:injury|injured|questionable|doubtful|inactive|inactives|medical)\b|\b(?:ir|pup)\b|practice report/i.test(text)
     || explicitOut;
@@ -92,6 +96,7 @@ function isTransactionRelated(title: string, sourceUrl?: string) {
 
 /** Classifies official items from their headline and canonical URL; summary text is display-only. */
 export function classifyOfficialFeedItem(title: string, _summary: string, sourceUrl?: string): "news" | "injury" | "transaction" {
+  if (isTeamWideCampReport(title)) return "news";
   if (isInjuryRelated(title, sourceUrl)) return "injury";
   return isTransactionRelated(title, sourceUrl) ? "transaction" : "news";
 }

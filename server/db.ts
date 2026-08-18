@@ -186,6 +186,19 @@ export async function getOfficialRosterEntriesForPftMatching() {
   return db.select({ teamCode: officialRosterEntries.teamCode, playerName: officialRosterEntries.playerName }).from(officialRosterEntries).limit(4_000);
 }
 
+export async function getPftAvailabilityInsightsForValidation() {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select({ id: externalAvailabilityInsights.id, teamCode: externalAvailabilityInsights.teamCode, headline: externalAvailabilityInsights.headline }).from(externalAvailabilityInsights);
+}
+
+export async function deleteExternalAvailabilityInsights(ids: number[]) {
+  if (!ids.length) return;
+  const db = await getDb();
+  if (!db) throw new Error("Database is not available for PFT availability cache");
+  for (const id of ids) await db.delete(externalAvailabilityInsights).where(eq(externalAvailabilityInsights.id, id));
+}
+
 export async function upsertExternalAvailabilityInsights(items: InsertExternalAvailabilityInsight[]) {
   if (!items.length) return;
   const db = await getDb();
