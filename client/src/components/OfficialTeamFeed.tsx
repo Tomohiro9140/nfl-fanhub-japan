@@ -3,13 +3,11 @@ import { ArrowUpRight, BadgeCheck, CircleAlert, Newspaper, Radio, RefreshCw, Tv 
 import { trpc } from "@/lib/trpc";
 import { hasDistinctNewsSummary } from "@/lib/newsSummary";
 import type { FavoriteTeam } from "@/lib/nflTeams";
+import { NEWS_SUMMARIES_ENABLED } from "@shared/newsSummaryFeature";
 
 type SourceKind = "team_official" | "nfl_official" | "pft" | "cbs";
 type FeedItem = { id: number; title: string; summary: string | null; japaneseSummary: string | null; englishSummary: string | null; sourceUrl: string; sourceName: string; sourceKind: SourceKind; category: "news" | "injury" | "transaction"; publishedAt: Date; fetchedAt: Date };
 const externalSourceKinds = new Set<SourceKind>(["pft", "cbs"]);
-
-/** AI article summaries are deliberately frozen until the user explicitly re-enables this feature. */
-export const NEWS_SUMMARIES_ENABLED = false;
 
 function isRosterMoveNews(item: FeedItem) {
   if (item.sourceKind !== "team_official") return false;

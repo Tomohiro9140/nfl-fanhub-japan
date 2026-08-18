@@ -5,6 +5,7 @@ import { publicProcedure, router } from "./_core/trpc";
 import { getFreshOfficialTeamFeed, refreshOfficialTeamFeed } from "./officialFeeds";
 import { getOfficialFeedItemById, getOfficialLeagueCalendar, getOfficialLeagueDashboardSummary, getOfficialTeamSnapshot, saveOfficialFeedEnglishSummary, saveOfficialFeedJapaneseSummary } from "./db";
 import { generateOfficialNewsEnglishSummary, generateOfficialNewsJapaneseSummary } from "./newsJapaneseSummary";
+import { NEWS_SUMMARIES_ENABLED } from "@shared/newsSummaryFeature";
 import { z } from "zod";
 
 export const appRouter = router({
@@ -29,6 +30,7 @@ export const appRouter = router({
       return { count };
     }),
     japaneseSummary: publicProcedure.input(z.object({ itemId: z.number().int().positive() })).mutation(async ({ input }) => {
+      if (!NEWS_SUMMARIES_ENABLED) return { itemId: input.itemId, summary: null, generated: false, frozen: true };
       const item = await getOfficialFeedItemById(input.itemId);
       if (!item) throw new Error("Official news item was not found");
       if (item.japaneseSummary) return { itemId: item.id, summary: item.japaneseSummary, generated: true };
@@ -44,6 +46,7 @@ export const appRouter = router({
       return { itemId: item.id, summary: item.summary, generated: false };
     }),
     englishSummary: publicProcedure.input(z.object({ itemId: z.number().int().positive() })).mutation(async ({ input }) => {
+      if (!NEWS_SUMMARIES_ENABLED) return { itemId: input.itemId, summary: null, generated: false, frozen: true };
       const item = await getOfficialFeedItemById(input.itemId);
       if (!item) throw new Error("Official news item was not found");
       if (item.englishSummary) return { itemId: item.id, summary: item.englishSummary, generated: true };

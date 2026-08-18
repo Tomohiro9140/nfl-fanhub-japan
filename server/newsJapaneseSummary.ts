@@ -1,4 +1,5 @@
 import { invokeLLM } from "./_core/llm";
+import { NEWS_SUMMARIES_ENABLED } from "@shared/newsSummaryFeature";
 
 type NewsForSummary = {
   title: string;
@@ -107,6 +108,7 @@ function parseEnglishSummary(content: string | null | undefined, minimumLength =
 }
 
 export async function generateOfficialNewsJapaneseSummary(item: NewsForSummary) {
+  if (!NEWS_SUMMARIES_ENABLED) return undefined;
   const reference = await getNewsSummaryReference(item);
   if (!reference) return undefined;
   const isExternalRss = reference.kind === "external_rss";
@@ -141,6 +143,7 @@ export async function generateOfficialNewsJapaneseSummary(item: NewsForSummary) 
 }
 
 export async function generateOfficialNewsEnglishSummary(item: NewsForSummary) {
+  if (!NEWS_SUMMARIES_ENABLED) return undefined;
   const reference = await getNewsSummaryReference(item);
   if (!reference) return undefined;
   const isExternalRss = reference.kind === "external_rss";

@@ -1,5 +1,9 @@
-import { describe, expect, it } from "vitest";
-import { externalRssSummaryReference, extractOfficialArticleText } from "./newsJapaneseSummary";
+import { describe, expect, it, vi } from "vitest";
+
+vi.mock("./_core/llm", () => ({ invokeLLM: vi.fn() }));
+
+import { invokeLLM } from "./_core/llm";
+import { externalRssSummaryReference, extractOfficialArticleText, generateOfficialNewsEnglishSummary, generateOfficialNewsJapaneseSummary } from "./newsJapaneseSummary";
 
 describe("extractOfficialArticleText", () => {
   it("uses article content and omits script payloads", () => {
@@ -20,5 +24,12 @@ describe("extractOfficialArticleText", () => {
     const pft = { title: "Bills receiver returns to practice", summary: "The report says the receiver was back at the team facility on Monday.", sourceUrl: "https://www.nbcsports.com/nfl/profootballtalk/example", sourceKind: "pft" as const };
     expect(externalRssSummaryReference(pft)?.text).toContain("External RSS description");
     expect(externalRssSummaryReference({ ...pft, sourceKind: "team_official" })).toBeUndefined();
+  });
+
+  it("does not invoke the AI provider while article summaries are frozen", async () => {
+    const item = { title: "Bills receiver returns to practice", summary: "The report says the receiver was back at the team facility on Monday.", sourceUrl: "https://www.nbcsports.com/nfl/profootballtalk/example", sourceKind: "pft" as const };
+    await expect(generateOfficialNewsJapaneseSummary(item)).resolves.toBeUndefined();
+    await expect(generateOfficialNewsEnglishSummary(item)).resolves.toBeUndefined();
+    expect(invokeLLM).not.toHaveBeenCalled();
   });
 });
