@@ -52,6 +52,23 @@ const teamSeeds: TeamSeed[] = [
 
 export const nflTeams: FavoriteTeam[] = teamSeeds;
 
+const officialTeamDomains: Record<string, string> = {
+  ARI: "azcardinals.com", ATL: "atlantafalcons.com", BAL: "baltimoreravens.com", BUF: "buffalobills.com",
+  CAR: "panthers.com", CHI: "chicagobears.com", CIN: "bengals.com", CLE: "clevelandbrowns.com",
+  DAL: "dallascowboys.com", DEN: "denverbroncos.com", DET: "detroitlions.com", GB: "packers.com",
+  HOU: "houstontexans.com", IND: "colts.com", JAX: "jaguars.com", KC: "chiefs.com",
+  LAC: "chargers.com", LAR: "therams.com", LV: "raiders.com", MIA: "miamidolphins.com",
+  MIN: "vikings.com", NE: "patriots.com", NO: "neworleansaints.com", NYG: "giants.com",
+  NYJ: "newyorkjets.com", PHI: "philadelphiaeagles.com", PIT: "steelers.com", SF: "49ers.com",
+  SEA: "seahawks.com", TB: "buccaneers.com", TEN: "titansonline.com", WAS: "commanders.com",
+};
+
+/** Returns the selected club's official schedule hub, never an opponent's schedule page. */
+export function officialTeamScheduleUrl(teamCode: string) {
+  const domain = officialTeamDomains[teamCode];
+  return domain ? `https://www.${domain}/schedule/` : "https://www.nfl.com/schedules/";
+}
+
 export function getTeamByCode(code: string | null): FavoriteTeam | undefined {
   return nflTeams.find((team) => team.code === code);
 }

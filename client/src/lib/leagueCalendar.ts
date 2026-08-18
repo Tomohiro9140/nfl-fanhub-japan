@@ -41,7 +41,9 @@ export function getNextSevenDayGames(games: LeagueCalendarGame[], now: Date) {
 
 /** Calendar rows intentionally use abbreviations to retain a compact mobile layout. */
 export function abbreviatedMatchup(game: LeagueCalendarGame) {
-  return `${game.teamCode} ${game.homeAway === "away" ? "@" : "vs."} ${game.opponentCode}`;
+  const awayTeam = game.homeAway === "away" ? game.teamCode : game.opponentCode;
+  const homeTeam = game.homeAway === "home" ? game.teamCode : game.opponentCode;
+  return `${awayTeam} @ ${homeTeam}`;
 }
 
 export function seasonWeekLabel(game: LeagueCalendarGame) {

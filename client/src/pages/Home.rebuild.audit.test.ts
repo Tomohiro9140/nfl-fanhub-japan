@@ -59,6 +59,7 @@ describe("mobile team page information hierarchy", () => {
     expect(markup).not.toContain("OFFICIAL CACHE");
     expect(markup).not.toContain("結果・スコア・結果が分かる画像を隠しています");
     expect(markup).not.toContain("視聴が終わるまで、この設定を維持します。");
+    expect(markup).not.toContain("を推しチームに設定しました");
   });
 
   it("integrates game-day status into the ticket and places roster moves after the availability radar", () => {

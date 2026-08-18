@@ -16,6 +16,11 @@ describe("league calendar presentation", () => {
     expect(abbreviatedMatchup(bills[1]!)).toBe("BUF @ PIT");
   });
 
+  it("uses the official away club first with @ for either stored team perspective", () => {
+    expect(abbreviatedMatchup(games[0]!)).toBe("BUF @ CLE");
+    expect(abbreviatedMatchup({ ...games[0]!, teamCode: "BUF", opponentCode: "CLE", homeAway: "away" })).toBe("BUF @ CLE");
+  });
+
   it("returns all league games that kick off in the next seven days", () => {
     const nextSevenDays = getNextSevenDayGames(games, new Date("2026-08-16T00:00:00.000Z"));
     expect(nextSevenDays.map((game) => game.id)).toEqual([3, 1]);

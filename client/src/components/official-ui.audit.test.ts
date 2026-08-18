@@ -24,8 +24,8 @@ describe("compact mobile result and schedule UI", () => {
     expect(markup).toContain("min-h-[10px]");
     const revealedMarkup = renderToStaticMarkup(createElement(OfficialLatestResults, { favorite, dashboard, loading: false, spoilerMode: false }));
     expect(revealedMarkup).not.toContain(">FINAL<");
-    expect(revealedMarkup).toContain("font-extrabold text-[#10213a]");
-    expect(markup).not.toContain("font-extrabold text-[#10213a]");
+    expect(revealedMarkup).toContain("font-extrabold text-[#a84420]");
+    expect(markup).not.toContain("font-extrabold text-[#a84420]");
     expect(revealedMarkup).toContain("py-2.5");
     expect(revealedMarkup).toContain("leading-[1.25]");
   });
@@ -61,6 +61,8 @@ describe("compact mobile result and schedule UI", () => {
     expect(switchMarkup).toContain("ネタバレ防止");
     expect(switchMarkup).not.toContain("SPOILER SAFE");
     expect(leagueMarkup).toContain("PRE · WEEK 2");
+    expect(leagueMarkup).toContain("https://www.buffalobills.com/schedule/");
+    expect(leagueMarkup).toContain("BUF @ CLE");
     expect(leagueMarkup).not.toContain("STARTS IN");
   });
 
