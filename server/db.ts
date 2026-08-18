@@ -186,24 +186,6 @@ export async function getOfficialRosterEntriesForPftMatching() {
   return db.select({ teamCode: officialRosterEntries.teamCode, playerName: officialRosterEntries.playerName }).from(officialRosterEntries).limit(4_000);
 }
 
-/** Complete current official roster directory for the ATLAS player finder. */
-export async function getOfficialRosterDirectory() {
-  const db = await getDb();
-  if (!db) return { players: [], lastUpdatedAt: undefined };
-  const players = await db.select({
-    id: officialRosterEntries.id,
-    teamCode: officialRosterEntries.teamCode,
-    playerName: officialRosterEntries.playerName,
-    jerseyNumber: officialRosterEntries.jerseyNumber,
-    position: officialRosterEntries.position,
-    rosterStatus: officialRosterEntries.rosterStatus,
-    sourceUrl: officialRosterEntries.sourceUrl,
-    fetchedAt: officialRosterEntries.fetchedAt,
-  }).from(officialRosterEntries).limit(4_000);
-  const lastUpdatedAt = players.map((player) => player.fetchedAt).sort((left, right) => right.getTime() - left.getTime())[0];
-  return { players, lastUpdatedAt };
-}
-
 export async function getPftAvailabilityInsightsForValidation() {
   const db = await getDb();
   if (!db) return [];
