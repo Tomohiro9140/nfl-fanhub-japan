@@ -1,0 +1,1 @@
+ALTER TABLE `official_scoreboard_games` ADD `game_date` varchar(10);

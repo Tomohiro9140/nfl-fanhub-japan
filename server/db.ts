@@ -231,7 +231,7 @@ export async function getOfficialTeamSnapshot(teamCode: string, skipGameUrl?: st
     db.select().from(officialGames).where(and(eq(officialGames.teamCode, teamCode), gte(officialGames.kickoffAt, activeWindowStart), lt(officialGames.kickoffAt, now))).orderBy(desc(officialGames.kickoffAt)).limit(1),
     db.select().from(officialGames).where(and(eq(officialGames.teamCode, teamCode), lt(officialGames.kickoffAt, now))).orderBy(desc(officialGames.kickoffAt)).limit(4),
     db.select().from(officialGames).where(and(eq(officialGames.teamCode, teamCode), gt(officialGames.kickoffAt, now))).orderBy(asc(officialGames.kickoffAt)).limit(1),
-    db.select({ externalId: officialScoreboardGames.externalId, seasonPhase: officialScoreboardGames.seasonPhase, weekLabel: officialScoreboardGames.weekLabel, awayTeamCode: officialScoreboardGames.awayTeamCode, homeTeamCode: officialScoreboardGames.homeTeamCode, awayScore: officialScoreboardGames.awayScore, homeScore: officialScoreboardGames.homeScore, gameState: officialScoreboardGames.gameState, finalRecordedAt: officialScoreboardGames.finalRecordedAt, gameUrl: officialScoreboardGames.gameUrl, nflHighlightUrl: officialScoreboardGames.nflHighlightUrl, fetchedAt: officialScoreboardGames.fetchedAt }).from(officialScoreboardGames).orderBy(desc(officialScoreboardGames.finalRecordedAt), desc(officialScoreboardGames.fetchedAt)).limit(80),
+    db.select({ externalId: officialScoreboardGames.externalId, seasonPhase: officialScoreboardGames.seasonPhase, weekLabel: officialScoreboardGames.weekLabel, awayTeamCode: officialScoreboardGames.awayTeamCode, homeTeamCode: officialScoreboardGames.homeTeamCode, awayScore: officialScoreboardGames.awayScore, homeScore: officialScoreboardGames.homeScore, gameState: officialScoreboardGames.gameState, gameDate: officialScoreboardGames.gameDate, finalRecordedAt: officialScoreboardGames.finalRecordedAt, gameUrl: officialScoreboardGames.gameUrl, nflHighlightUrl: officialScoreboardGames.nflHighlightUrl, fetchedAt: officialScoreboardGames.fetchedAt }).from(officialScoreboardGames).orderBy(desc(officialScoreboardGames.finalRecordedAt), desc(officialScoreboardGames.fetchedAt)).limit(80),
     db.select({ id: officialRosterEntries.id, playerName: officialRosterEntries.playerName, jerseyNumber: officialRosterEntries.jerseyNumber, position: officialRosterEntries.position, rosterStatus: officialRosterEntries.rosterStatus, sourceUrl: officialRosterEntries.sourceUrl, fetchedAt: officialRosterEntries.fetchedAt }).from(officialRosterEntries).where(eq(officialRosterEntries.teamCode, teamCode)).orderBy(asc(officialRosterEntries.rosterStatus), asc(officialRosterEntries.position), asc(officialRosterEntries.playerName)).limit(160),
     db.select({ id: officialFeedItems.id, title: officialFeedItems.title, sourceName: officialFeedItems.sourceName, sourceUrl: officialFeedItems.sourceUrl, publishedAt: officialFeedItems.publishedAt, category: officialFeedItems.category, fetchedAt: officialFeedItems.fetchedAt }).from(officialFeedItems).where(and(eq(officialFeedItems.teamCode, teamCode), eq(officialFeedItems.category, "injury"), gte(officialFeedItems.publishedAt, officialInjuryWindowStart))).orderBy(sql`case when ${officialFeedItems.sourceKind} = 'team_official' then 0 else 1 end`, desc(officialFeedItems.publishedAt)).limit(3),
     db.select({ id: officialFeedItems.id, title: officialFeedItems.title, sourceName: officialFeedItems.sourceName, sourceUrl: officialFeedItems.sourceUrl, publishedAt: officialFeedItems.publishedAt, category: officialFeedItems.category, fetchedAt: officialFeedItems.fetchedAt }).from(officialFeedItems).where(and(eq(officialFeedItems.teamCode, teamCode), eq(officialFeedItems.category, "transaction"), gte(officialFeedItems.publishedAt, rosterMoveWindowStart))).orderBy(sql`case when ${officialFeedItems.sourceKind} = 'team_official' then 0 else 1 end`, desc(officialFeedItems.publishedAt)).limit(3),
@@ -257,7 +257,9 @@ export async function getOfficialTeamSnapshot(teamCode: string, skipGameUrl?: st
     homeAway: score.homeTeamCode === teamCode ? "home" as const : "away" as const,
     seasonPhase: score.seasonPhase,
     weekLabel: score.weekLabel,
-    kickoffAt: score.finalRecordedAt ?? score.fetchedAt,
+    // A score confirmation/fetch time is not a kickoff time. Use the official game date at a neutral UTC hour only for replay-window ordering; the UI renders it as date-only.
+    kickoffAt: score.gameDate ? new Date(`${score.gameDate}T12:00:00.000Z`) : score.fetchedAt,
+    gameDate: score.gameDate,
     venue: null,
     broadcast: null,
     sourceUrl: score.gameUrl,
@@ -288,6 +290,7 @@ export async function getOfficialTeamSnapshot(teamCode: string, skipGameUrl?: st
     gameState: nextGame.gameState,
     awayScore: nextGame.awayScore,
     homeScore: nextGame.homeScore,
+    gameDate: "gameDate" in nextGame ? nextGame.gameDate ?? null : null,
     sourceUrl: nextGame.sourceUrl,
     fetchedAt: nextGame.fetchedAt,
   } : undefined;
@@ -304,14 +307,15 @@ export async function upsertOfficialStandings(items: InsertOfficialStanding[]) {
 export async function replaceOfficialScoreboardGames(season: number, items: InsertOfficialScoreboardGame[]) {
   const db = await getDb();
   if (!db) throw new Error("Database is not available for official scoreboard cache");
-  const existingLinks = await db.select({ externalId: officialScoreboardGames.externalId, nflHighlightUrl: officialScoreboardGames.nflHighlightUrl, nflHighlightSourceUrl: officialScoreboardGames.nflHighlightSourceUrl, nflHighlightMatchedAt: officialScoreboardGames.nflHighlightMatchedAt, finalRecordedAt: officialScoreboardGames.finalRecordedAt }).from(officialScoreboardGames).where(eq(officialScoreboardGames.season, season));
+  const existingLinks = await db.select({ externalId: officialScoreboardGames.externalId, gameDate: officialScoreboardGames.gameDate, nflHighlightUrl: officialScoreboardGames.nflHighlightUrl, nflHighlightSourceUrl: officialScoreboardGames.nflHighlightSourceUrl, nflHighlightMatchedAt: officialScoreboardGames.nflHighlightMatchedAt, finalRecordedAt: officialScoreboardGames.finalRecordedAt }).from(officialScoreboardGames).where(eq(officialScoreboardGames.season, season));
   const existingByExternalId = new Map(existingLinks.map((link) => [link.externalId, link]));
   await db.delete(officialScoreboardGames).where(eq(officialScoreboardGames.season, season));
   if (!items.length) return;
   for (const item of items) {
     const existing = existingByExternalId.get(item.externalId);
     const finalRecordedAt = isOfficialFinal(item) ? existing?.finalRecordedAt ?? item.fetchedAt : null;
-    await db.insert(officialScoreboardGames).values({ ...item, ...(existing ?? {}), finalRecordedAt }).onDuplicateKeyUpdate({ set: { awayScore: item.awayScore, homeScore: item.homeScore, gameState: item.gameState, finalRecordedAt, sourceUrl: item.sourceUrl, fetchedAt: item.fetchedAt } });
+    const gameDate = item.gameDate ?? existing?.gameDate ?? null;
+    await db.insert(officialScoreboardGames).values({ ...item, ...(existing ?? {}), gameDate, finalRecordedAt }).onDuplicateKeyUpdate({ set: { awayScore: item.awayScore, homeScore: item.homeScore, gameState: item.gameState, gameDate, finalRecordedAt, sourceUrl: item.sourceUrl, fetchedAt: item.fetchedAt } });
   }
 }
 

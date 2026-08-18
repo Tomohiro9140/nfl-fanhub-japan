@@ -20,6 +20,6 @@ describe("official league dashboard parsers", () => {
   it("parses a completed official NFL score card", () => {
     const rows = parseNFLScoresPage(scoresFixture, 2026);
     expect(rows).toHaveLength(1);
-    expect(rows[0]).toMatchObject({ seasonPhase: "preseason", weekLabel: "PRESEASON WEEK 1", awayTeamCode: "CAR", homeTeamCode: "BUF", awayScore: 14, homeScore: 29, gameState: "FINAL" });
+    expect(rows[0]).toMatchObject({ seasonPhase: "preseason", weekLabel: "PRESEASON WEEK 1", awayTeamCode: "CAR", homeTeamCode: "BUF", awayScore: 14, homeScore: 29, gameState: "FINAL", gameDate: "2026-08-15" });
   });
 });

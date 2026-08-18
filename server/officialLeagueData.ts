@@ -20,6 +20,7 @@ function text(value: string) {
 }
 
 const nicknameToCode = Object.fromEntries(Object.entries(TEAM_NAMES).map(([code, name]) => [name.split(" ").at(-1) ?? name, code]));
+const monthNumber = new Map([["january", 0], ["february", 1], ["march", 2], ["april", 3], ["may", 4], ["june", 5], ["july", 6], ["august", 7], ["september", 8], ["october", 9], ["november", 10], ["december", 11]]);
 
 async function fetchOfficialHtml(url: string) {
   const controller = new AbortController();
@@ -59,6 +60,16 @@ function phaseAndWeek(html: string) {
   return { seasonPhase: "regular" as const, weekLabel: null };
 }
 
+/** Extracts only the official calendar date from a completed score label; it never invents a kickoff time. */
+function officialGameDateFromLabel(label: string | undefined, season: number) {
+  const match = label?.match(/,\s+(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday),\s+([a-z]+)\s+(\d{1,2})(?:st|nd|rd|th)?/i);
+  if (!match) return null;
+  const month = monthNumber.get(match[1].toLowerCase());
+  if (month === undefined) return null;
+  const year = month < 6 ? season + 1 : season;
+  return `${year}-${String(month + 1).padStart(2, "0")}-${match[2].padStart(2, "0")}`;
+}
+
 export function parseNFLScoresPage(html: string, season: number, sourceUrl = officialScheduleUrl): InsertOfficialScoreboardGame[] {
   const { seasonPhase, weekLabel } = phaseAndWeek(html);
   return Array.from(html.matchAll(/data-analytics="([^"]+)"[^>]*href="([^\"]*\/games\/[^\"]+)"/gi)).flatMap((match) => {
@@ -72,7 +83,7 @@ export function parseNFLScoresPage(html: string, season: number, sourceUrl = off
     const homeTeamCode = nicknameToCode[homeNickname];
     if (!awayTeamCode || !homeTeamCode) return [];
     const gameUrl = `https://www.nfl.com${match[2]}`;
-    return [{ externalId: hash(gameUrl), season, seasonPhase, weekLabel, awayTeamCode, homeTeamCode, awayScore: Number(awayScore), homeScore: Number(homeScore), gameState, gameUrl, sourceUrl, fetchedAt: new Date() }];
+    return [{ externalId: hash(gameUrl), season, seasonPhase, weekLabel, awayTeamCode, homeTeamCode, awayScore: Number(awayScore), homeScore: Number(homeScore), gameState, gameDate: officialGameDateFromLabel(label, season), gameUrl, sourceUrl, fetchedAt: new Date() }];
   });
 }
 

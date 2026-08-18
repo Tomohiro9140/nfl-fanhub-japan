@@ -78,6 +78,13 @@
       "when": 1786965162510,
       "tag": "0010_familiar_mulholland_black",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "5",
+      "when": 1787026944397,
+      "tag": "0011_shiny_valeria_richards",
+      "breakpoints": true
     }
   ]
 }
