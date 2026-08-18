@@ -69,4 +69,11 @@ describe("mobile team page information hierarchy", () => {
     expect(markup).not.toContain("GAME-DAY STATUS");
     expect(markup.indexOf("STATUS RADAR")).toBeLessThan(markup.indexOf("ROSTER MOVE DIGEST"));
   });
+
+  it("changes the watched-ticket state without emitting a page notification", () => {
+    const source = Home.toString();
+    expect(source).not.toContain("視聴済みにしました。次の未完了試合を表示します。");
+    expect(source).not.toContain("視聴済みを解除しました。LAST GAMEへ戻します。");
+    expect(source).not.toContain("toast(");
+  });
 });

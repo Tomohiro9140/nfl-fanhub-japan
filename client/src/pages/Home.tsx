@@ -4,7 +4,6 @@
  */
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { CircleAlert, Eye, EyeOff, Flag, Menu, ShieldCheck, X } from "lucide-react";
-import { toast } from "sonner";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { getTeamByCode, nflTeams, type FavoriteTeam, type TeamBrand } from "@/lib/nflTeams";
 import { OfficialTeamFeed } from "@/components/OfficialTeamFeed";
@@ -87,12 +86,10 @@ export default function Home() {
   const markTicketWatched = (gameSourceUrl: string) => {
     window.localStorage.setItem(`${watchedTicketStorageKey}:${favorite.code}`, gameSourceUrl);
     setWatchedTicketUrl(gameSourceUrl);
-    toast("視聴済みにしました。次の未完了試合を表示します。");
   };
   const restoreLastGame = () => {
     window.localStorage.removeItem(`${watchedTicketStorageKey}:${favorite.code}`);
     setWatchedTicketUrl(null);
-    toast("視聴済みを解除しました。LAST GAMEへ戻します。");
   };
 
   return <div className="min-h-screen overflow-x-clip bg-[#f5f2ea] text-[#10213a] selection:bg-[#e85d2a] selection:text-white">
