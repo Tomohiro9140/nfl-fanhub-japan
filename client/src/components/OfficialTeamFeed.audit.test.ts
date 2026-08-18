@@ -75,6 +75,8 @@ describe("official feed mobile content selection", () => {
     expect(markup).toContain("OFFICIAL");
     expect(markup).toContain("PFT");
     expect(markup).toContain("CBS");
+    expect(markup).toContain("PUBLISHED ·");
+    expect(markup).toContain("JST");
     expect(markup).toContain('href="https://www.buffalobills.com/news/1"');
     expect(markup).toContain('target="_blank"');
     expect(markup).not.toContain("日本語要約");

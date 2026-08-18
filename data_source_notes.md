@@ -207,3 +207,9 @@ LATEST NEWSの詳細ポップアップに、日本語要約と英語原文抜粋
 ## 結果・ニュース密度と詳しい英語サマリー（2026-08-16）
 
 LATEST RESULTSから右上のトロフィーアイコンを削除し、カード外周・行間・読込状態の余白を圧縮した。GAME TICKETの大きな観戦ボタンを削除し、右上の小さなDAZNリンクへ置き換えた。LATEST NEWSは公式新着を3件から5件へ増やした。英語表示は公式RSS概要ではなく、公式記事を一時取得して生成する500〜800文字（約10行）の英語サマリーをキャッシュして表示する。Buffalo公式記事で948文字の英語サマリーが生成・保存されることを確認した。390px幅の実データ画面では、結果カードの圧縮、右上DAZNリンク、ニュース5件表示を確認した。
+
+## UTC 06時区分の公式RSS収集結果（2026-08-18）
+
+2026年8月18日06:04 UTCに、UTC 06時区分の [Cowboys](https://www.dallascowboys.com/rss/news)、[Broncos](https://www.denverbroncos.com/rss/news)、[Lions](https://www.detroitlions.com/rss/news)、[Packers](https://www.packers.com/rss/news)、[Texans](https://www.houstontexans.com/rss/news)、[Colts](https://www.colts.com/rss/news)、[Jaguars](https://www.jaguars.com/rss/news)、[Chiefs](https://www.chiefs.com/rss/news) を直接確認した。各チームの最新3件、計24件を`team_official`として保存した。内訳はnews 21件、transaction 3件（Houston 2件、Indianapolis 1件）である。
+
+Dallas公式RSSは先頭に2018年の記事を混在させていたため、45日を超える過去記事を保存しない鮮度条件を適用して除外した。Jaguars RSSは初回12秒取得で応答が間に合わなかったが、30秒で再検証した結果、3件すべてを取得できた。NFL公式[Injuriesページ](https://www.nfl.com/injuries/)は同時確認したが、このUTCグループに対して個別URLと公開日時を検証できる新規対象項目がなかったため保存していない。
