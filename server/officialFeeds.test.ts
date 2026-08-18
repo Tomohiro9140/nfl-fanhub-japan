@@ -35,6 +35,7 @@ describe("official team feed parsing", () => {
   it("classifies official roster and contract moves as transactions without mistaking autograph stories for moves", () => {
     expect(classifyOfficialFeedItem("Houston Texans Transactions (8-15-2026)", "The Houston Texans made roster moves.")).toBe("transaction");
     expect(classifyOfficialFeedItem("Packers announce roster move", "Green Bay releases QB Kyron Drones")).toBe("transaction");
+    expect(classifyOfficialFeedItem("Roster Move: Eagles sign CB Isaiah Bolden", "The team makes a change following Saturday's preseason opener.", "https://www.philadelphiaeagles.com/news/roster-move-eagles-sign-cb-isaiah-bolden")).toBe("transaction");
     expect(classifyOfficialFeedItem("Player signs autographs for fans", "A signature event at the team store.")).toBe("news");
   });
 
