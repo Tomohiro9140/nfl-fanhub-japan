@@ -1,0 +1,28 @@
+import { ArrowLeft, ArrowRightLeft, ExternalLink } from "lucide-react";
+import { useMemo, useState } from "react";
+import { trpc } from "@/lib/trpc";
+import { buildFieldlineMetrics, type FieldlineStanding } from "@/lib/fieldlineComparison";
+import { nflTeams } from "@/lib/nflTeams";
+
+const brandLogo = "/manus-storage/fan-hub-field-mark_2da1d2c0.png";
+
+function TeamSelect({ value, onChange, label }: { value: string; onChange: (value: string) => void; label: string }) {
+  return <label className="block"><span className="mb-1 block font-mono text-[10px] font-bold tracking-[.16em] text-[#64748b]">{label}</span><select value={value} onChange={(event) => onChange(event.target.value)} className="h-11 w-full border border-[#d7d1c4] bg-white px-3 font-display text-sm font-bold outline-none focus:border-[#e85d2a]">{nflTeams.map((team) => <option key={team.code} value={team.code}>{team.name}</option>)}</select></label>;
+}
+
+export default function Fieldline() {
+  const [leftCode, setLeftCode] = useState("BUF");
+  const [rightCode, setRightCode] = useState("KC");
+  const summaryQuery = trpc.leagueDashboard.summary.useQuery(undefined, { staleTime: 15 * 60 * 1000, refetchOnWindowFocus: false, retry: 1 });
+  const standings = (summaryQuery.data?.standings ?? []) as FieldlineStanding[];
+  const metrics = useMemo(() => buildFieldlineMetrics(standings, leftCode, rightCode), [leftCode, rightCode, standings]);
+  const left = nflTeams.find((team) => team.code === leftCode) ?? nflTeams[0];
+  const right = nflTeams.find((team) => team.code === rightCode) ?? nflTeams[1];
+  const swap = () => { setLeftCode(rightCode); setRightCode(leftCode); };
+
+  return <div className="min-h-screen bg-[#f5f2ea] text-[#10213a]"><header className="sticky top-0 z-20 border-b border-[#ded8cc] bg-[#f5f2ea]/95 backdrop-blur"><div className="mx-auto flex h-[68px] max-w-6xl items-center justify-between px-4 sm:px-6"><a href="/" className="flex items-center gap-2.5" aria-label="FAN/HUBへ戻る"><img src={brandLogo} alt="FAN/HUB" className="h-9 w-9 object-contain" /><span className="font-display text-xl font-extrabold tracking-[-.03em]">FAN<span className="text-[#e85d2a]">/</span>HUB</span></a><a href="/" className="inline-flex items-center gap-1.5 border border-[#d7d1c4] bg-white px-3 py-2 font-mono text-[11px] font-bold tracking-[.08em]"><ArrowLeft className="h-3.5 w-3.5" /> HOME</a></div></header>
+    <main className="mx-auto w-full max-w-6xl px-4 pb-20 pt-6 sm:px-6"><div className="mb-6 border-l-4 border-[#e85d2a] pl-4"><p className="font-mono text-[10px] font-bold tracking-[.18em] text-[#64748b]">FAN/HUB REFERENCE DESK</p><h1 className="font-display text-3xl font-extrabold tracking-[.06em]">FIELDLINE / TEAM COMPARISON</h1><p className="mt-2 max-w-2xl text-sm leading-relaxed text-[#526173]">NFL公式順位表の現行シーズンデータから、任意の2チームを横並びで比較します。順位はNFL全体における位置を # で示します。</p></div>
+      <section className="memo-slip border border-[#d7d1c4] bg-[#fffdf8] p-3 sm:p-4"><div className="grid items-end gap-2 sm:grid-cols-[1fr_auto_1fr]"><TeamSelect label="LEFT TEAM" value={leftCode} onChange={setLeftCode} /><button onClick={swap} className="mx-auto grid h-10 w-10 place-items-center border border-[#d7d1c4] bg-white text-[#e85d2a] hover:border-[#e85d2a]" aria-label="チームを入れ替える"><ArrowRightLeft className="h-4 w-4" /></button><TeamSelect label="RIGHT TEAM" value={rightCode} onChange={setRightCode} /></div></section>
+      <section className="mt-4 overflow-hidden border border-[#d7d1c4] bg-white"><div className="grid grid-cols-[1fr_88px_88px] items-end gap-2 border-b border-[#d7d1c4] bg-[#10213a] px-3 py-4 text-white sm:grid-cols-[1fr_160px_160px]"><div className="font-mono text-[10px] font-bold tracking-[.16em] text-white/60">OFFICIAL 2026 STANDINGS</div><div className="text-right"><p className="font-display text-base font-extrabold" style={{ color: left.brand.accent }}>{left.code}</p><p className="truncate text-[10px] text-white/70">{left.name}</p></div><div className="text-right"><p className="font-display text-base font-extrabold" style={{ color: right.brand.accent }}>{right.code}</p><p className="truncate text-[10px] text-white/70">{right.name}</p></div></div>{summaryQuery.isLoading && <div className="p-10 text-center font-mono text-xs text-[#64748b]">LOADING OFFICIAL STANDINGS…</div>}{!summaryQuery.isLoading && metrics.map((metric) => { const leftWins = metric.leftRank < metric.rightRank; const rightWins = metric.rightRank < metric.leftRank; return <div key={metric.label} className="grid grid-cols-[1fr_88px_88px] items-center gap-2 border-b border-[#ece7dc] px-3 py-3 sm:grid-cols-[1fr_160px_160px]"><span className="font-mono text-[10px] font-bold tracking-[.12em] text-[#64748b]">{metric.label}</span><span className={`text-right font-display text-lg font-extrabold ${leftWins ? "text-[#a84420]" : "text-[#10213a]"}`}>{metric.leftValue}<small className="ml-1 font-mono text-[10px] text-[#64748b]">#{metric.leftRank}</small></span><span className={`text-right font-display text-lg font-extrabold ${rightWins ? "text-[#a84420]" : "text-[#10213a]"}`}>{metric.rightValue}<small className="ml-1 font-mono text-[10px] text-[#64748b]">#{metric.rightRank}</small></span></div>; })}{!summaryQuery.isLoading && metrics.length === 0 && <div className="p-10 text-center text-sm text-[#64748b]">公式順位表データが更新されると比較できます。</div>}<div className="flex justify-end p-3"><a href="https://www.nfl.com/standings/league/2026/REG" target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 font-mono text-[10px] font-bold tracking-[.1em] text-[#a84420]"><ExternalLink className="h-3.5 w-3.5" /> OFFICIAL STANDINGS</a></div></section>
+    </main></div>;
+}
