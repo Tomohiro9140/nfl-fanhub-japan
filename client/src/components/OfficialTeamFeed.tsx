@@ -1,15 +1,15 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowUpRight, BadgeCheck, ChevronRight, CircleAlert, Newspaper, Radio, RefreshCw, Tv } from "lucide-react";
+import React, { useMemo } from "react";
+import { ArrowUpRight, BadgeCheck, CircleAlert, Newspaper, Radio, RefreshCw, Tv } from "lucide-react";
 import { trpc } from "@/lib/trpc";
-import { compactJapaneseSummary, hasDistinctNewsSummary } from "@/lib/newsSummary";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { hasDistinctNewsSummary } from "@/lib/newsSummary";
 import type { FavoriteTeam } from "@/lib/nflTeams";
 
 type SourceKind = "team_official" | "nfl_official" | "pft" | "cbs";
 type FeedItem = { id: number; title: string; summary: string | null; japaneseSummary: string | null; englishSummary: string | null; sourceUrl: string; sourceName: string; sourceKind: SourceKind; category: "news" | "injury" | "transaction"; publishedAt: Date; fetchedAt: Date };
-type SummaryMode = "ja" | "en";
-
 const externalSourceKinds = new Set<SourceKind>(["pft", "cbs"]);
+
+/** AI article summaries are deliberately frozen until the user explicitly re-enables this feature. */
+export const NEWS_SUMMARIES_ENABLED = false;
 
 function isRosterMoveNews(item: FeedItem) {
   if (item.sourceKind !== "team_official") return false;
@@ -56,62 +56,22 @@ function displayDate(value: Date) {
 }
 
 export function OfficialTeamFeed({ favorite }: { favorite: FavoriteTeam }) {
-  const [activeItem, setActiveItem] = useState<FeedItem | null>(null);
-  const [detailLanguage, setDetailLanguage] = useState<SummaryMode>("ja");
   const shouldSimulateUnavailable = typeof window !== "undefined" && import.meta.env.DEV && new URLSearchParams(window.location.search).has("feedError");
   const feedInput = useMemo(() => ({ teamCode: shouldSimulateUnavailable ? "XXX" : favorite.code }), [shouldSimulateUnavailable, favorite.code]);
   const feed = trpc.officialFeed.byTeam.useQuery(feedInput, { refetchInterval: 15 * 60 * 1000, staleTime: 15 * 60 * 1000, refetchOnWindowFocus: false, refetchOnReconnect: false, retry: 1 });
   const displayError = feed.isError || shouldSimulateUnavailable;
   const items = (shouldSimulateUnavailable ? [] : feed.data?.items ?? []) as FeedItem[];
   const news = useMemo(() => selectLatestNews(items), [items]);
-  const japaneseSummary = trpc.officialFeed.japaneseSummary.useMutation({
-    onSuccess: (result) => {
-      const generatedSummary: string | undefined = result.generated && typeof result.summary === "string" ? result.summary : undefined;
-      if (generatedSummary) {
-        setActiveItem((current) => current?.id === result.itemId ? { ...current, japaneseSummary: generatedSummary } : current);
-      }
-    },
-  });
-  const englishSummary = trpc.officialFeed.englishSummary.useMutation({
-    onSuccess: (result) => {
-      const generatedSummary: string | undefined = result.generated && typeof result.summary === "string" ? result.summary : undefined;
-      if (generatedSummary) setActiveItem((current) => current?.id === result.itemId ? { ...current, englishSummary: generatedSummary } : current);
-    },
-  });
-
-  const openArticle = (item: FeedItem) => {
-    setActiveItem(item);
-    setDetailLanguage("ja");
-    japaneseSummary.reset();
-    englishSummary.reset();
-    if (!item.japaneseSummary) japaneseSummary.mutate({ itemId: item.id });
-  };
-
-  const activeJapaneseSummary = activeItem ? activeItem.japaneseSummary || (japaneseSummary.data?.itemId === activeItem.id ? japaneseSummary.data.summary : null) : null;
-  const activeEnglishSummary = activeItem ? activeItem.englishSummary || (englishSummary.data?.itemId === activeItem.id ? englishSummary.data.summary : null) : null;
-  const displayedJapaneseSummary = activeJapaneseSummary ? compactJapaneseSummary(activeJapaneseSummary) : null;
-  const showEnglishSummary = () => {
-    if (!activeItem) return;
-    setDetailLanguage("en");
-    if (!activeEnglishSummary) englishSummary.mutate({ itemId: activeItem.id });
-  };
   return (
     <section id="updates" className="scroll-mt-24">
       <div className="flex items-center gap-2 font-mono text-[10px] font-semibold tracking-[0.2em] text-[#64748b]"><span className="text-[#10213a]">02</span><span>{favorite.code} NEWS DESK</span><span className="h-px flex-1 bg-[#d9d5cc]" /></div>
       <div className="mt-3">
         <article className="clip-note border border-[#ded8cc] bg-white p-3 shadow-[0_10px_30px_rgba(34,42,53,.05)]">
           <div className="flex items-center justify-between border-b border-[#eeeae1] pb-2"><div className="flex items-center gap-2"><div className="grid h-7 w-7 place-items-center bg-[#10213a] text-white"><Newspaper className="h-3.5 w-3.5" /></div><p className="font-display text-lg font-bold tracking-wide">LATEST NEWS</p></div><button onClick={() => feed.refetch()} disabled={feed.isFetching} className="inline-flex items-center gap-1 font-mono text-[9px] font-bold tracking-[.1em] text-[#526173] hover:text-[#e85d2a] disabled:opacity-50"><RefreshCw className={`h-3.5 w-3.5 ${feed.isFetching ? "animate-spin" : ""}`} /> REFRESH</button></div>
-          {feed.isLoading && !shouldSimulateUnavailable ? <div className="py-5 text-center font-mono text-[10px] text-[#64748b]">LOADING TEAM NEWS…</div> : news.length > 0 ? <div className="divide-y divide-[#eeeae1]">{news.map((item) => <button key={item.id} onClick={() => openArticle(item)} className="flex w-full items-start gap-3 py-2.5 text-left transition hover:bg-[#fffaf0]"><SourceMark kind={item.sourceKind} /><span className="min-w-0 flex-1"><span className="flex items-center justify-between gap-2"><span className="font-display text-base font-bold tracking-wide">{item.title}</span><ChevronRight className="h-3.5 w-3.5 shrink-0 text-[#94a3b8]" /></span>{hasDistinctNewsSummary(item.title, item.summary) ? <span className="mt-0.5 block text-[11px] leading-4 text-[#687587]">{item.summary}</span> : null}</span><span className="hidden font-mono text-[8px] text-[#94a3b8] sm:block">{displayDate(item.publishedAt)}</span></button>)}</div> : <EmptyFeed teamCode={favorite.code} error={displayError} />}
+          {feed.isLoading && !shouldSimulateUnavailable ? <div className="py-5 text-center font-mono text-[10px] text-[#64748b]">LOADING TEAM NEWS…</div> : news.length > 0 ? <div className="divide-y divide-[#eeeae1]">{news.map((item) => <a key={item.id} href={item.sourceUrl} target="_blank" rel="noreferrer" aria-label={`${item.title}を${sourceLabel(item.sourceKind)}で開く`} className="group flex w-full items-start gap-3 py-2.5 text-left transition hover:bg-[#fffaf0] active:bg-[#fff4ef]"><SourceMark kind={item.sourceKind} /><span className="min-w-0 flex-1"><span className="flex items-center justify-between gap-2"><span className="font-display text-base font-bold tracking-wide">{item.title}</span><ArrowUpRight className="h-3.5 w-3.5 shrink-0 text-[#94a3b8] transition group-hover:text-[#e85d2a]" /></span>{hasDistinctNewsSummary(item.title, item.summary) ? <span className="mt-0.5 block text-[11px] leading-4 text-[#687587]">{item.summary}</span> : null}</span><span className="hidden font-mono text-[8px] text-[#94a3b8] sm:block">{displayDate(item.publishedAt)}</span></a>)}</div> : <EmptyFeed teamCode={favorite.code} error={displayError} />}
         </article>
       </div>
       {displayError && <div className="mt-2 flex items-center gap-1.5 border border-[#f1c7b5] bg-[#fff4ef] px-3 py-2 font-mono text-[9px] font-bold tracking-[.06em] text-[#a34220]"><CircleAlert className="h-3.5 w-3.5 shrink-0" />LIVE REFRESH UNAVAILABLE — SHOWING LAST SAVED OFFICIAL ITEMS</div>}
-      <Dialog open={Boolean(activeItem)} onOpenChange={(open) => !open && setActiveItem(null)}>
-        <DialogContent className="border-[#d7d1c4] bg-[#f5f2ea] p-5 sm:max-w-lg">
-          <DialogHeader className="text-left"><p className="font-mono text-[10px] font-bold tracking-[.16em] text-[#e85d2a]">{activeItem?.category === "injury" ? "INJURY WATCH" : `${activeItem ? sourceLabel(activeItem.sourceKind) : ""} TEAM NEWS`}</p><DialogTitle className="pr-7 font-display text-2xl font-extrabold leading-[.95] tracking-[.04em]">{activeItem?.title}</DialogTitle><DialogDescription className="font-mono text-[10px]">{activeItem ? `${activeItem.sourceName} · ${displayDate(activeItem.publishedAt)} JST` : ""}</DialogDescription></DialogHeader>
-          {activeItem && <><div className="mt-4 grid grid-cols-2 gap-1 rounded-sm border border-[#d7d1c4] bg-white p-1"><button type="button" aria-pressed={detailLanguage === "ja"} onClick={() => setDetailLanguage("ja")} className={`min-h-9 font-mono text-[10px] font-bold tracking-[.08em] ${detailLanguage === "ja" ? "bg-[#10213a] text-white" : "text-[#526173]"}`}>日本語要約</button><button type="button" aria-pressed={detailLanguage === "en"} onClick={showEnglishSummary} className={`min-h-9 font-mono text-[10px] font-bold tracking-[.08em] ${detailLanguage === "en" ? "bg-[#10213a] text-white" : "text-[#526173]"}`}>ENGLISH SUMMARY</button></div><div className="mt-3 border-y border-[#d7d1c4] py-4"><p className="mb-2 font-mono text-[9px] font-bold tracking-[.14em] text-[#e85d2a]">{detailLanguage === "ja" ? (externalSourceKinds.has(activeItem.sourceKind) ? `日本語要約（${sourceLabel(activeItem.sourceKind)} RSS）` : "日本語要約") : (externalSourceKinds.has(activeItem.sourceKind) ? `ENGLISH SUMMARY (${sourceLabel(activeItem.sourceKind)} RSS)` : "英語要約（公式記事）")}</p><div className="whitespace-pre-line text-[14px] leading-6 text-[#334155]">{detailLanguage === "ja" ? (japaneseSummary.isPending && !displayedJapaneseSummary ? (externalSourceKinds.has(activeItem.sourceKind) ? "公開RSSの見出しと概要を基に、日本語要約を生成しています…" : "公式記事を読み込み、日本語要約を生成しています…") : displayedJapaneseSummary || activeItem.summary || "記事の要約が提供されていません。原文で詳細をご確認ください。") : (englishSummary.isPending && !activeEnglishSummary ? (externalSourceKinds.has(activeItem.sourceKind) ? "公開RSSの見出しと概要を基に、英語要約を生成しています…" : "公式記事を読み込み、英語要約を生成しています…") : activeEnglishSummary || activeItem.summary || "英語要約を取得できませんでした。原文で全文をご確認ください。")}</div>{detailLanguage === "ja" && displayedJapaneseSummary && activeJapaneseSummary && displayedJapaneseSummary !== activeJapaneseSummary && <p className="mt-3 text-[11px] leading-4 text-[#687587]">長い要約はモバイル向けに短く表示しています。詳しい内容は原文でご確認ください。</p>}{detailLanguage === "ja" && japaneseSummary.data && !japaneseSummary.data.generated && <p className="mt-3 text-[11px] leading-4 text-[#687587]">要約を生成できなかったため、{externalSourceKinds.has(activeItem.sourceKind) ? `${sourceLabel(activeItem.sourceKind)} RSS` : "公式RSS"}の概要を表示しています。</p>}{detailLanguage === "en" && englishSummary.data && !englishSummary.data.generated && <p className="mt-3 text-[11px] leading-4 text-[#687587]">英語要約を生成できなかったため、{externalSourceKinds.has(activeItem.sourceKind) ? `${sourceLabel(activeItem.sourceKind)} RSS` : "公式RSS"}の概要を表示しています。</p>}{externalSourceKinds.has(activeItem.sourceKind) && <p className="mt-3 text-[11px] leading-4 text-[#687587]">外部記事の要約は、保存済みの公開RSS見出し・概要だけを根拠にしています。公式発表とは区別してご確認ください。</p>}{detailLanguage === "en" && <p className="mt-3 text-[11px] leading-4 text-[#687587]">詳しい内容は原文でご確認ください。</p>}</div></>}
-          {activeItem && <a href={activeItem.sourceUrl} target="_blank" rel="noreferrer" className="inline-flex min-h-10 items-center justify-center gap-2 bg-[#10213a] px-4 font-sans text-[13px] font-bold text-white transition hover:bg-[#203a61] active:scale-[.97]">READ ON {sourceLabel(activeItem.sourceKind)} <ArrowUpRight className="h-4 w-4" /></a>}
-        </DialogContent>
-      </Dialog>
     </section>
   );
 }
