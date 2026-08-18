@@ -34,6 +34,7 @@ describe("official feed mobile content selection", () => {
       { id: 4, sourceKind: "team_official", category: "news", title: "News fourth", summary: null, sourceUrl: "https://www.buffalobills.com/news/4", sourceName: "BUF Official News", publishedAt: daysAgo(3), fetchedAt: now },
       { id: 9, sourceKind: "team_official", category: "news", title: "News fifth", summary: null, sourceUrl: "https://www.buffalobills.com/news/5", sourceName: "BUF Official News", publishedAt: daysAgo(4), fetchedAt: now },
       { id: 10, sourceKind: "team_official", category: "news", title: "News sixth hidden", summary: null, sourceUrl: "https://www.buffalobills.com/news/6", sourceName: "BUF Official News", publishedAt: daysAgo(5), fetchedAt: now },
+      { id: 13, sourceKind: "team_official", category: "news", title: "Bills sign WR Example Player, release WR Example Veteran", summary: null, sourceUrl: "https://www.buffalobills.com/news/bills-sign-example-player-release-example-veteran", sourceName: "BUF Official News", publishedAt: daysAgo(0), fetchedAt: now },
       { id: 11, sourceKind: "pft", category: "news", title: "PFT Bills brief", summary: null, sourceUrl: "https://www.nbcsports.com/nfl/profootballtalk/bills", sourceName: "PFT · NBC SPORTS", publishedAt: daysAgo(0), fetchedAt: now },
       { id: 12, sourceKind: "cbs", category: "news", title: "CBS Bills brief", summary: null, sourceUrl: "https://www.cbssports.com/nfl/news/bills", sourceName: "CBS SPORTS", publishedAt: daysAgo(0), fetchedAt: now },
       { id: 5, sourceKind: "team_official", category: "injury", title: "Current injury newest", summary: null, sourceUrl: "https://www.buffalobills.com/news/injury-newest", sourceName: "BUF Official News", publishedAt: daysAgo(0), fetchedAt: now },
@@ -46,6 +47,7 @@ describe("official feed mobile content selection", () => {
   it("keeps three official stories first while reserving one card each for PFT and CBS", () => {
     const selected = selectLatestNews(mockedItems as never[]);
     expect(selected.map((item) => item.id)).toEqual([1, 2, 3, 11, 12]);
+    expect(selected.map((item) => item.id)).not.toContain(13);
   });
 
   it("renders the source icons and five mixed news cards while moving injury status out of the news panel", () => {
@@ -68,6 +70,7 @@ describe("official feed mobile content selection", () => {
     expect(markup).not.toContain("Current injury update");
     expect(markup).not.toContain("Current injury older");
     expect(markup).not.toContain("Historic injury hidden");
+    expect(markup).not.toContain("Bills sign WR Example Player");
   });
 
   it("keeps every source mark inside a fixed non-wrapping card slot", () => {

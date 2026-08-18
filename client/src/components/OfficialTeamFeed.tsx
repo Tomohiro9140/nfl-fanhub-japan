@@ -11,6 +11,13 @@ type SummaryMode = "ja" | "en";
 
 const externalSourceKinds = new Set<SourceKind>(["pft", "cbs"]);
 
+function isRosterMoveNews(item: FeedItem) {
+  if (item.sourceKind !== "team_official") return false;
+  const text = `${item.title} ${item.sourceUrl}`.toLowerCase();
+  if (/\b(?:autographs?|signature event|signed poster|signed memorabilia)\b/.test(text)) return false;
+  return /\b(?:transactions?|roster moves?|sign(?:ed|s)?|released?|waived|waivers?|claimed|claim|trade(?:d)?|contract(?: extension)?|extensions?|activated?|designated (?:for|to return)|placed on (?:injured reserve|ir|pup))\b/.test(text);
+}
+
 function sourceLabel(kind: SourceKind) {
   if (kind === "pft") return "PFT";
   if (kind === "cbs") return "CBS";
@@ -26,7 +33,7 @@ function SourceMark({ kind }: { kind: SourceKind }) {
 
 /** Keeps official stories foremost while reserving room for one PFT and one CBS team story when available. */
 export function selectLatestNews(items: FeedItem[]) {
-  const sorted = [...items].filter((item) => item.category === "news").sort((left, right) => new Date(right.publishedAt).getTime() - new Date(left.publishedAt).getTime());
+  const sorted = [...items].filter((item) => item.category === "news" && !isRosterMoveNews(item)).sort((left, right) => new Date(right.publishedAt).getTime() - new Date(left.publishedAt).getTime());
   const official = sorted.filter((item) => !externalSourceKinds.has(item.sourceKind));
   const selected = [...official.slice(0, 3)];
   for (const kind of ["pft", "cbs"] as const) {
