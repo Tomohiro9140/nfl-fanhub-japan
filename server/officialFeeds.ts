@@ -80,10 +80,18 @@ function isTeamWideCampReport(title: string) {
   return /\b(?:camp|training camp)\s+(?:report|observations?|notes)\b/i.test(title);
 }
 
+function isEditorialHighlight(title: string) {
+  return /\b(?:play(?:\(s\)|s)?|highlight(?:s)?) of the day\b|\btop plays?\b/i.test(title);
+}
+
+function isNonInjuryAbsence(title: string) {
+  return /\b(?:holdout|hold-out|contract dispute|contract negotiation|veteran rest|coach(?:'s|es)? decision)\b/i.test(title);
+}
+
 function isInjuryRelated(title: string, sourceUrl?: string) {
   const text = `${title} ${sourceUrl ?? ""}`;
-  if (isViewingGuide(title, sourceUrl) || isTeamWideCampReport(title)) return false;
-  const explicitOut = /\b(?:sit|sits|sitting|ruled|remain|remains|held|miss|misses|missing|will be|is|was)\s+out\b|\bout\s+(?:for|with|due to|of practice|until|through)\b|\blisted as out\b|\bwill not play\b/i.test(title);
+  if (isViewingGuide(title, sourceUrl) || isTeamWideCampReport(title) || isEditorialHighlight(title) || isNonInjuryAbsence(title)) return false;
+  const explicitOut = /\b(?:sit|sits|sitting|ruled|remain|remains|miss|misses|missing|will be|is|was)\s+out\b|\bout\s+(?:for|with|due to|of practice|until|through)\b|\blisted as out\b|\bwill not play\b/i.test(title);
   return /\b(?:injury|injured|questionable|doubtful|inactive|inactives|medical)\b|\b(?:ir|pup)\b|practice report/i.test(text)
     || explicitOut;
 }
@@ -96,7 +104,7 @@ function isTransactionRelated(title: string, sourceUrl?: string) {
 
 /** Classifies official items from their headline and canonical URL; summary text is display-only. */
 export function classifyOfficialFeedItem(title: string, _summary: string, sourceUrl?: string): "news" | "injury" | "transaction" {
-  if (isTeamWideCampReport(title)) return "news";
+  if (isTeamWideCampReport(title) || isEditorialHighlight(title) || isNonInjuryAbsence(title)) return "news";
   if (isInjuryRelated(title, sourceUrl)) return "injury";
   return isTransactionRelated(title, sourceUrl) ? "transaction" : "news";
 }

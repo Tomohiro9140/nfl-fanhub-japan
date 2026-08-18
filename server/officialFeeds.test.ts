@@ -37,6 +37,12 @@ describe("official team feed parsing", () => {
     expect(classifyOfficialFeedItem("Training Camp Observations: injury updates and roster competition", "", "https://www.panthers.com/news/training-camp-observations")).toBe("news");
   });
 
+  it("keeps non-injury absences and editorial highlight packages in news", () => {
+    expect(classifyOfficialFeedItem("Defensive tackle Derrick Brown among players held out of preseason game at Buffalo", "Most starters will play, but Brown is not expected to play.", "https://www.panthers.com/news/defensive-tackle-derrick-brown-among-players-held-out")).toBe("news");
+    expect(classifyOfficialFeedItem("Play of the Day: Devin Lloyd keeps forcing turnovers", "", "https://www.panthers.com/news/play-of-the-day-devin-lloyd-keeps-forcing-turnovers")).toBe("news");
+    expect(classifyOfficialFeedItem("Play(s) of the Day: Jalen Coker brings in highlight catches", "", "https://www.panthers.com/news/play-of-the-day-jalen-coker-highlight-catches")).toBe("news");
+  });
+
   it("classifies official roster and contract moves as transactions without mistaking autograph stories for moves", () => {
     expect(classifyOfficialFeedItem("Houston Texans Transactions (8-15-2026)", "The Houston Texans made roster moves.")).toBe("transaction");
     expect(classifyOfficialFeedItem("Packers announce roster move", "Green Bay releases QB Kyron Drones")).toBe("transaction");
