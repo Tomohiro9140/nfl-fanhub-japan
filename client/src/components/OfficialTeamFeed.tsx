@@ -58,29 +58,18 @@ function displayDate(value: Date) {
 export function OfficialTeamFeed({ favorite }: { favorite: FavoriteTeam }) {
   const [activeItem, setActiveItem] = useState<FeedItem | null>(null);
   const [detailLanguage, setDetailLanguage] = useState<SummaryMode>("ja");
-  const [warmedSummaries, setWarmedSummaries] = useState<Record<number, string>>({});
-  const warmedItemIds = useRef(new Set<number>());
   const shouldSimulateUnavailable = typeof window !== "undefined" && import.meta.env.DEV && new URLSearchParams(window.location.search).has("feedError");
   const feedInput = useMemo(() => ({ teamCode: shouldSimulateUnavailable ? "XXX" : favorite.code }), [shouldSimulateUnavailable, favorite.code]);
   const feed = trpc.officialFeed.byTeam.useQuery(feedInput, { refetchInterval: 15 * 60 * 1000, staleTime: 15 * 60 * 1000, refetchOnWindowFocus: false, refetchOnReconnect: false, retry: 1 });
   const displayError = feed.isError || shouldSimulateUnavailable;
   const items = (shouldSimulateUnavailable ? [] : feed.data?.items ?? []) as FeedItem[];
   const news = useMemo(() => selectLatestNews(items), [items]);
-  const newsSignature = news.map((item) => `${item.id}:${Boolean(item.japaneseSummary)}`).join(",");
-
   const japaneseSummary = trpc.officialFeed.japaneseSummary.useMutation({
     onSuccess: (result) => {
       const generatedSummary: string | undefined = result.generated && typeof result.summary === "string" ? result.summary : undefined;
       if (generatedSummary) {
-        setWarmedSummaries((current) => ({ ...current, [result.itemId]: generatedSummary }));
         setActiveItem((current) => current?.id === result.itemId ? { ...current, japaneseSummary: generatedSummary } : current);
       }
-    },
-  });
-  const warmJapaneseSummary = trpc.officialFeed.japaneseSummary.useMutation({
-    onSuccess: (result) => {
-      const generatedSummary: string | undefined = result.generated && typeof result.summary === "string" ? result.summary : undefined;
-      if (generatedSummary) setWarmedSummaries((current) => ({ ...current, [result.itemId]: generatedSummary }));
     },
   });
   const englishSummary = trpc.officialFeed.englishSummary.useMutation({
@@ -90,37 +79,15 @@ export function OfficialTeamFeed({ favorite }: { favorite: FavoriteTeam }) {
     },
   });
 
-  useEffect(() => {
-    const candidates = news.filter((item) => !externalSourceKinds.has(item.sourceKind) && !item.japaneseSummary && !warmedItemIds.current.has(item.id)).slice(0, 2);
-    if (!candidates.length) return;
-    const timer = window.setTimeout(() => {
-      void (async () => {
-        for (const item of candidates) {
-          warmedItemIds.current.add(item.id);
-          try {
-            await warmJapaneseSummary.mutateAsync({ itemId: item.id });
-          } catch {
-            // Clicking the article still shows an RSS fallback if background warm-up fails.
-          }
-        }
-      })();
-    }, 1_500);
-    return () => window.clearTimeout(timer);
-  }, [favorite.code, newsSignature]);
-
   const openArticle = (item: FeedItem) => {
     setActiveItem(item);
     setDetailLanguage("ja");
     japaneseSummary.reset();
     englishSummary.reset();
-    if (!item.japaneseSummary && !warmedSummaries[item.id] && !warmedItemIds.current.has(item.id)) {
-      warmedItemIds.current.add(item.id);
-      japaneseSummary.mutate({ itemId: item.id });
-    }
-    if (!item.englishSummary) englishSummary.mutate({ itemId: item.id });
+    if (!item.japaneseSummary) japaneseSummary.mutate({ itemId: item.id });
   };
 
-  const activeJapaneseSummary = activeItem ? activeItem.japaneseSummary || warmedSummaries[activeItem.id] || (japaneseSummary.data?.itemId === activeItem.id ? japaneseSummary.data.summary : null) : null;
+  const activeJapaneseSummary = activeItem ? activeItem.japaneseSummary || (japaneseSummary.data?.itemId === activeItem.id ? japaneseSummary.data.summary : null) : null;
   const activeEnglishSummary = activeItem ? activeItem.englishSummary || (englishSummary.data?.itemId === activeItem.id ? englishSummary.data.summary : null) : null;
   const displayedJapaneseSummary = activeJapaneseSummary ? compactJapaneseSummary(activeJapaneseSummary) : null;
   const showEnglishSummary = () => {

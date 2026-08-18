@@ -53,6 +53,23 @@ export function needsOfficialNewsTopUp(items: Array<{ category: string }>) {
   return items.filter((item) => item.category === "news").length < 5;
 }
 
+export function shouldSynchronouslyTopUpOfficialNews(items: Array<{ category: string }>) {
+  return items.length === 0;
+}
+
+const TEAM_NEWS_TOP_UP_COOLDOWN_MS = 15 * 60 * 1_000;
+const lastQueuedTeamNewsTopUpAt = new Map<string, number>();
+
+function queueOfficialTeamNewsTopUp(teamCode: string) {
+  const now = Date.now();
+  const lastQueuedAt = lastQueuedTeamNewsTopUpAt.get(teamCode) ?? 0;
+  if (now - lastQueuedAt < TEAM_NEWS_TOP_UP_COOLDOWN_MS) return;
+  lastQueuedTeamNewsTopUpAt.set(teamCode, now);
+  void refreshOfficialTeamNews(teamCode).catch((error) => {
+    console.warn("[Official news] background cache top-up unavailable", { teamCode, error: error instanceof Error ? error.message : error });
+  });
+}
+
 function stripMarkup(value: string) {
   return value
     .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1")
@@ -254,13 +271,15 @@ export async function refreshOfficialTeamFeed(teamCode: string) {
 
 export async function getFreshOfficialTeamFeed(teamCode: string) {
   let items = await getOfficialFeedItems(teamCode);
-  if (needsOfficialNewsTopUp(items)) {
+  if (shouldSynchronouslyTopUpOfficialNews(items)) {
     try {
       await refreshOfficialTeamNews(teamCode);
       items = await getOfficialFeedItems(teamCode);
     } catch (error) {
       console.warn("[Official news] cache top-up unavailable", { teamCode, error: error instanceof Error ? error.message : error });
     }
+  } else if (needsOfficialNewsTopUp(items)) {
+    queueOfficialTeamNewsTopUp(teamCode);
   }
   return { items, sources: getOfficialSources(teamCode) };
 }

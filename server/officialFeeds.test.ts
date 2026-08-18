@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { classifyOfficialFeedItem, getOfficialSources, isFreshNflInjuryArticle, needsOfficialNewsTopUp, parseNflArticlePublishedAt, parseOfficialNflInjuryPage, parseOfficialTeamRss, scheduledTeamGroups, supportedOfficialTeamCodes } from "./officialFeeds";
+import { classifyOfficialFeedItem, getOfficialSources, isFreshNflInjuryArticle, needsOfficialNewsTopUp, parseNflArticlePublishedAt, parseOfficialNflInjuryPage, parseOfficialTeamRss, scheduledTeamGroups, shouldSynchronouslyTopUpOfficialNews, supportedOfficialTeamCodes } from "./officialFeeds";
 
 const sampleRss = `<?xml version="1.0"?><rss><channel><item><title><![CDATA[Practice report: player listed as questionable]]></title><link>https://www.packers.com/news/practice-report</link><description><![CDATA[Official practice report with injury updates.]]></description><pubDate>Fri, 14 Aug 2026 21:12:14 GMT</pubDate></item><item><title>Team announces community event</title><link>https://www.packers.com/news/community-event</link><description>Official team news.</description><pubDate>Thu, 13 Aug 2026 21:12:14 GMT</pubDate></item></channel></rss>`;
 
@@ -102,5 +102,7 @@ describe("official team feed parsing", () => {
   it("tops up an incomplete official-news cache before the five-card news panel is rendered", () => {
     expect(needsOfficialNewsTopUp([{ category: "news" }, { category: "news" }, { category: "news" }])).toBe(true);
     expect(needsOfficialNewsTopUp([{ category: "news" }, { category: "news" }, { category: "news" }, { category: "news" }, { category: "news" }, { category: "injury" }])).toBe(false);
+    expect(shouldSynchronouslyTopUpOfficialNews([])).toBe(true);
+    expect(shouldSynchronouslyTopUpOfficialNews([{ category: "news" }])).toBe(false);
   });
 });
