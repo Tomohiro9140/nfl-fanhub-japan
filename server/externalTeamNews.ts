@@ -21,13 +21,20 @@ const teamMatchers: Record<string, string[]> = {
   SEA: ["seattle seahawks", "seahawks"], TB: ["tampa bay buccaneers", "buccaneers", "bucs"], TEN: ["tennessee titans", "titans"], WAS: ["washington commanders", "commanders"],
 };
 
+function decodeNumericEntities(value: string) {
+  return value.replace(/&#(?:x([0-9a-f]+)|([0-9]+));/gi, (entity, hexadecimal: string | undefined, decimal: string | undefined) => {
+    const codePoint = Number.parseInt(hexadecimal ?? decimal ?? "", hexadecimal ? 16 : 10);
+    return Number.isInteger(codePoint) && codePoint >= 0 && codePoint <= 0x10ffff ? String.fromCodePoint(codePoint) : entity;
+  });
+}
+
 function clean(value: string) {
-  return value
+  return decodeNumericEntities(value)
     .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1")
     .replace(/<[^>]+>/g, " ")
     .replace(/&amp;/gi, "&")
     .replace(/&quot;/gi, '"')
-    .replace(/&#39;|&apos;/gi, "'")
+    .replace(/&apos;|&rsquo;/gi, "'")
     .replace(/&lt;/gi, "<")
     .replace(/&gt;/gi, ">")
     .replace(/\s+/g, " ")

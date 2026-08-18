@@ -44,6 +44,14 @@ export function pftInsightStatus(value: string) {
   return null;
 }
 
+function titleHasTeamContext(title: string, teamCode: string, roster: RosterMatch[]) {
+  const lowerTitle = title.toLowerCase();
+  const teamName = TEAM_NAMES[teamCode]?.toLowerCase() ?? "";
+  const teamAlias = teamName.split(" ").at(-1) ?? "";
+  if (teamName && (lowerTitle.includes(teamName) || lowerTitle.includes(teamAlias))) return true;
+  return roster.some((entry) => entry.teamCode === teamCode && lowerTitle.includes(entry.playerName.toLowerCase()));
+}
+
 export function parsePftAvailabilityArticle(html: string, sourceUrl: string, roster: RosterMatch[]): InsertExternalAvailabilityInsight[] {
   const title = parseTitle(html);
   const publishedAt = parsePublishedAt(html);
@@ -58,7 +66,7 @@ export function parsePftAvailabilityArticle(html: string, sourceUrl: string, ros
   return roster.flatMap((entry) => {
     const teamName = TEAM_NAMES[entry.teamCode]?.toLowerCase() ?? "";
     const teamAlias = teamName.split(" ").at(-1) ?? "";
-    if (!teamName || (!lower.includes(teamName) && !lower.includes(teamAlias))) return [];
+    if (!teamName || (!lower.includes(teamName) && !lower.includes(teamAlias)) || !titleHasTeamContext(title, entry.teamCode, roster)) return [];
     const playerSentence = sentences.find((sentence) => sentence.toLowerCase().includes(entry.playerName.toLowerCase()));
     const statusLabel = playerSentence ? pftInsightStatus(playerSentence) : null;
     if (!statusLabel) return [];

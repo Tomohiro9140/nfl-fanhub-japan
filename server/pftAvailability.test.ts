@@ -30,7 +30,14 @@ describe("PFT availability parsing", () => {
 
   it("ignores player and status words found only in navigation or related links outside the article body", () => {
     const htmlWithRelatedLinks = articleHtml.replace("</body>", "<nav>New York Giants quarterback Jaxson Dart is out for the season. Cleveland Browns quarterback Deshaun Watson is out for the season.</nav></body>");
-    const insights = parsePftAvailabilityArticle(htmlWithRelatedLinks, "https://example.com/article-body-only", [{ teamCode: "NE", playerName: "Ben Brown" }, { teamCode: "NYG", playerName: "Jaxson Dart" }, { teamCode: "CLE", playerName: "Deshaun Watson" }]);
-    expect(insights).toEqual([expect.objectContaining({ teamCode: "NE", playerName: "Ben Brown", statusLabel: "OUT · MULTI-WEEK" })]);
+    const insights = parsePftAvailabilityArticle(htmlWithRelatedLinks, "https://example.com/article-body-only", [{ teamCode: "NE", playerName: "Ben Brown" }, { teamCode: "NE", playerName: "Christian Gonzalez" }, { teamCode: "NYG", playerName: "Jaxson Dart" }, { teamCode: "CLE", playerName: "Deshaun Watson" }]);
+    expect(insights).toEqual(expect.arrayContaining([expect.objectContaining({ teamCode: "NE", playerName: "Ben Brown", statusLabel: "OUT · MULTI-WEEK" })]));
+    expect(insights.some((item) => item.teamCode === "NYG" || item.teamCode === "CLE")).toBe(false);
+  });
+
+  it("rejects a Giants player mentioned in a stale in-article module when the headline identifies only another team", () => {
+    const titansArticle = `<!doctype html><html><head><title>Titans TE Jaren Kanak, DE Jaylen Harrell out for season with injuries | NBC Sports</title><script type="application/ld+json">{"datePublished":"2026-08-15T22:36:43.000Z"}</script></head><body><article>The Titans lost a pair of players to season-ending injuries. Related story: New York Giants quarterback Jaxson Dart is out for the season.</article></body></html>`;
+    const insights = parsePftAvailabilityArticle(titansArticle, "https://example.com/titans", [{ teamCode: "NYG", playerName: "Jaxson Dart" }]);
+    expect(insights).toEqual([]);
   });
 });

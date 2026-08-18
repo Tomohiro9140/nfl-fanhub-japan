@@ -20,4 +20,11 @@ describe("external team news RSS", () => {
     const xml = `<?xml version="1.0"?><rss><channel><item><title>New York Giants update</title><link>https://example.test/giants</link><description>Giants news.</description><pubDate>Mon, 17 Aug 2026 03:00:00 +0000</pubDate></item></channel></rss>`;
     expect(parseExternalTeamNewsRss(xml, externalNewsSources[0], ["NYJ"], new Date("2026-08-17T08:00:00.000Z"))).toHaveLength(0);
   });
+
+  it("decodes decimal, padded decimal, and hexadecimal apostrophe entities from CBS cards", () => {
+    const xml = `<?xml version="1.0"?><rss><channel><item><title>Giants&#039; Jaxson Dart&#x27;s update</title><link>https://www.cbssports.com/nfl/news/giants-dart/</link><description>Dart&#00039;s report is available.</description><pubDate>Mon, 17 Aug 2026 03:00:00 +0000</pubDate></item></channel></rss>`;
+    const [item] = parseExternalTeamNewsRss(xml, externalNewsSources[1], ["NYG"], new Date("2026-08-17T08:00:00.000Z"));
+    expect(item.title).toBe("Giants' Jaxson Dart's update");
+    expect(item.summary).toBe("Dart's report is available.");
+  });
 });

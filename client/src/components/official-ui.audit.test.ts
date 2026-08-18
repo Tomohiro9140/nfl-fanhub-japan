@@ -21,6 +21,7 @@ describe("compact mobile result and schedule UI", () => {
     expect(markup).toContain("WATCH HIGHLIGHTS");
     expect(markup).not.toContain("リンク済");
     expect(markup).toContain("RESULT HIDDEN");
+    expect(markup).toContain("min-h-[10px]");
     const revealedMarkup = renderToStaticMarkup(createElement(OfficialLatestResults, { favorite, dashboard, loading: false, spoilerMode: false }));
     expect(revealedMarkup).not.toContain(">FINAL<");
     expect(revealedMarkup).toContain("font-extrabold text-[#10213a]");

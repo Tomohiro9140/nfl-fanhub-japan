@@ -51,6 +51,7 @@ export function OfficialLatestResults({ favorite, dashboard, loading, spoilerMod
               const homeScore = game.homeScore ?? 0;
               const awayWon = !spoilerMode && hasOfficialScore && awayScore > homeScore;
               const homeWon = !spoilerMode && hasOfficialScore && homeScore > awayScore;
+              const resultMeta = spoilerMode ? "RESULT HIDDEN" : game.gameState !== "FINAL" ? game.gameState : "\u00a0";
               return (
                 <div key={game.id} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 py-2.5">
                   <a href={game.gameUrl} target="_blank" rel="noreferrer" className="min-w-0 self-center text-[13px] leading-[1.25]">
@@ -59,7 +60,7 @@ export function OfficialLatestResults({ favorite, dashboard, loading, spoilerMod
                   </a>
                   <div className="min-w-[106px] self-center text-right">
                     <p className="font-mono text-[26px] font-black leading-[.85] tracking-[-.06em]">{spoilerMode ? "—" : `${game.awayScore ?? "—"} - ${game.homeScore ?? "—"}`}</p>
-                    {spoilerMode ? <p className="mt-1 font-mono text-[8px] font-bold tracking-[.08em] text-[#64748b]">RESULT HIDDEN</p> : game.gameState !== "FINAL" ? <p className="mt-1 font-mono text-[8px] font-bold tracking-[.08em] text-[#64748b]">{game.gameState}</p> : null}
+                    <p className="mt-1 min-h-[10px] font-mono text-[8px] font-bold leading-[10px] tracking-[.08em] text-[#64748b]">{resultMeta}</p>
                   </div>
                 </div>
               );
