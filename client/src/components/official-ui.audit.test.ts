@@ -68,12 +68,13 @@ describe("compact mobile result and schedule UI", () => {
     expect(leagueMarkup).toContain("https://www.nfl.com/standings/league/2026/REG");
     expect(leagueMarkup).not.toContain("STARTS IN");
     expect(leagueMarkup).toContain("AWAY");
-    expect(leagueMarkup).toContain("bg-[#f4f8fd]");
+    expect(leagueMarkup).toContain("bg-[#f3f4f6]");
 
     const homeDashboard: LeagueDashboard = { ...dashboard, calendar: [{ ...dashboard.calendar[0]!, opponentCode: "MIA", homeAway: "home" }] };
     const homeLeagueMarkup = renderToStaticMarkup(createElement(OfficialLeagueDashboard, { favorite, dashboard: homeDashboard, loading: false }));
     expect(homeLeagueMarkup).toContain("HOME");
-    expect(homeLeagueMarkup).toContain("bg-[#f2faf5]");
+    expect(homeLeagueMarkup).toContain("background-color:#00338D");
+    expect(homeLeagueMarkup).toContain("border-left-color:#C60C30");
   });
 
   it("uses the reclaimed huddle space for official updates and storylines instead of next-game detail", () => {
