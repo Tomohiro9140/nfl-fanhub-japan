@@ -47,5 +47,9 @@ describe("ATLAS and FIELDLINE integration routes", () => {
     expect(embeddedNavSource).toContain('HOME');
     expect(embeddedNavSource).toContain('ATLAS');
     expect(embeddedNavSource).toContain('FIELDLINE');
+    expect(atlasSource).toContain('atlasUtils.atlas.contracts.prefetch');
+    expect(atlasSource).toContain('atlasUtils.atlas.stats.prefetch');
+    expect(atlasSource).toContain('staleTime: 12 * 60 * 60_000');
+    expect(atlasSource).toContain('staleTime: 24 * 60 * 60_000');
   });
 });

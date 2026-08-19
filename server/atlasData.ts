@@ -39,8 +39,8 @@ const CACHE_TTL = {
   players: 12 * 60 * 60 * 1000,
   teams: 6 * 60 * 60 * 1000,
   history: 7 * 24 * 60 * 60 * 1000,
-  stats: 6 * 60 * 60 * 1000,
-  contracts: 12 * 60 * 60 * 1000,
+  stats: 12 * 60 * 60 * 1000,
+  contracts: 24 * 60 * 60 * 1000,
 } as const;
 
 const teamAliases: Record<string, string> = {
@@ -525,7 +525,9 @@ export type AtlasStatColumn = { key: string; label: string; sources?: string[]; 
 const sum = (rows: CsvRow[], sources: string[]) => rows.reduce((total, row) => total + sources.reduce((rowTotal, source) => rowTotal + number(row[source]), 0), 0);
 const ratio = (rows: CsvRow[], numerator: string[], denominator: string[], percent = false) => { const divisor = sum(rows, denominator); return divisor ? Number((sum(rows, numerator) / divisor * (percent ? 100 : 1)).toFixed(percent ? 1 : 2)) : 0; };
 const weightedAverage = (rows: CsvRow[], value: string, weight: string) => { const totalWeight = sum(rows, [weight]); return totalWeight ? Number((rows.reduce((total, row) => total + number(row[value]) * number(row[weight]), 0) / totalWeight).toFixed(2)) : 0; };
-const gameCount = (rows: CsvRow[]) => new Set(rows.map((row) => row.game_id || `${row.season}-${row.week}-${row.team}`)).size;
+const gameCount = (rows: CsvRow[]) => rows.some((row) => row.game_id)
+  ? new Set(rows.map((row) => row.game_id || `${row.season}-${row.week}-${row.team}`)).size
+  : sum(rows, ["games"]);
 const maxValue = (rows: CsvRow[], sources: string[]) => Math.max(0, ...rows.flatMap((row) => sources.map((source) => number(row[source]))));
 const passerRating = (rows: CsvRow[]) => { const attempts = sum(rows, ["attempts"]); if (!attempts) return 0; const bounded = (value: number) => Math.max(0, Math.min(2.375, value)); const completions = sum(rows, ["completions"]); const yards = sum(rows, ["passing_yards"]); const touchdowns = sum(rows, ["passing_tds"]); const interceptions = sum(rows, ["passing_interceptions"]); return Number((((bounded((completions / attempts - 0.3) * 5) + bounded((yards / attempts - 3) * 0.25) + bounded(touchdowns / attempts * 20) + bounded(2.375 - interceptions / attempts * 25)) / 6) * 100).toFixed(1)); };
 const fgRange = (bucket: string) => (rows: CsvRow[]) => { const made = sum(rows, [`fg_made_${bucket}`]); const attempts = made + sum(rows, [`fg_missed_${bucket}`, `fg_blocked_${bucket}`]); return attempts ? `${made}/${attempts}` : "—"; };
@@ -620,9 +622,9 @@ async function atlasStatsUncached(playerId: string) {
   const { roster, master } = await atlasPlayerContext(playerId);
   const start = rookieSeason(master);
   const end = roster ? currentSeason : Math.max(start, number(master.last_season) || currentSeason - 1);
-  const rows = await mapInBatches(Array.from({ length: end - start + 1 }, (_, index) => start + index), 6, async (season) => {
+  const rows = await mapInBatches(Array.from({ length: end - start + 1 }, (_, index) => start + index), 8, async (season) => {
     try {
-      return await fetchPlayerCsvRows(`${NFLVERSE_RELEASES}/stats_player/stats_player_week_${season}.csv`, playerId);
+      return await fetchPlayerCsvRows(`${NFLVERSE_RELEASES}/stats_player/stats_player_reg_${season}.csv`, playerId);
     } catch {
       return [];
     }

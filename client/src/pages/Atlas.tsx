@@ -31,6 +31,7 @@ function displayValue(values: object, key: string) { const value = atlasValue(va
 function contractMoney(value?: number | null) { const amount = Number(value ?? 0); if (!amount) return "—"; return Math.abs(amount) >= 1000 ? `$${(amount / 1000).toFixed(2)}B` : `$${amount.toFixed(amount >= 100 ? 0 : 1)}M`; }
 
 export default function Atlas() {
+  const atlasUtils = trpc.useUtils();
   const [mode, setMode] = useState<SearchMode>("name");
   const [nameQuery, setNameQuery] = useState(() => new URLSearchParams(window.location.search).get("q") ?? "");
   const [debouncedQuery, setDebouncedQuery] = useState(nameQuery);
@@ -42,8 +43,14 @@ export default function Atlas() {
   useEffect(() => { const timer = window.setTimeout(() => setDebouncedQuery(nameQuery), 240); return () => window.clearTimeout(timer); }, [nameQuery]);
   const nameInput = useMemo(() => ({ query: debouncedQuery.trim() }), [debouncedQuery]); const browseInput = useMemo(() => ({ team, position: position || undefined, jersey: jersey.trim() || undefined }), [team, position, jersey]); const teamInput = useMemo(() => team ? { team } : undefined, [team]); const playerInput = useMemo(() => ({ playerId: selectedId }), [selectedId]);
   const filters = trpc.atlas.filters.useQuery(undefined, { enabled: mode === "filter", staleTime: 6 * 60 * 60_000 }); const teamFilters = trpc.atlas.filters.useQuery(teamInput, { enabled: mode === "filter" && Boolean(team), staleTime: 6 * 60 * 60_000 }); const nameSearch = trpc.atlas.search.useQuery(nameInput, { enabled: nameInput.query.length >= 2, staleTime: 60_000 }); const browse = trpc.atlas.browse.useQuery(browseInput, { enabled: mode === "filter" && Boolean(team) && Boolean(position || jersey.trim()), staleTime: 60_000 });
-  const profile = trpc.atlas.profile.useQuery(playerInput, { enabled: Boolean(selectedId), staleTime: 5 * 60_000 }); const career = trpc.atlas.career.useQuery(playerInput, { enabled: Boolean(selectedId) && detailTab === "career", staleTime: 5 * 60_000 }); const awards = trpc.atlas.awards.useQuery(playerInput, { enabled: Boolean(selectedId) && detailTab === "career" && shouldFetchAwards, staleTime: 5 * 60_000 }); const stats = trpc.atlas.stats.useQuery(playerInput, { enabled: Boolean(selectedId) && detailTab === "stats", staleTime: 5 * 60_000 }); const contracts = trpc.atlas.contracts.useQuery(playerInput, { enabled: Boolean(selectedId) && detailTab === "contract", staleTime: 6 * 60 * 60_000 });
+  const profile = trpc.atlas.profile.useQuery(playerInput, { enabled: Boolean(selectedId), staleTime: 5 * 60_000 }); const career = trpc.atlas.career.useQuery(playerInput, { enabled: Boolean(selectedId) && detailTab === "career", staleTime: 5 * 60_000 }); const awards = trpc.atlas.awards.useQuery(playerInput, { enabled: Boolean(selectedId) && detailTab === "career" && shouldFetchAwards, staleTime: 5 * 60_000 }); const stats = trpc.atlas.stats.useQuery(playerInput, { enabled: Boolean(selectedId) && detailTab === "stats", staleTime: 12 * 60 * 60_000 }); const contracts = trpc.atlas.contracts.useQuery(playerInput, { enabled: Boolean(selectedId) && detailTab === "contract", staleTime: 24 * 60 * 60_000 });
   useEffect(() => { setShouldFetchAwards(false); if (!selectedId || !career.data) return; const timer = window.setTimeout(() => setShouldFetchAwards(true), 1_200); return () => window.clearTimeout(timer); }, [career.data, selectedId]);
+  useEffect(() => {
+    if (!selectedId) return;
+    const contractTimer = window.setTimeout(() => { void atlasUtils.atlas.contracts.prefetch({ playerId: selectedId }); }, 180);
+    const statsTimer = window.setTimeout(() => { void atlasUtils.atlas.stats.prefetch({ playerId: selectedId }); }, 650);
+    return () => { window.clearTimeout(contractTimer); window.clearTimeout(statsTimer); };
+  }, [atlasUtils, selectedId]);
   const selectPlayer = (player: AtlasPreview) => { setSelectedPreview(player); setSelectedId(player.id); setDetailTab("career"); const url = new URL(window.location.href); url.searchParams.set("player", player.id); url.searchParams.delete("tab"); window.history.pushState({}, "", url); window.scrollTo({ top: 0, behavior: "smooth" }); };
   const closeDetail = () => { setSelectedId(""); setSelectedPreview(null); const url = new URL(window.location.href); url.searchParams.delete("player"); url.searchParams.delete("tab"); window.history.pushState({}, "", url); window.scrollTo({ top: 0, behavior: "smooth" }); };
   const setTab = (tab: DetailTab) => { setDetailTab(tab); const url = new URL(window.location.href); tab === "career" ? url.searchParams.delete("tab") : url.searchParams.set("tab", tab); window.history.replaceState({}, "", url); };

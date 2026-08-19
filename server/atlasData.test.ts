@@ -25,6 +25,13 @@ describe("ATLAS data helpers", () => {
     expect(summary.seasons[0].values.completionPct).toBe(73.3);
   });
 
+  it("uses the source game total when a pre-aggregated season row has no game id", () => {
+    const summary = summarizeAtlasStats([
+      { player_id: "00-test", season: "2025", team: "KC", games: "14", attempts: "581", completions: "365", passing_yards: "3587", passing_tds: "22" },
+    ], "00-test", "QB");
+    expect(summary.seasons[0].values.games).toBe(14);
+  });
+
   it("retains the original ATLAS quarterback detail columns and season total row", () => {
     const summary = summarizeAtlasStats([
       { player_id: "00-test", season: "2025", week: "1", game_id: "one", team: "KC", attempts: "20", completions: "15", passing_yards: "240", passing_tds: "2", passing_interceptions: "1", rushing_yards: "14", rushing_tds: "1", passing_cpoe: "3" },
