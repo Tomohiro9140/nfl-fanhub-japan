@@ -53,6 +53,9 @@
   .atlas-display { font-family: "DM Serif Display", "Noto Sans JP", serif; }
   .atlas-shell { width: min(100%, 32rem); margin-inline: auto; }
   .atlas-soft-grid { background-image: linear-gradient(rgba(15, 23, 42, .012) 1px, transparent 1px), linear-gradient(90deg, rgba(15, 23, 42, .012) 1px, transparent 1px); background-size: 24px 24px; }
+  .atlas-soft-grid > .atlas-shell { display: flex; min-height: 100svh; flex-direction: column; justify-content: center; }
+  .atlas-soft-grid:has(input:not(:placeholder-shown)) > .atlas-shell { justify-content: flex-start; }
+  .atlas-view p:empty { display: none; }
 }
 
 @media (max-width: 639px) {

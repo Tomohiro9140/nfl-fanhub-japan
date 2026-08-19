@@ -33,6 +33,7 @@ describe("ATLAS and FIELDLINE integration routes", () => {
     expect(atlasSource).toContain('ワークアウト、試合別ロスター、その他ボーナス');
     expect(atlasSource).toContain('契約履歴');
     expect(atlasSource).toContain('EARNED');
+    expect(atlasSource).toContain('enabled: mode === "filter"');
     expect(atlasSource).toContain('NFL PLAYER');
     expect(atlasSource).not.toContain('window.location.replace');
     expect(atlasSource).not.toContain('nflplayeratl-tus9mrqw.manus.space');

@@ -372,6 +372,10 @@ function draftLabel(player: CsvRow): string {
 }
 
 export async function atlasProfile(playerId: string) {
+  return cached(`atlas:profile:${playerId}`, CACHE_TTL.roster, () => atlasProfileUncached(playerId));
+}
+
+async function atlasProfileUncached(playerId: string) {
   const { current, masterById, directory } = await searchUniverse();
   const roster = current.get(playerId);
   const master = masterById.get(playerId) ?? roster;
@@ -428,6 +432,10 @@ async function mapInBatches<T, Result>(items: T[], size: number, mapper: (item: 
 
 /** Builds team spans from annual NFLverse roster rows without blocking the base profile. */
 export async function atlasCareer(playerId: string) {
+  return cached(`atlas:career:${playerId}`, CACHE_TTL.history, () => atlasCareerUncached(playerId));
+}
+
+async function atlasCareerUncached(playerId: string) {
   const { roster, master, directory } = await atlasPlayerContext(playerId);
   const start = rookieSeason(master);
   const end = roster ? currentSeason : Math.max(start, number(master.last_season) || currentSeason - 1);
@@ -605,6 +613,10 @@ async function fetchPlayerCsvRows(url: string, playerId: string): Promise<CsvRow
 }
 
 export async function atlasStats(playerId: string) {
+  return cached(`atlas:stats:${playerId}`, CACHE_TTL.stats, () => atlasStatsUncached(playerId));
+}
+
+async function atlasStatsUncached(playerId: string) {
   const { roster, master } = await atlasPlayerContext(playerId);
   const start = rookieSeason(master);
   const end = roster ? currentSeason : Math.max(start, number(master.last_season) || currentSeason - 1);
@@ -692,7 +704,7 @@ export async function atlasContracts(playerId: string) {
         currentContract: { team: contractTeamName(record.team || roster?.team || "—", directory), yearSigned: startYear, endYear: startYear && record.years ? startYear + record.years - 1 : null, years: record.years || null, total: contractNumber(record.total), apy: contractNumber(record.apy), guaranteed: contractNumber(record.guaranteed) },
         years,
         history,
-        noteAvailability: { incentives: false, deadMoney: false, message: "公開年度データにはインセンティブ／出来高とデッドマネーの専用項目がありません。" },
+        noteAvailability: { incentives: false, deadMoney: false, message: "" },
       },
       source: { provider: index.source || "NFLverse / Over The Cap", updatedAt: index.sourceUpdatedAt || new Date().toISOString() },
     };
