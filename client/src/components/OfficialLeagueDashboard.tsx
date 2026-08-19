@@ -42,7 +42,7 @@ export function OfficialLatestResults({ favorite, dashboard, loading, spoilerMod
       <div className="mb-1.5 flex items-center gap-2 font-mono text-[10px] font-semibold tracking-[0.2em] text-[#64748b]">
         <span className="text-[#10213a]">01</span><span>LATEST RESULTS</span><span className="h-px flex-1 bg-[#d9d5cc]" />
       </div>
-      <div className="memo-slip border border-[#ded8cc] bg-[#fffdf8] px-3 py-2 shadow-[0_10px_30px_rgba(34,42,53,.05)]">
+      <div className="rounded-[2px_14px_2px_14px] border border-[#ded8cc] bg-[#fffdf8] px-3 py-2 shadow-[0_10px_30px_rgba(34,42,53,.05)]">
         <div>
           <p className="font-mono text-[9px] font-bold tracking-[.14em] text-[#64748b]">OFFICIAL SCORES</p>
           <h2 className="mt-0.5 font-display text-[19px] font-extrabold leading-none tracking-wide">LATEST RESULTS</h2>
@@ -110,7 +110,9 @@ export function OfficialLeagueDashboard({ favorite, dashboard, loading, calendar
     const teamScheduleLink = calendarView === "team";
     const href = teamScheduleLink ? officialTeamScheduleUrl(favorite.code) : (game.daznUrl ?? game.sourceUrl);
     const target = teamScheduleLink ? "_blank" : (game.daznUrl ? watchTarget : "_blank");
-    return <a key={game.id} href={href} target={target} rel="noreferrer" className={`min-w-0 border-l-2 bg-[#fffdf8] px-2 py-2 ${game.teamCode === favorite.code || game.opponentCode === favorite.code ? "border-[#e85d2a]" : "border-[#d7d1c4]"}`}><p className="truncate font-mono text-[11px] font-bold">{abbreviatedMatchup(game)}</p><p className="mt-0.5 truncate text-[9px] text-[#687587]">{calendarDate(game.kickoffAt)} JST</p><p className="mt-1 truncate font-mono text-[9px] font-bold tracking-[.04em] text-[#64748b]">{seasonWeekLabel(game)}{game.broadcast ? ` · ${game.broadcast}` : ""}</p></a>;
+    const venueStyle = teamScheduleLink ? game.homeAway === "home" ? "border-[#2f7a5b] bg-[#f2faf5]" : "border-[#2d5f98] bg-[#f4f8fd]" : (game.teamCode === favorite.code || game.opponentCode === favorite.code ? "border-[#e85d2a] bg-[#fffdf8]" : "border-[#d7d1c4] bg-[#fffdf8]");
+    const venueLabel = teamScheduleLink ? game.homeAway === "home" ? "HOME" : "AWAY" : null;
+    return <a key={game.id} href={href} target={target} rel="noreferrer" className={`min-w-0 border-l-2 px-2 py-2 ${venueStyle}`}><p className="truncate font-mono text-[11px] font-bold">{abbreviatedMatchup(game)}</p><p className="mt-0.5 truncate text-[9px] text-[#687587]">{calendarDate(game.kickoffAt)} JST</p><p className="mt-1 flex min-w-0 items-center gap-1 truncate font-mono text-[9px] font-bold tracking-[.04em] text-[#64748b]">{venueLabel ? <span className={game.homeAway === "home" ? "text-[#236247]" : "text-[#244e80]"}>{venueLabel}</span> : null}<span className="truncate">{seasonWeekLabel(game)}{game.broadcast ? ` · ${game.broadcast}` : ""}</span></p></a>;
   };
 
   return <section id="league" data-layout-scope="league-dashboard" className="scroll-mt-24 space-y-3"><div className="flex items-center gap-2 font-mono text-[10px] font-semibold tracking-[0.2em] text-[#64748b]"><span className="text-[#10213a]">04</span><span>LEAGUE DESK</span><span className="h-px flex-1 bg-[#d9d5cc]" /></div>

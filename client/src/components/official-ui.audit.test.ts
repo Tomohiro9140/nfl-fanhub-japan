@@ -29,6 +29,7 @@ describe("compact mobile result and schedule UI", () => {
     expect(revealedMarkup).toMatch(/>14<\/span><span> - <\/span><span[^>]*text-\[#a84420\][^>]*>29<\/span>/);
     expect(revealedMarkup).toContain("py-2.5");
     expect(revealedMarkup).toContain("leading-[1.25]");
+    expect(revealedMarkup).not.toContain("memo-slip");
   });
 
   it("removes the requested Game Ticket chrome while retaining the watch action", () => {
@@ -66,6 +67,13 @@ describe("compact mobile result and schedule UI", () => {
     expect(leagueMarkup).toContain("BUF @ CLE");
     expect(leagueMarkup).toContain("https://www.nfl.com/standings/league/2026/REG");
     expect(leagueMarkup).not.toContain("STARTS IN");
+    expect(leagueMarkup).toContain("AWAY");
+    expect(leagueMarkup).toContain("bg-[#f4f8fd]");
+
+    const homeDashboard: LeagueDashboard = { ...dashboard, calendar: [{ ...dashboard.calendar[0]!, opponentCode: "MIA", homeAway: "home" }] };
+    const homeLeagueMarkup = renderToStaticMarkup(createElement(OfficialLeagueDashboard, { favorite, dashboard: homeDashboard, loading: false }));
+    expect(homeLeagueMarkup).toContain("HOME");
+    expect(homeLeagueMarkup).toContain("bg-[#f2faf5]");
   });
 
   it("uses the reclaimed huddle space for official updates and storylines instead of next-game detail", () => {
