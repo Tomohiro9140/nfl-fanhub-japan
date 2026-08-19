@@ -1,5 +1,7 @@
 type CsvRow = Record<string, string>;
 
+import { storageGetSignedUrl } from "./storage";
+
 type CacheEntry<T> = {
   value: T;
   expiresAt: number;
@@ -28,11 +30,14 @@ const inFlight = new Map<string, Promise<unknown>>();
 const NFLVERSE_RELEASES = "https://github.com/nflverse/nflverse-data/releases/download";
 const currentSeason = Math.max(2025, new Date().getUTCFullYear());
 const USER_AGENT = "NFL-Fan-Hub-Japan-Atlas/1.0";
+const HISTORIC_ROSTER_KEY = "atlas-historic-roster-index_ccf81874.json";
 
 const CACHE_TTL = {
   roster: 20 * 60 * 1000,
   players: 12 * 60 * 60 * 1000,
   teams: 6 * 60 * 60 * 1000,
+  history: 7 * 24 * 60 * 60 * 1000,
+  stats: 6 * 60 * 60 * 1000,
 } as const;
 
 const teamAliases: Record<string, string> = {
@@ -201,6 +206,68 @@ function teamFor(code: string | undefined, directory: Map<string, AtlasTeam>): A
   };
 }
 
+type HistoricRosterIndex = {
+  coverage: { startSeason: number; endSeason: number };
+  players: Record<string, Record<string, string[]>>;
+};
+
+async function historicRosterIndex(): Promise<HistoricRosterIndex | null> {
+  return cached("atlas:historic-roster-index", CACHE_TTL.history, async () => {
+    try {
+      const url = await storageGetSignedUrl(HISTORIC_ROSTER_KEY);
+      const response = await fetch(url, { headers: { "User-Agent": USER_AGENT } });
+      if (!response.ok) throw new Error(`Historic roster index returned ${response.status}`);
+      const value = await response.json() as HistoricRosterIndex;
+      if (!value.coverage || !value.players) throw new Error("Historic roster index is incomplete");
+      return value;
+    } catch {
+      return null;
+    }
+  });
+}
+
+const hallFallback: ReadonlyArray<readonly [string, number]> = [
+  ["Drew Brees", 2026], ["Larry Fitzgerald", 2026], ["Adam Vinatieri", 2026], ["Antonio Gates", 2025], ["Julius Peppers", 2024], ["Peyton Manning", 2021], ["Calvin Johnson", 2021], ["Troy Polamalu", 2020], ["Ed Reed", 2019], ["Ray Lewis", 2018], ["Randy Moss", 2018], ["LaDainian Tomlinson", 2017], ["Kurt Warner", 2017], ["Brett Favre", 2016], ["Jerome Bettis", 2015], ["Michael Strahan", 2014], ["Larry Allen", 2013], ["Deion Sanders", 2011], ["Jerry Rice", 2010], ["Emmitt Smith", 2010], ["Bruce Smith", 2009], ["Troy Aikman", 2006], ["Reggie White", 2006], ["Steve Young", 2005], ["Dan Marino", 2005], ["Barry Sanders", 2004], ["John Elway", 2004], ["Marcus Allen", 2003], ["Jim Kelly", 2002], ["Joe Montana", 2000], ["Lawrence Taylor", 1999], ["Dan Fouts", 1993],
+];
+
+function cleanHallName(value: string): string {
+  const sortName = value.match(/\{\{sortname\|([^|}]+)\|([^|}]+)(?:\|[^}]*)?\}\}/i);
+  if (sortName) return `${sortName[1]} ${sortName[2]}`.replace(/\s+/g, " ").trim();
+  const linkedName = value.match(/\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/);
+  if (linkedName) return (linkedName[2] || linkedName[1]).replace(/\s*\([^)]*\)/g, "").trim();
+  return value.replace(/\{\{[^}]+\}\}|\[\[[^\]]+\]\]|<[^>]+>|\*+|\^.*|\[\d+\]/g, "").replace(/\s+/g, " ").trim();
+}
+
+function hallFallbackMap() {
+  return new Map(hallFallback.map(([name, year]) => [normalizeAtlasText(name), year]));
+}
+
+async function hallOfFameYears(): Promise<Map<string, number>> {
+  return cached("atlas:hall-of-fame", CACHE_TTL.history, async () => {
+    const fallback = hallFallbackMap();
+    try {
+      const response = await fetch("https://en.wikipedia.org/w/api.php?action=parse&page=List_of_Pro_Football_Hall_of_Fame_inductees&prop=wikitext&format=json&origin=*", { headers: { "User-Agent": USER_AGENT } });
+      if (!response.ok) return fallback;
+      const payload = await response.json() as { parse?: { wikitext?: { "*"?: string } } };
+      const values = payload.parse?.wikitext?.["*"] ?? "";
+      values.split(/\n\|-/).forEach((row) => {
+        const columns = row.split("||");
+        const year = columns[1]?.match(/\b(19|20)\d{2}\b/)?.[0];
+        const role = columns[2]?.replace(/\[\[[^\]]+\]\]/g, "").toLowerCase() ?? "";
+        const name = cleanHallName(columns[0] ?? "");
+        if (year && name && !/(coach|owner|general manager|commissioner|administrator|personnel|executive|contributor|official|founder|president)/.test(role)) fallback.set(normalizeAtlasText(name), Number(year));
+      });
+      return fallback;
+    } catch {
+      return fallback;
+    }
+  });
+}
+
+async function hallOfFameYear(name: string) {
+  return (await hallOfFameYears()).get(normalizeAtlasText(name)) ?? null;
+}
+
 function latestRosterByPlayer(rows: CsvRow[]): Map<string, CsvRow> {
   const latest = new Map<string, CsvRow>();
   rows.forEach((row) => {
@@ -360,30 +427,37 @@ export async function atlasCareer(playerId: string) {
   const { roster, master, directory } = await atlasPlayerContext(playerId);
   const start = rookieSeason(master);
   const end = roster ? currentSeason : Math.max(start, number(master.last_season) || currentSeason - 1);
-  const seasons = Array.from({ length: end - start + 1 }, (_, index) => start + index);
-  const rows = await mapInBatches(seasons, 4, async (season) => {
+  const historic = await historicRosterIndex();
+  const historicEntries: Record<string, string[]> = historic?.players[playerId] ?? {};
+  const historicSeasons = Object.entries(historicEntries).map(([season, teams]) => ({ season: number(season), teams }));
+  const recentStart = Math.max(historic?.coverage.endSeason ? historic.coverage.endSeason + 1 : start, start);
+  const seasons = Array.from({ length: Math.max(0, end - recentStart + 1) }, (_, index) => recentStart + index);
+  const recentSeasons = await mapInBatches(seasons, 4, async (season) => {
     try {
       const rosterRows = await rosterForSeason(season);
-      const matches = rosterRows.filter((row) => row.gsis_id === playerId);
-      const latest = matches.sort((left, right) => number(right.week) - number(left.week))[0];
-      return latest?.team ? { season, team: teamAliases[latest.team] ?? latest.team } : null;
+      const teams = Array.from(new Set(rosterRows.filter((row) => row.gsis_id === playerId).map((row) => teamAliases[row.team] ?? row.team).filter(Boolean)));
+      return { season, teams };
     } catch {
-      return null;
+      return { season, teams: [] as string[] };
     }
   });
-  const timeline = rows.filter((row): row is { season: number; team: string } => Boolean(row));
-  const spans: Array<{ startSeason: number; endSeason: number; team: AtlasTeam }> = [];
+  const bySeason = new Map<number, string[]>();
+  [...historicSeasons, ...recentSeasons].forEach((entry) => { if (entry.teams.length) bySeason.set(entry.season, Array.from(new Set(entry.teams))); });
+  const timeline = Array.from(bySeason.entries()).map(([season, teams]) => ({ season, teams })).sort((left, right) => right.season - left.season);
+  const spans: Array<{ startSeason: number; endSeason: number; teams: AtlasTeam[] }> = [];
   timeline.forEach((entry) => {
     const previous = spans.at(-1);
-    if (previous && previous.team.abbreviation === entry.team && previous.endSeason === entry.season - 1) {
-      previous.endSeason = entry.season;
+    const normalizedTeams = entry.teams.map((team) => teamFor(team, directory));
+    if (previous && previous.teams.map((team) => team.abbreviation).join("|") === normalizedTeams.map((team) => team.abbreviation).join("|") && previous.startSeason === entry.season + 1) {
+      previous.startSeason = entry.season;
       return;
     }
-    spans.push({ startSeason: entry.season, endSeason: entry.season, team: teamFor(entry.team, directory) });
+    spans.push({ startSeason: entry.season, endSeason: entry.season, teams: normalizedTeams });
   });
   return {
     spans,
-    source: { provider: "NFLverse roster data", updatedAt: new Date().toISOString(), coverage: { startSeason: start, endSeason: end } },
+    hallOfFameYear: await hallOfFameYear(playerName(master)),
+    source: { provider: "NFLverse roster data", updatedAt: new Date().toISOString(), teamHistoryCoverage: { availableFrom: historic?.coverage.startSeason ?? start, unavailableBefore: historic && start < historic.coverage.startSeason ? { startSeason: start, endSeason: historic.coverage.startSeason - 1 } : null } },
   };
 }
 
@@ -426,70 +500,63 @@ async function espnAwards(espnId?: string): Promise<string[]> {
   }
 }
 
-const hallFallback: Record<string, number> = {
-  "peytonmanning": 2021, "calvinjohnson": 2021, "troypolamalu": 2020, "edreed": 2019,
-  "raylewis": 2018, "randymoss": 2018, "ladainiantomlinson": 2017, "kurtwarner": 2017,
-  "brettfavre": 2016, "jeromebettis": 2015, "michaelstrahan": 2014, "jerryrice": 2010,
-  "emmittsmith": 2010, "brucesmith": 2009, "troy aikman": 2006, "steveyoung": 2005,
-  "danmarino": 2005, "barrysanders": 2004, "johnelway": 2004, "jimkelly": 2002,
-  "joemontana": 2000, "lawrencetaylor": 1999,
-};
-
 export async function atlasAwards(playerId: string) {
   const { roster, master } = await atlasPlayerContext(playerId);
   const awards = await espnAwards(master.espn_id || roster?.espn_id);
-  const inductionYear = hallFallback[normalizeAtlasText(playerName(master))];
+  const inductionYear = await hallOfFameYear(playerName(master));
   if (inductionYear) awards.unshift(`${inductionYear} · Pro Football Hall of Fame`);
   return { awards: Array.from(new Set(awards)), source: { provider: "ESPN / Pro Football Hall of Fame", updatedAt: new Date().toISOString() } };
 }
 
-export type AtlasStatColumn = { key: string; label: string };
+export type AtlasStatColumn = { key: string; label: string; sources?: string[]; calculate?: (rows: CsvRow[]) => number | string };
+
+const sum = (rows: CsvRow[], sources: string[]) => rows.reduce((total, row) => total + sources.reduce((rowTotal, source) => rowTotal + number(row[source]), 0), 0);
+const ratio = (rows: CsvRow[], numerator: string[], denominator: string[], percent = false) => { const divisor = sum(rows, denominator); return divisor ? Number((sum(rows, numerator) / divisor * (percent ? 100 : 1)).toFixed(percent ? 1 : 2)) : 0; };
+const weightedAverage = (rows: CsvRow[], value: string, weight: string) => { const totalWeight = sum(rows, [weight]); return totalWeight ? Number((rows.reduce((total, row) => total + number(row[value]) * number(row[weight]), 0) / totalWeight).toFixed(2)) : 0; };
+const gameCount = (rows: CsvRow[]) => new Set(rows.map((row) => row.game_id || `${row.season}-${row.week}-${row.team}`)).size;
+const maxValue = (rows: CsvRow[], sources: string[]) => Math.max(0, ...rows.flatMap((row) => sources.map((source) => number(row[source]))));
+const passerRating = (rows: CsvRow[]) => { const attempts = sum(rows, ["attempts"]); if (!attempts) return 0; const bounded = (value: number) => Math.max(0, Math.min(2.375, value)); const completions = sum(rows, ["completions"]); const yards = sum(rows, ["passing_yards"]); const touchdowns = sum(rows, ["passing_tds"]); const interceptions = sum(rows, ["passing_interceptions"]); return Number((((bounded((completions / attempts - 0.3) * 5) + bounded((yards / attempts - 3) * 0.25) + bounded(touchdowns / attempts * 20) + bounded(2.375 - interceptions / attempts * 25)) / 6) * 100).toFixed(1)); };
+const fgRange = (bucket: string) => (rows: CsvRow[]) => { const made = sum(rows, [`fg_made_${bucket}`]); const attempts = made + sum(rows, [`fg_missed_${bucket}`, `fg_blocked_${bucket}`]); return attempts ? `${made}/${attempts}` : "—"; };
+const gameColumn: AtlasStatColumn = { key: "games", label: "GP", calculate: gameCount };
 
 const statColumnsByPosition: Record<string, AtlasStatColumn[]> = {
-  QB: [{ key: "games", label: "GP" }, { key: "completionPct", label: "CMP%" }, { key: "passingYards", label: "PASS YDS" }, { key: "passingTds", label: "TD" }, { key: "interceptions", label: "INT" }],
-  RB: [{ key: "games", label: "GP" }, { key: "carries", label: "ATT" }, { key: "rushingYards", label: "RUSH YDS" }, { key: "rushingTds", label: "RUSH TD" }, { key: "receivingYards", label: "REC YDS" }],
-  WR: [{ key: "games", label: "GP" }, { key: "receptions", label: "REC" }, { key: "receivingYards", label: "YDS" }, { key: "receivingTds", label: "REC TD" }, { key: "targets", label: "TGT" }],
-  TE: [{ key: "games", label: "GP" }, { key: "receptions", label: "REC" }, { key: "receivingYards", label: "YDS" }, { key: "receivingTds", label: "REC TD" }, { key: "targets", label: "TGT" }],
-  DEF: [{ key: "games", label: "GP" }, { key: "tackles", label: "TACKLES" }, { key: "sacks", label: "SACK" }, { key: "interceptions", label: "INT" }, { key: "passesDefended", label: "PD" }],
+  QB: [gameColumn, { key: "completionPct", label: "CMP%", calculate: (rows) => ratio(rows, ["completions"], ["attempts"], true) }, { key: "passingYards", label: "PASS YDS", sources: ["passing_yards"] }, { key: "yardsPerAttempt", label: "YPA", calculate: (rows) => ratio(rows, ["passing_yards"], ["attempts"]) }, { key: "passingTds", label: "TD", sources: ["passing_tds"] }, { key: "interceptions", label: "INT", sources: ["passing_interceptions"] }, { key: "passerRating", label: "RATING", calculate: passerRating }, { key: "sacks", label: "SACKED", sources: ["sacks_suffered"] }, { key: "rushingYards", label: "RUSH YDS", sources: ["rushing_yards"] }, { key: "rushingTds", label: "RUSH TD", sources: ["rushing_tds"] }, { key: "cpoe", label: "CPOE", calculate: (rows) => weightedAverage(rows, "passing_cpoe", "attempts") }],
+  RB: [gameColumn, { key: "carries", label: "ATT", sources: ["carries"] }, { key: "rushingYards", label: "RUSH YDS", sources: ["rushing_yards"] }, { key: "yardsPerCarry", label: "YPC", calculate: (rows) => ratio(rows, ["rushing_yards"], ["carries"]) }, { key: "rushingTds", label: "RUSH TD", sources: ["rushing_tds"] }, { key: "receivingYards", label: "REC YDS", sources: ["receiving_yards"] }, { key: "receivingTds", label: "REC TD", sources: ["receiving_tds"] }, { key: "fumbles", label: "FUM", sources: ["rushing_fumbles", "receiving_fumbles"] }, { key: "fumblesLost", label: "LOST", sources: ["rushing_fumbles_lost", "receiving_fumbles_lost"] }],
+  WR: [gameColumn, { key: "receivingYards", label: "YDS", sources: ["receiving_yards"] }, { key: "yardsPerReception", label: "YPR", calculate: (rows) => ratio(rows, ["receiving_yards"], ["receptions"]) }, { key: "receivingTds", label: "REC TD", sources: ["receiving_tds"] }, { key: "catchPct", label: "CATCH%", calculate: (rows) => ratio(rows, ["receptions"], ["targets"], true) }, { key: "firstDowns", label: "1ST", sources: ["receiving_first_downs"] }, { key: "yac", label: "YAC", sources: ["receiving_yards_after_catch"] }],
+  TE: [gameColumn, { key: "receivingYards", label: "YDS", sources: ["receiving_yards"] }, { key: "yardsPerReception", label: "YPR", calculate: (rows) => ratio(rows, ["receiving_yards"], ["receptions"]) }, { key: "receivingTds", label: "REC TD", sources: ["receiving_tds"] }, { key: "catchPct", label: "CATCH%", calculate: (rows) => ratio(rows, ["receptions"], ["targets"], true) }, { key: "firstDowns", label: "1ST", sources: ["receiving_first_downs"] }, { key: "yac", label: "YAC", sources: ["receiving_yards_after_catch"] }],
+  OL: [gameColumn, { key: "penalties", label: "PEN", sources: ["penalties"] }, { key: "penaltyYards", label: "PEN YDS", sources: ["penalty_yards"] }],
+  DL: [gameColumn, { key: "solo", label: "SOLO", sources: ["def_tackles_solo"] }, { key: "assists", label: "AST", sources: ["def_tackle_assists"] }, { key: "tfl", label: "TFL", sources: ["def_tackles_for_loss"] }, { key: "sacks", label: "SACK", sources: ["def_sacks"] }, { key: "hits", label: "QB HIT", sources: ["def_qb_hits"] }, { key: "forcedFumbles", label: "FF", sources: ["def_fumbles_forced"] }],
+  LB: [gameColumn, { key: "solo", label: "SOLO", sources: ["def_tackles_solo"] }, { key: "assists", label: "AST", sources: ["def_tackle_assists"] }, { key: "totalTackles", label: "TOTAL", sources: ["def_tackles_solo", "def_tackle_assists"] }, { key: "tfl", label: "TFL", sources: ["def_tackles_for_loss"] }, { key: "sacks", label: "SACK", sources: ["def_sacks"] }, { key: "hits", label: "QB HIT", sources: ["def_qb_hits"] }, { key: "interceptions", label: "INT", sources: ["def_interceptions"] }, { key: "forcedFumbles", label: "FF", sources: ["def_fumbles_forced"] }],
+  DB: [gameColumn, { key: "passesDefended", label: "PD", sources: ["def_pass_defended"] }, { key: "interceptions", label: "INT", sources: ["def_interceptions"] }, { key: "totalTackles", label: "TOTAL", sources: ["def_tackles_solo", "def_tackle_assists"] }, { key: "tfl", label: "TFL", sources: ["def_tackles_for_loss"] }, { key: "forcedFumbles", label: "FF", sources: ["def_fumbles_forced"] }],
+  K: [gameColumn, { key: "fgMade", label: "FGM", sources: ["fg_made"] }, { key: "fgAttempted", label: "FGA", sources: ["fg_att"] }, { key: "fgPct", label: "FG%", calculate: (rows) => ratio(rows, ["fg_made"], ["fg_att"], true) }, { key: "fg1to19", label: "1-19", calculate: fgRange("0_19") }, { key: "fg20to29", label: "20-29", calculate: fgRange("20_29") }, { key: "fg30to39", label: "30-39", calculate: fgRange("30_39") }, { key: "fg40to49", label: "40-49", calculate: fgRange("40_49") }, { key: "fg50plus", label: "50+", calculate: (rows) => `${sum(rows, ["fg_made_50_59", "fg_made_60_"])}/${sum(rows, ["fg_made_50_59", "fg_made_60_", "fg_missed_50_59", "fg_missed_60_", "fg_blocked_50_59", "fg_blocked_60_"]) || "—"}` }, { key: "fgLong", label: "LONG", calculate: (rows) => maxValue(rows, ["fg_long"]) }, { key: "patMade", label: "XPM", sources: ["pat_made"] }, { key: "patAttempted", label: "XPA", sources: ["pat_att"] }, { key: "patPct", label: "XP%", calculate: (rows) => ratio(rows, ["pat_made"], ["pat_att"], true) }],
+  P: [gameColumn, { key: "punts", label: "PUNTS", sources: ["punts"] }, { key: "puntYards", label: "YDS", sources: ["punt_yards"] }, { key: "grossAvg", label: "GROSS AVG", calculate: (rows) => ratio(rows, ["punt_yards"], ["punts"]) }, { key: "netAvg", label: "NET AVG", calculate: (rows) => ratio(rows, ["punt_net_yards"], ["punts"]) }, { key: "in20", label: "IN20", sources: ["punt_inside_20"] }, { key: "in20Pct", label: "IN20%", calculate: (rows) => ratio(rows, ["punt_inside_20"], ["punts"], true) }, { key: "touchbacks", label: "TB", sources: ["punt_touchbacks"] }, { key: "fairCatches", label: "FC", sources: ["punt_fair_catches"] }, { key: "puntLong", label: "LONG", calculate: (rows) => maxValue(rows, ["punt_long"]) }, { key: "puntsBlocked", label: "BLK", sources: ["punt_blocked"] }],
+  LS: [gameColumn, { key: "solo", label: "SOLO", sources: ["def_tackles_solo"] }, { key: "assists", label: "AST", sources: ["def_tackle_assists"] }, { key: "totalTackles", label: "TOTAL", sources: ["def_tackles_solo", "def_tackle_assists"] }],
 };
 
 function statPosition(position: string): keyof typeof statColumnsByPosition {
   const group = atlasPositionGroup(position);
-  if (group === "QB" || group === "RB" || group === "WR" || group === "TE") return group;
-  return "DEF";
-}
-
-function sumRows(rows: CsvRow[], keys: string[]) {
-  return rows.reduce((total, row) => total + keys.reduce((rowTotal, key) => rowTotal + number(row[key]), 0), 0);
+  return group in statColumnsByPosition ? group as keyof typeof statColumnsByPosition : "WR";
 }
 
 export function summarizeAtlasStats(rows: CsvRow[], playerId: string, position: string) {
   const group = statPosition(position);
   const columns = statColumnsByPosition[group];
-  const bySeason = new Map<number, CsvRow[]>();
+  const bySeason = new Map<number, Map<string, CsvRow[]>>();
   rows.filter((row) => row.player_id === playerId && (!row.season_type || row.season_type === "REG"))
     .forEach((row) => {
       const season = number(row.season);
-      if (season) bySeason.set(season, [...(bySeason.get(season) ?? []), row]);
+      const team = row.team || row.recent_team || "FA";
+      if (!season) return;
+      const teams = bySeason.get(season) ?? new Map<string, CsvRow[]>();
+      teams.set(team, [...(teams.get(team) ?? []), row]);
+      bySeason.set(season, teams);
     });
-  const valuesFor = (seasonRows: CsvRow[]) => {
-    const games = new Set(seasonRows.map((row) => row.game_id || `${row.season}-${row.week}-${row.team}`)).size;
-    const attempts = sumRows(seasonRows, ["attempts"]);
-    return {
-      games,
-      completionPct: attempts ? Number((sumRows(seasonRows, ["completions"]) / attempts * 100).toFixed(1)) : 0,
-      passingYards: sumRows(seasonRows, ["passing_yards"]), passingTds: sumRows(seasonRows, ["passing_tds"]), interceptions: sumRows(seasonRows, ["passing_interceptions", "def_interceptions"]),
-      carries: sumRows(seasonRows, ["carries"]), rushingYards: sumRows(seasonRows, ["rushing_yards"]), rushingTds: sumRows(seasonRows, ["rushing_tds"]),
-      receptions: sumRows(seasonRows, ["receptions"]), receivingYards: sumRows(seasonRows, ["receiving_yards"]), receivingTds: sumRows(seasonRows, ["receiving_tds"]), targets: sumRows(seasonRows, ["targets"]),
-      tackles: sumRows(seasonRows, ["def_tackles_solo", "def_tackle_assists"]), sacks: sumRows(seasonRows, ["def_sacks"]), passesDefended: sumRows(seasonRows, ["def_pass_defended"]),
-    };
-  };
-  const seasons = Array.from(bySeason.entries()).map(([season, seasonRows]) => ({
-    season,
-    team: Array.from(new Set(seasonRows.map((row) => row.team || row.recent_team).filter(Boolean))).join(" / ") || "—",
-    values: valuesFor(seasonRows),
-  })).sort((left, right) => right.season - left.season);
-  return { position: group, columns, seasons, total: valuesFor(Array.from(bySeason.values()).flat()) };
+  const valuesFor = (seasonRows: CsvRow[]) => Object.fromEntries(columns.map((column) => [column.key, column.calculate ? column.calculate(seasonRows) : sum(seasonRows, column.sources ?? [])]));
+  const seasons = Array.from(bySeason.entries()).sort(([left], [right]) => right - left).flatMap(([season, teams]) => {
+    const teamRows = Array.from(teams.entries()).map(([team, seasonRows]) => ({ season, team, kind: "team" as const, values: valuesFor(seasonRows) }));
+    return teamRows.length < 2 ? teamRows : [...teamRows, { season, team: "SEASON TOTAL", kind: "season-total" as const, values: valuesFor(Array.from(teams.values()).flat()) }];
+  });
+  return { position: group, columns, seasons, total: valuesFor(Array.from(bySeason.values()).flatMap((teams) => Array.from(teams.values()).flat())) };
 }
 
 async function fetchPlayerCsvRows(url: string, playerId: string): Promise<CsvRow[]> {
@@ -544,7 +611,8 @@ export async function atlasStats(playerId: string) {
       return [];
     }
   });
-  return { ...summarizeAtlasStats(rows.flat(), playerId, roster?.position || master.position || "WR"), source: { provider: "NFLverse player statistics", updatedAt: new Date().toISOString(), throughSeason: end } };
+  const rookie = number(master.rookie_season || master.entry_year || master.draft_year) || start;
+  return { ...summarizeAtlasStats(rows.flat(), playerId, roster?.position || master.position || "WR"), source: { provider: "NFLverse player statistics", updatedAt: new Date().toISOString(), throughSeason: end, seasonStatsCoverage: { availableFrom: 1999, unavailableBefore: rookie < 1999 ? { startSeason: rookie, endSeason: 1998 } : null } } };
 }
 
 function contractMoney(value: number) {
