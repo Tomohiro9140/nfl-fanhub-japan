@@ -623,29 +623,81 @@ function contractMoney(value: number) {
   return value ? `$${value >= 1_000_000 ? `${(value / 1_000_000).toFixed(1)}M` : `${value.toFixed(1)}M`}` : "—";
 }
 
+type ContractSeason = {
+  year: string;
+  team?: string;
+  baseSalary?: number;
+  proratedBonus?: number;
+  optionBonus?: number;
+  rosterBonus?: number;
+  guaranteed?: number;
+  capHit?: number;
+  cashPaid?: number;
+  workoutBonus?: number;
+  perGameRosterBonus?: number;
+  otherBonus?: number;
+};
+
+type ContractHistory = { team?: string; yearSigned?: number; years?: number; total?: number; apy?: number; guaranteed?: number; type?: string; status?: string; amountEarned?: number };
+type ActiveContract = { team?: string; yearSigned?: number; years?: number; total?: number; apy?: number; guaranteed?: number; seasonHistory?: ContractSeason[]; contractHistory?: ContractHistory[] };
+type ContractIndex = { source?: string; sourceUpdatedAt?: string; contracts?: Record<string, ActiveContract> };
+
+function contractNumber(value: number | undefined) { return typeof value === "number" && Number.isFinite(value) ? value : 0; }
+function hasContractCharge(season: ContractSeason) {
+  return [season.cashPaid, season.capHit, season.proratedBonus, season.optionBonus, season.rosterBonus, season.workoutBonus, season.perGameRosterBonus, season.otherBonus].some((value) => contractNumber(value) > 0);
+}
+function contractOtherBreakdown(season: ContractSeason) {
+  return [
+    { key: "workoutBonus", label: "ワークアウト", amount: contractNumber(season.workoutBonus) },
+    { key: "perGameRosterBonus", label: "試合別ロスター", amount: contractNumber(season.perGameRosterBonus) },
+    { key: "otherBonus", label: "その他ボーナス", amount: contractNumber(season.otherBonus) },
+  ].filter((entry) => entry.amount > 0);
+}
+
+function contractTeamName(team: string, directory: Map<string, AtlasTeam>) {
+  const normalized = team.trim().toLowerCase();
+  return Array.from(directory.values()).find((entry) => entry.name.toLowerCase() === normalized || entry.name.toLowerCase().endsWith(` ${normalized}`))?.name ?? team;
+}
+
 export async function atlasContracts(playerId: string) {
-  const { roster, master } = await atlasPlayerContext(playerId);
+  const { roster } = await atlasPlayerContext(playerId);
   try {
     const index = await cached("atlas:active-contract-index", CACHE_TTL.contracts, async () => {
       const signedUrl = await storageGetSignedUrl(ACTIVE_CONTRACTS_KEY);
       const response = await fetch(signedUrl, { headers: { "User-Agent": USER_AGENT } });
       if (!response.ok) throw new Error(`Active contract archive returned ${response.status}`);
-      return await response.json() as { source?: string; sourceUpdatedAt?: string; contracts?: Record<string, { team?: string; yearSigned?: number; years?: number; total?: number; apy?: number; guaranteed?: number; contractHistory?: Array<{ team?: string; yearSigned?: number; years?: number; total?: number; apy?: number; guaranteed?: number }> }> };
+      return await response.json() as ContractIndex;
     });
     const record = index.contracts?.[playerId];
-    const contractHistory = record?.contractHistory?.length ? record.contractHistory : record ? [record] : [];
-    const records = contractHistory.map((entry) => ({
-      team: entry.team || record?.team || roster?.team || "—",
-      yearSigned: Number(entry.yearSigned ?? record?.yearSigned ?? 0),
-      years: Number(entry.years ?? record?.years ?? 0),
-      total: Number(entry.total ?? record?.total ?? 0) * 1_000_000,
-      apy: Number(entry.apy ?? record?.apy ?? 0) * 1_000_000,
-      guaranteed: Number(entry.guaranteed ?? record?.guaranteed ?? 0) * 1_000_000,
-      active: true,
-    })).sort((left, right) => right.yearSigned - left.yearSigned);
-    return { available: true, records, source: { provider: index.source || "NFLverse / Over The Cap", updatedAt: index.sourceUpdatedAt || new Date().toISOString() } };
+    if (!record) return { available: true, contract: null, source: { provider: index.source || "NFLverse / Over The Cap", updatedAt: index.sourceUpdatedAt || new Date().toISOString() } };
+    const { directory } = await searchUniverse();
+    const startYear = contractNumber(record.yearSigned) || null;
+    const seasonHistory = [...(record.seasonHistory ?? [])].filter((season) => /^\d{4}$/.test(season.year) && (!startYear || Number(season.year) >= startYear)).sort((left, right) => Number(left.year) - Number(right.year));
+    const lastCashYear = Math.max(0, ...seasonHistory.filter((season) => contractNumber(season.cashPaid) > 0).map((season) => Number(season.year)));
+    const years = seasonHistory.filter((season) => Number(season.year) <= lastCashYear || hasContractCharge(season)).map((season) => {
+      const otherBreakdown = contractOtherBreakdown(season);
+      return {
+        ...season,
+        year: Number(season.year),
+        team: contractTeamName(season.team || record.team || roster?.team || "—", directory),
+        otherTotal: otherBreakdown.reduce((total, entry) => total + entry.amount, 0),
+        otherBreakdown,
+        isVoidYear: Boolean(lastCashYear && Number(season.year) > lastCashYear && contractNumber(season.cashPaid) === 0),
+      };
+    });
+    const history = [...(record.contractHistory ?? [])].filter((entry) => entry.yearSigned).sort((left, right) => contractNumber(right.yearSigned) - contractNumber(left.yearSigned) || contractNumber(right.total) - contractNumber(left.total)).map((entry) => ({ ...entry, team: contractTeamName(entry.team || record.team || "—", directory) }));
+    return {
+      available: true,
+      contract: {
+        currentContract: { team: contractTeamName(record.team || roster?.team || "—", directory), yearSigned: startYear, endYear: startYear && record.years ? startYear + record.years - 1 : null, years: record.years || null, total: contractNumber(record.total), apy: contractNumber(record.apy), guaranteed: contractNumber(record.guaranteed) },
+        years,
+        history,
+        noteAvailability: { incentives: false, deadMoney: false, message: "公開年度データにはインセンティブ／出来高とデッドマネーの専用項目がありません。" },
+      },
+      source: { provider: index.source || "NFLverse / Over The Cap", updatedAt: index.sourceUpdatedAt || new Date().toISOString() },
+    };
   } catch {
-    return { available: false, records: [], source: { provider: "NFLverse / Over The Cap", message: "公開契約アーカイブを現在取得できません。" } };
+    return { available: false, contract: null, source: { provider: "NFLverse / Over The Cap", message: "公開契約アーカイブを現在取得できません。" } };
   }
 }
 

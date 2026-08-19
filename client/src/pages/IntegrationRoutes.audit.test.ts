@@ -27,6 +27,12 @@ describe("ATLAS and FIELDLINE integration routes", () => {
     expect(atlasSource).toContain('trpc.atlas.contracts.useQuery');
     expect(atlasSource).toContain('キャリア');
     expect(atlasSource).toContain('契約情報');
+    expect(atlasSource).toContain('現契約の年度別内訳');
+    expect(atlasSource).toContain('SIGN / PRORATED');
+    expect(atlasSource).toContain('VOID');
+    expect(atlasSource).toContain('ワークアウト、試合別ロスター、その他ボーナス');
+    expect(atlasSource).toContain('契約履歴');
+    expect(atlasSource).toContain('EARNED');
     expect(atlasSource).toContain('NFL PLAYER');
     expect(atlasSource).not.toContain('window.location.replace');
     expect(atlasSource).not.toContain('nflplayeratl-tus9mrqw.manus.space');

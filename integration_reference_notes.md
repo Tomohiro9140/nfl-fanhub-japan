@@ -89,3 +89,9 @@ Patrick MahomesのSTATSタブでは、2017年から2025年までのNFLverseレ�
 同じ選手の契約タブでは、指定どおり`契約情報は現在ロスターに登録されている選手を対象に表示します`を確認した。成績タブでは`1998年以前の成績は表示されません。`の案内と、QBのGP、CMP%、PASS YDS、YPA、TD、INT、RATING、SACKED、RUSH YDS、RUSH TD、CPOEを含む横スクロール表を確認した。2000年・1999年のDallas Cowboys行とCAREER TOTALが実データで描画された。
 
 Patrick Mahomes（`00-0033873`）の現役成績検証では、2017〜2025年のQB成績とCAREER TOTALを確認した。表は元ATLAS相当のGP、CMP%、PASS YDS、YPA、TD、INT、RATING、SACKED、RUSH YDS、RUSH TD、CPOEの全列を含み、例として2025年は3,587 PASS YDS、22 TD、11 INT、89.6 RATING、422 RUSH YDSを実データで表示した。
+
+## 元ATLAS契約詳細仕様の再確認（2026-08-19）
+
+元ATLASの契約タブは、現役ロスターの選手に対して、契約概要カード、年度別内訳表、契約履歴、データ制約注記をこの順に表示する。概要カードにはLATEST CONTRACT、契約開始〜終了年、チーム、契約年数、TOTAL、APY、GUARANTEEDを表示する。年度別表はYEAR、CAP HIT、BASE、SIGN / PRORATED、ROSTER、OPTION、OTHER、GUARANTEEDの8列で構成し、OTHERはワークアウト、試合別ロスター、その他ボーナスを合計する。各年の現金支払いがなく契約表示期間後にキャップ計上だけが残る年はアンバー背景とVOIDラベルを付ける。
+
+契約履歴は新しい契約から表示し、各行に締結年、チーム、契約年数、契約種別・状態、TOTAL、APY、GTD、EARNEDを表示する。公開年度データに含まれないインセンティブ／出来高とデッドマネーは推測せず、制約注記を明示する。金額単位は公開契約アーカイブの百万ドル単位をそのまま使い、1000以上はB、未満はMで整形する。Patrick Mahomesの現契約では2026〜2032年、TOTAL $448M、APY $64.0M、GUARANTEED $95.5M、年次CAP HIT／BASE／按分サインボーナス／ロスターボーナス／その他ボーナスが確認済みである。
