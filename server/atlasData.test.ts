@@ -32,7 +32,7 @@ describe("ATLAS data helpers", () => {
     ], "00-test", "QB");
     expect(summary.columns.map((column) => column.label)).toEqual(expect.arrayContaining(["YPA", "RATING", "SACKED", "RUSH YDS", "CPOE"]));
     expect(summary.seasons).toHaveLength(3);
-    expect(summary.seasons.at(-1)?.team).toBe("SEASON TOTAL");
+    expect(summary.seasons.at(-1)?.team).toBe("TOTAL");
     expect(summary.seasons.at(-1)?.values.passingYards).toBe(520);
   });
 });

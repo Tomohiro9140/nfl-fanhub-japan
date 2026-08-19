@@ -31,6 +31,8 @@ const NFLVERSE_RELEASES = "https://github.com/nflverse/nflverse-data/releases/do
 const currentSeason = Math.max(2025, new Date().getUTCFullYear());
 const USER_AGENT = "NFL-Fan-Hub-Japan-Atlas/1.0";
 const HISTORIC_ROSTER_KEY = "atlas-historic-roster-index_ccf81874.json";
+const ACTIVE_CONTRACTS_KEY = "nfl-active-contracts_42bb7ee5.json";
+const POSITION_ORDER = ["QB", "RB", "WR", "TE", "OL", "DL", "LB", "DB", "K", "P", "LS"] as const;
 
 const CACHE_TTL = {
   roster: 20 * 60 * 1000,
@@ -38,6 +40,7 @@ const CACHE_TTL = {
   teams: 6 * 60 * 60 * 1000,
   history: 7 * 24 * 60 * 60 * 1000,
   stats: 6 * 60 * 60 * 1000,
+  contracts: 12 * 60 * 60 * 1000,
 } as const;
 
 const teamAliases: Record<string, string> = {
@@ -308,7 +311,8 @@ async function searchUniverse() {
 export async function atlasFilters(team?: string) {
   const { active, directory } = await searchUniverse();
   const teams = Array.from(new Set(active.map((player) => player.team.abbreviation))).map((code) => teamFor(code, directory)).sort((left, right) => left.name.localeCompare(right.name));
-  const positions = Array.from(new Set(active.filter((player) => !team || player.team.abbreviation === team).map((player) => atlasPositionGroup(player.position)))).sort();
+  const availablePositions = new Set(active.filter((player) => !team || player.team.abbreviation === team).map((player) => atlasPositionGroup(player.position)));
+  const positions = POSITION_ORDER.filter((position) => availablePositions.has(position));
   return { teams, positions, season: currentSeason };
 }
 
@@ -554,7 +558,7 @@ export function summarizeAtlasStats(rows: CsvRow[], playerId: string, position: 
   const valuesFor = (seasonRows: CsvRow[]) => Object.fromEntries(columns.map((column) => [column.key, column.calculate ? column.calculate(seasonRows) : sum(seasonRows, column.sources ?? [])]));
   const seasons = Array.from(bySeason.entries()).sort(([left], [right]) => right - left).flatMap(([season, teams]) => {
     const teamRows = Array.from(teams.entries()).map(([team, seasonRows]) => ({ season, team, kind: "team" as const, values: valuesFor(seasonRows) }));
-    return teamRows.length < 2 ? teamRows : [...teamRows, { season, team: "SEASON TOTAL", kind: "season-total" as const, values: valuesFor(Array.from(teams.values()).flat()) }];
+    return teamRows.length < 2 ? teamRows : [...teamRows, { season, team: "TOTAL", kind: "season-total" as const, values: valuesFor(Array.from(teams.values()).flat()) }];
   });
   return { position: group, columns, seasons, total: valuesFor(Array.from(bySeason.values()).flatMap((teams) => Array.from(teams.values()).flat())) };
 }
@@ -621,16 +625,27 @@ function contractMoney(value: number) {
 
 export async function atlasContracts(playerId: string) {
   const { roster, master } = await atlasPlayerContext(playerId);
-  const contractUrl = `${NFLVERSE_RELEASES}/contracts/historical_contracts.csv`;
   try {
-    const rows = await cached("atlas:contracts", 12 * 60 * 60 * 1000, () => fetchCsv(contractUrl));
-    const normalizedName = normalizeAtlasText(playerName(master));
-    const records = rows.filter((row) => row.gsis_id === playerId || normalizeAtlasText(row.player) === normalizedName)
-      .map((row) => ({ team: row.team || roster?.team || "—", yearSigned: number(row.year_signed), years: number(row.years), total: number(row.value), apy: number(row.apy), guaranteed: number(row.guaranteed), active: row.is_active === "TRUE" || row.is_active === "true" }))
-      .sort((left, right) => right.yearSigned - left.yearSigned);
-    return { available: true, records, source: { provider: "nflverse / OverTheCap", updatedAt: new Date().toISOString() } };
+    const index = await cached("atlas:active-contract-index", CACHE_TTL.contracts, async () => {
+      const signedUrl = await storageGetSignedUrl(ACTIVE_CONTRACTS_KEY);
+      const response = await fetch(signedUrl, { headers: { "User-Agent": USER_AGENT } });
+      if (!response.ok) throw new Error(`Active contract archive returned ${response.status}`);
+      return await response.json() as { source?: string; sourceUpdatedAt?: string; contracts?: Record<string, { team?: string; yearSigned?: number; years?: number; total?: number; apy?: number; guaranteed?: number; contractHistory?: Array<{ team?: string; yearSigned?: number; years?: number; total?: number; apy?: number; guaranteed?: number }> }> };
+    });
+    const record = index.contracts?.[playerId];
+    const contractHistory = record?.contractHistory?.length ? record.contractHistory : record ? [record] : [];
+    const records = contractHistory.map((entry) => ({
+      team: entry.team || record?.team || roster?.team || "—",
+      yearSigned: Number(entry.yearSigned ?? record?.yearSigned ?? 0),
+      years: Number(entry.years ?? record?.years ?? 0),
+      total: Number(entry.total ?? record?.total ?? 0) * 1_000_000,
+      apy: Number(entry.apy ?? record?.apy ?? 0) * 1_000_000,
+      guaranteed: Number(entry.guaranteed ?? record?.guaranteed ?? 0) * 1_000_000,
+      active: true,
+    })).sort((left, right) => right.yearSigned - left.yearSigned);
+    return { available: true, records, source: { provider: index.source || "NFLverse / Over The Cap", updatedAt: index.sourceUpdatedAt || new Date().toISOString() } };
   } catch {
-    return { available: false, records: [], source: { provider: "nflverse / OverTheCap", message: "公開契約アーカイブを現在取得できません。" } };
+    return { available: false, records: [], source: { provider: "NFLverse / Over The Cap", message: "公開契約アーカイブを現在取得できません。" } };
   }
 }
 
