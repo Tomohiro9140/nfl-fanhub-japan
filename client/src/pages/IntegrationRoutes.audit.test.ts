@@ -16,7 +16,8 @@ describe("ATLAS and FIELDLINE integration routes", () => {
     expect(homeSource).toContain('ATLAS');
     expect(homeSource).toContain('FIELDLINE');
     expect(fieldlineSource).toContain('https://nflteamstats-4q87cnse.manus.space/');
-    expect(atlasSource).toContain('EmbeddedAppNav current="ATLAS"');
+    expect(atlasSource).toContain('atlas-shell');
+    expect(atlasSource).toContain('atlas-display');
     expect(fieldlineSource).toContain('EmbeddedAppNav current="FIELDLINE"');
     expect(atlasSource).toContain('trpc.atlas.search.useQuery');
     expect(atlasSource).toContain('trpc.atlas.profile.useQuery');
@@ -24,8 +25,8 @@ describe("ATLAS and FIELDLINE integration routes", () => {
     expect(atlasSource).toContain('trpc.atlas.awards.useQuery');
     expect(atlasSource).toContain('trpc.atlas.stats.useQuery');
     expect(atlasSource).toContain('trpc.atlas.contracts.useQuery');
-    expect(atlasSource).toContain('CAREER');
-    expect(atlasSource).toContain('CONTRACT');
+    expect(atlasSource).toContain('キャリア');
+    expect(atlasSource).toContain('契約情報');
     expect(atlasSource).toContain('NFL PLAYER');
     expect(atlasSource).not.toContain('window.location.replace');
     expect(atlasSource).not.toContain('nflplayeratl-tus9mrqw.manus.space');

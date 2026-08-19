@@ -3,7 +3,7 @@
  * Style reminder — editorial data journalism, warm bone paper, ink navy structure,
  * endzone-orange decision accents; do not dilute with generic dashboard styling.
  */
-@import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=IBM+Plex+Mono:wght@400;500;600&family=Noto+Sans+JP:wght@400;500;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=DM+Serif+Display:ital@0;1&family=IBM+Plex+Mono:wght@400;500;600&family=Manrope:wght@400;500;600;700;800&family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
 @import "tailwindcss";
 @import "tw-animate-css";
 
@@ -49,6 +49,10 @@
   .briefing-row { position: relative; border-radius: 2px 10px 10px 2px; }
   .roster-slip { border-radius: 18px 2px 18px 2px; }
   .watch-slip { border-radius: 2px 18px 2px 18px; }
+  .atlas-view { font-family: "Manrope", "Noto Sans JP", sans-serif; }
+  .atlas-display { font-family: "DM Serif Display", "Noto Sans JP", serif; }
+  .atlas-shell { width: min(100%, 32rem); margin-inline: auto; }
+  .atlas-soft-grid { background-image: linear-gradient(rgba(15, 23, 42, .012) 1px, transparent 1px), linear-gradient(90deg, rgba(15, 23, 42, .012) 1px, transparent 1px); background-size: 24px 24px; }
 }
 
 @media (max-width: 639px) {

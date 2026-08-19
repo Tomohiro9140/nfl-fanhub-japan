@@ -1,10 +1,26 @@
-import { EmbeddedAppNav } from "@/components/EmbeddedAppNav";
 import { trpc } from "@/lib/trpc";
-import { ArrowLeft, Award, BadgeDollarSign, CalendarDays, GraduationCap, Hash, LoaderCircle, Search, Shield, SlidersHorizontal, Trophy, UserRoundSearch, X } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  ArrowLeft,
+  CalendarDays,
+  ChevronRight,
+  Clock3,
+  Database,
+  GraduationCap,
+  Hash,
+  Loader2,
+  ReceiptText,
+  Search,
+  Shield,
+  SlidersHorizontal,
+  Trophy,
+  UserRoundSearch,
+  X,
+} from "lucide-react";
+import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 
 type SearchMode = "name" | "filter";
-type DetailTab = "career" | "awards" | "stats" | "contracts";
+type DetailTab = "career" | "stats" | "contract";
+
 type AtlasPreview = {
   id: string;
   name: string;
@@ -13,37 +29,63 @@ type AtlasPreview = {
   headshot: string;
   rosterStatus: "current" | "past";
   lastSeason: number | null;
-  team: { abbreviation: string; name: string; color: string; logo?: string };
+  team: { abbreviation: string; name: string; color: string };
 };
 
+function Initials({ name, className = "" }: { name: string; className?: string }) {
+  const initials = name.split(" ").filter(Boolean).slice(0, 2).map((part) => part[0]).join("");
+  return <div className={`grid place-items-center font-serif text-xl text-white/90 ${className}`}>{initials || "NFL"}</div>;
+}
+
 function PlayerAvatar({ player, size = "md" }: { player: Pick<AtlasPreview, "name" | "headshot">; size?: "sm" | "md" | "lg" }) {
-  const dimension = size === "lg" ? "h-28 w-28" : size === "sm" ? "h-11 w-11" : "h-14 w-14";
-  const initials = player.name.split(" ").filter(Boolean).slice(0, 2).map((part) => part[0]).join("") || "NFL";
-  return <div className={`relative grid shrink-0 place-items-center overflow-hidden rounded-2xl bg-slate-900 font-mono text-sm font-bold text-white/85 ${dimension}`}>
-    <span>{initials}</span>
-    {player.headshot ? <img src={player.headshot} alt={`${player.name}の写真`} className="absolute inset-0 h-full w-full object-cover object-top" onError={(event) => { event.currentTarget.style.display = "none"; }} /> : null}
+  const dimensions = size === "lg" ? "h-28 w-28" : size === "sm" ? "h-11 w-11" : "h-14 w-14";
+  return <div className={`relative shrink-0 overflow-hidden rounded-2xl bg-slate-800 ${dimensions}`}>
+    <Initials name={player.name} className="absolute inset-0" />
+    {player.headshot ? <img src={player.headshot} alt={`${player.name}の写真`} className="relative h-full w-full object-cover object-top" onError={(event) => { event.currentTarget.style.display = "none"; }} /> : null}
   </div>;
 }
 
-function SectionTitle({ children }: { children: string }) {
-  return <p className="font-mono text-[10px] font-bold tracking-[.16em] text-slate-400">{children}</p>;
+function PlayerResult({ player, onSelect }: { player: AtlasPreview; onSelect: (player: AtlasPreview) => void }) {
+  const isPast = player.rosterStatus === "past";
+  return <button type="button" onClick={() => onSelect(player)} className="group flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left transition duration-150 hover:bg-slate-950/[0.045] active:scale-[0.985]">
+    <PlayerAvatar player={player} size="sm" />
+    <span className="min-w-0 flex-1">
+      <span className="block truncate text-sm font-bold text-slate-900">{player.name}</span>
+      <span className="mt-0.5 flex items-center gap-1.5 text-xs font-medium text-slate-500">
+        <span className="rounded-md bg-slate-100 px-1.5 py-0.5 text-[10px] font-extrabold tracking-wide text-slate-700">{player.position}</span>
+        <span className={`rounded-md px-1.5 py-0.5 text-[10px] font-extrabold tracking-wide ${isPast ? "bg-stone-100 text-stone-500" : "bg-emerald-50 text-emerald-700"}`}>{isPast ? "過去" : "現役"}</span>
+        <span className="truncate">{isPast ? `Last Team: ${player.team.abbreviation} · ${player.lastSeason ?? "—"}` : `${player.team.abbreviation} · #${player.number}`}</span>
+      </span>
+    </span>
+    <ChevronRight className="h-4 w-4 shrink-0 text-slate-300 transition group-hover:translate-x-0.5 group-hover:text-slate-700" />
+  </button>;
 }
 
-function AtlasDetailLoading({ label }: { label: string }) {
-  return <div className="flex min-h-28 flex-col items-center justify-center gap-2 py-5 text-center"><LoaderCircle className="h-5 w-5 animate-spin text-[#e85d2a]" /><p className="text-xs font-bold text-slate-500">{label}を読み込んでいます</p></div>;
+function SectionLabel({ children, icon: Icon }: { children: ReactNode; icon?: typeof Trophy }) {
+  return <div className="mb-3 flex items-center gap-2">
+    {Icon ? <span className="grid h-7 w-7 place-items-center rounded-lg bg-amber-100 text-amber-800"><Icon className="h-3.5 w-3.5" /></span> : null}
+    <h2 className="text-sm font-extrabold tracking-[0.02em] text-slate-900">{children}</h2>
+  </div>;
 }
 
-function AtlasDetailError({ onRetry }: { onRetry: () => void }) {
-  return <div className="py-5 text-center"><p className="text-xs font-bold text-rose-700">データを取得できませんでした。</p><button type="button" onClick={onRetry} className="mt-2 rounded-lg bg-rose-50 px-3 py-1.5 text-[11px] font-extrabold text-rose-800">再試行</button></div>;
+function EmptySearch({ text }: { text: string }) {
+  return <div className="rounded-2xl border border-dashed border-slate-200 bg-white/60 px-5 py-7 text-center"><UserRoundSearch className="mx-auto mb-2 h-5 w-5 text-slate-300" /><p className="text-sm font-semibold text-slate-600">{text}</p></div>;
 }
 
-function money(value: number) {
-  if (!value) return "—";
-  return value >= 1_000_000 ? `$${(value / 1_000_000).toFixed(1)}M` : `$${value.toFixed(1)}M`;
+function DetailSkeleton() {
+  return <div className="mx-4 animate-pulse overflow-hidden rounded-[2rem] bg-slate-900 px-5 pb-6 pt-5 shadow-[0_18px_50px_rgba(15,23,42,0.18)]"><div className="flex items-start justify-between"><div className="space-y-3"><div className="h-5 w-24 rounded bg-white/15" /><div className="h-10 w-40 rounded bg-white/15" /><div className="h-4 w-52 rounded bg-white/10" /></div><div className="h-28 w-28 rounded-2xl bg-white/10" /></div><div className="mt-7 grid grid-cols-3 gap-4 border-t border-white/10 pt-4">{[0, 1, 2].map((item) => <div key={item} className="space-y-2"><div className="h-3 w-10 rounded bg-white/10" /><div className="h-5 w-14 rounded bg-white/15" /></div>)}</div></div>;
 }
 
-function atlasStatValue(values: object, key: string) {
-  return (values as Record<string, unknown>)[key] ?? "—";
+function CareerSkeleton() {
+  return <div className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-900/[0.04]"><div className="animate-pulse space-y-4"><div className="h-4 w-28 rounded bg-slate-200" />{[0, 1, 2].map((item) => <div key={item} className="flex gap-3"><div className="mt-1 h-3 w-3 shrink-0 rounded-full bg-amber-200" /><div className="space-y-2"><div className="h-3 w-16 rounded bg-slate-200" /><div className="h-4 w-40 rounded bg-slate-100" /></div></div>)}</div></div>;
+}
+
+function StatsSkeleton() {
+  return <div className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-900/[0.05]"><div className="animate-pulse"><div className="flex h-10 items-center gap-3 bg-slate-900 px-3"><div className="h-3 w-12 rounded bg-white/20" /><div className="h-3 w-9 rounded bg-white/15" /></div>{[0, 1, 2, 3].map((row) => <div key={row} className="flex h-12 items-center gap-3 border-b border-slate-100 px-3"><div className="h-3 w-10 rounded bg-slate-200" /><div className="h-3 w-7 rounded bg-slate-200" /></div>)}</div></div>;
+}
+
+function atlasValue(values: object, key: string) {
+  return (values as Record<string, number>)[key] ?? 0;
 }
 
 export default function Atlas() {
@@ -55,104 +97,64 @@ export default function Atlas() {
   const [jersey, setJersey] = useState("");
   const [selectedPreview, setSelectedPreview] = useState<AtlasPreview | null>(null);
   const [selectedId, setSelectedId] = useState(() => new URLSearchParams(window.location.search).get("player") ?? "");
-  const [detailTab, setDetailTab] = useState<DetailTab>("career");
+  const [detailTab, setDetailTab] = useState<DetailTab>(() => new URLSearchParams(window.location.search).get("tab") === "stats" ? "stats" : new URLSearchParams(window.location.search).get("tab") === "contract" ? "contract" : "career");
+  const [shouldFetchAwards, setShouldFetchAwards] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    const timer = window.setTimeout(() => setDebouncedQuery(nameQuery), 240);
-    return () => window.clearTimeout(timer);
-  }, [nameQuery]);
-
+  useEffect(() => { const timer = window.setTimeout(() => setDebouncedQuery(nameQuery), 240); return () => window.clearTimeout(timer); }, [nameQuery]);
   const nameInput = useMemo(() => ({ query: debouncedQuery.trim() }), [debouncedQuery]);
   const browseInput = useMemo(() => ({ team, position: position || undefined, jersey: jersey.trim() || undefined }), [team, position, jersey]);
-  const teamFilterInput = useMemo(() => team ? { team } : undefined, [team]);
-  const profileInput = useMemo(() => ({ playerId: selectedId }), [selectedId]);
-
+  const teamInput = useMemo(() => (team ? { team } : undefined), [team]);
+  const playerInput = useMemo(() => ({ playerId: selectedId }), [selectedId]);
   const filters = trpc.atlas.filters.useQuery();
-  const filteredOptions = trpc.atlas.filters.useQuery(teamFilterInput, { enabled: Boolean(team) });
+  const teamFilters = trpc.atlas.filters.useQuery(teamInput, { enabled: Boolean(team) });
   const nameSearch = trpc.atlas.search.useQuery(nameInput, { enabled: nameInput.query.length >= 2, staleTime: 60_000 });
   const browse = trpc.atlas.browse.useQuery(browseInput, { enabled: Boolean(team) && Boolean(position || jersey.trim()), staleTime: 60_000 });
-  const profile = trpc.atlas.profile.useQuery(profileInput, { enabled: Boolean(selectedId), staleTime: 5 * 60_000 });
-  const career = trpc.atlas.career.useQuery(profileInput, { enabled: Boolean(selectedId) && detailTab === "career", staleTime: 12 * 60_000 });
-  const awards = trpc.atlas.awards.useQuery(profileInput, { enabled: Boolean(selectedId) && detailTab === "awards", staleTime: 12 * 60_000 });
-  const stats = trpc.atlas.stats.useQuery(profileInput, { enabled: Boolean(selectedId) && detailTab === "stats", staleTime: 12 * 60_000 });
-  const contracts = trpc.atlas.contracts.useQuery(profileInput, { enabled: Boolean(selectedId) && detailTab === "contracts", staleTime: 12 * 60_000 });
+  const profile = trpc.atlas.profile.useQuery(playerInput, { enabled: Boolean(selectedId), staleTime: 5 * 60_000 });
+  const career = trpc.atlas.career.useQuery(playerInput, { enabled: Boolean(selectedId) && detailTab === "career", staleTime: 5 * 60_000 });
+  const awards = trpc.atlas.awards.useQuery(playerInput, { enabled: Boolean(selectedId) && detailTab === "career" && shouldFetchAwards, staleTime: 5 * 60_000 });
+  const stats = trpc.atlas.stats.useQuery(playerInput, { enabled: Boolean(selectedId) && detailTab === "stats", staleTime: 5 * 60_000 });
+  const contracts = trpc.atlas.contracts.useQuery(playerInput, { enabled: Boolean(selectedId) && detailTab === "contract", staleTime: 6 * 60 * 60_000 });
 
-  const results = mode === "name" ? nameSearch.data?.players ?? [] : browse.data?.players ?? [];
-  const resultsLoading = mode === "name" ? nameSearch.isFetching : browse.isFetching;
-  const resultsError = mode === "name" ? nameSearch.error : browse.error;
-  const availablePositions = filteredOptions.data?.positions ?? filters.data?.positions ?? [];
+  useEffect(() => { setShouldFetchAwards(false); if (!selectedId || !career.data) return; const timer = window.setTimeout(() => setShouldFetchAwards(true), 1_600); return () => window.clearTimeout(timer); }, [career.data, selectedId]);
 
   const selectPlayer = (player: AtlasPreview) => {
-    setSelectedPreview(player);
-    setSelectedId(player.id);
-    setDetailTab("career");
-    const url = new URL(window.location.href);
-    url.searchParams.set("player", player.id);
-    window.history.pushState({}, "", url);
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    setSelectedPreview(player); setSelectedId(player.id); setDetailTab("career");
+    const url = new URL(window.location.href); url.searchParams.set("player", player.id); url.searchParams.delete("tab"); window.history.pushState({}, "", url); window.scrollTo({ top: 0, behavior: "smooth" });
   };
+  const closeDetail = () => { setSelectedId(""); setSelectedPreview(null); const url = new URL(window.location.href); url.searchParams.delete("player"); url.searchParams.delete("tab"); window.history.pushState({}, "", url); window.scrollTo({ top: 0, behavior: "smooth" }); };
+  const setTab = (tab: DetailTab) => { setDetailTab(tab); const url = new URL(window.location.href); tab === "career" ? url.searchParams.delete("tab") : url.searchParams.set("tab", tab); window.history.replaceState({}, "", url); };
+  const clearName = () => { setNameQuery(""); const url = new URL(window.location.href); url.searchParams.delete("q"); window.history.replaceState({}, "", url); window.requestAnimationFrame(() => inputRef.current?.focus()); };
 
-  const closeDetail = () => {
-    setSelectedId("");
-    setSelectedPreview(null);
-    const url = new URL(window.location.href);
-    url.searchParams.delete("player");
-    window.history.pushState({}, "", url);
-    window.scrollTo({ top: 0, behavior: "smooth" });
-  };
-
-  const clearName = () => {
-    setNameQuery("");
-    const url = new URL(window.location.href);
-    url.searchParams.delete("q");
-    window.history.replaceState({}, "", url);
-    window.requestAnimationFrame(() => inputRef.current?.focus());
-  };
-
-  const profileDetails = profile.data?.profile;
-  const player = profileDetails ?? selectedPreview;
+  const player = profile.data?.profile ?? selectedPreview;
   if (selectedId) {
     const teamColor = player?.team.color || "#142033";
-    return <main className="min-h-[100dvh] bg-[#f7f5f0] pb-12 text-slate-900">
-      <EmbeddedAppNav current="ATLAS" />
-      <header className="mx-auto flex w-full max-w-3xl items-center justify-between px-5 pb-3 pt-5">
-        <button type="button" onClick={closeDetail} className="inline-flex h-10 items-center gap-1.5 rounded-xl px-2 text-sm font-bold text-slate-700 transition hover:bg-white active:scale-95"><ArrowLeft className="h-4 w-4" />検索へ戻る</button>
-        <span className="font-mono text-[10px] font-bold tracking-[.18em] text-slate-400">PLAYER CARD</span>
-      </header>
-      <div className="mx-auto w-full max-w-3xl px-4">
-        {!player ? <div className="animate-pulse rounded-[2rem] bg-slate-900 px-5 py-7"><div className="h-4 w-20 rounded bg-white/20" /><div className="mt-4 h-9 w-44 rounded bg-white/20" /><div className="mt-6 h-20 rounded bg-white/10" /></div> : <>
-          <section className="overflow-hidden rounded-[2rem] text-white shadow-[0_18px_50px_rgba(15,23,42,0.18)]" style={{ background: `linear-gradient(135deg, ${teamColor} 0%, #091423 100%)` }}>
-            <div className="relative px-5 pb-6 pt-5"><div className="absolute -right-8 -top-8 h-40 w-40 rounded-full border-[20px] border-white/[.07]" />
-              <div className="relative flex items-start justify-between gap-4"><div className="min-w-0"><div className="mb-4 flex items-center gap-2"><span className="rounded-md bg-white/15 px-2 py-1 font-mono text-[10px] font-bold tracking-[.12em]">{player.rosterStatus === "past" ? "PAST PLAYER" : player.team.abbreviation}</span><span className="text-xs font-semibold text-white/65">{player.rosterStatus === "past" ? `LAST ACTIVE ${player.lastSeason ?? "—"}` : `#${player.number}`}</span></div><h1 className="text-4xl font-black leading-[.92] tracking-[-.05em]">{player.name}</h1><p className="mt-2 text-sm font-bold text-white/75">{player.position} <span className="mx-1.5 text-white/35">/</span> {player.rosterStatus === "past" ? `Last Team ${player.team.name}` : player.team.name}</p></div><PlayerAvatar player={player} size="lg" /></div>
-              <div className="mt-6 grid grid-cols-3 divide-x divide-white/15 border-t border-white/15 pt-4"><div><p className="text-[10px] font-bold tracking-[.1em] text-white/50">AGE</p><p className="mt-1 text-base font-extrabold">{profileDetails?.age ?? "—"}</p><p className="mt-1 text-[10px] font-semibold text-white/60">{profileDetails?.birthDate ?? "—"}</p></div><div className="pl-4"><p className="text-[10px] font-bold tracking-[.1em] text-white/50">HEIGHT</p><p className="mt-1 text-base font-extrabold">{profileDetails?.displayHeight ?? "—"}</p></div><div className="pl-4"><p className="text-[10px] font-bold tracking-[.1em] text-white/50">WEIGHT</p><p className="mt-1 text-base font-extrabold">{profileDetails?.displayWeight ?? "—"}</p></div></div>
-            </div>
-          </section>
-          <section className="mt-4 grid grid-cols-2 rounded-2xl bg-white p-3 shadow-sm ring-1 ring-slate-900/[.05]"><div className="flex gap-2.5 px-1 py-1"><GraduationCap className="mt-0.5 h-4 w-4 shrink-0 text-amber-700" /><div className="min-w-0"><SectionTitle>COLLEGE</SectionTitle><p className="mt-1 text-xs font-bold leading-snug text-slate-700">{profileDetails?.college ?? "—"}</p></div></div><div className="flex gap-2.5 border-l border-slate-100 px-3 py-1"><Hash className="mt-0.5 h-4 w-4 shrink-0 text-amber-700" /><div className="min-w-0"><SectionTitle>DRAFT</SectionTitle><p className="mt-1 text-xs font-bold leading-snug text-slate-700">{profileDetails?.draft ?? "—"}</p></div></div></section>
-          <section className="mt-6 overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-900/[.05]"><div className="grid grid-cols-4 border-b border-slate-100">{([
-            ["career", "CAREER", Shield], ["awards", "AWARDS", Trophy], ["stats", "STATS", Award], ["contracts", "CONTRACT", BadgeDollarSign],
-          ] as const).map(([key, label, Icon]) => <button key={key} type="button" onClick={() => setDetailTab(key)} className={`flex min-h-14 flex-col items-center justify-center gap-1 text-[9px] font-black tracking-[.04em] ${detailTab === key ? "border-b-2 border-[#e85d2a] bg-[#fffaf6] text-[#10213a]" : "text-slate-400"}`}><Icon className="h-3.5 w-3.5" />{label}</button>)}</div>
-            <div className="p-4">{detailTab === "career" ? <>{career.isFetching ? <AtlasDetailLoading label="キャリア" /> : career.isError ? <AtlasDetailError onRetry={() => void career.refetch()} /> : career.data?.spans.length ? <div className="space-y-2">{career.data.spans.map((span) => <div key={`${span.startSeason}-${span.team.abbreviation}`} className="flex items-center gap-3 rounded-xl bg-slate-50 px-3 py-2.5"><span className="h-8 w-1 rounded-full" style={{ backgroundColor: span.team.color }} /><span className="min-w-0 flex-1"><span className="block text-sm font-extrabold text-slate-800">{span.team.name}</span><span className="mt-0.5 block font-mono text-[10px] font-bold text-slate-400">{span.startSeason === span.endSeason ? span.startSeason : `${span.startSeason} — ${span.endSeason}`}</span></span><span className="rounded-md bg-white px-2 py-1 text-[10px] font-black text-slate-500 shadow-sm">{span.team.abbreviation}</span></div>)}</div> : <p className="py-5 text-center text-xs font-bold text-slate-400">確認できるキャリア履歴がありません。</p>}</> : null}
-            {detailTab === "awards" ? <>{awards.isFetching ? <AtlasDetailLoading label="受賞歴" /> : awards.isError ? <AtlasDetailError onRetry={() => void awards.refetch()} /> : awards.data?.awards.length ? <ul className="space-y-2">{awards.data.awards.map((item) => <li key={item} className="flex gap-2 rounded-xl bg-amber-50 px-3 py-2 text-xs font-bold leading-5 text-amber-950"><Trophy className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-600" />{item}</li>)}</ul> : <p className="py-5 text-center text-xs font-bold text-slate-400">公開受賞歴は確認できませんでした。</p>}</> : null}
-            {detailTab === "stats" ? <>
-              {stats.isFetching ? <AtlasDetailLoading label="シーズン成績" /> : stats.isError ? <AtlasDetailError onRetry={() => void stats.refetch()} /> : stats.data?.seasons.length ? <div className="overflow-x-auto"><table className="w-full min-w-[430px] border-collapse text-left"><thead><tr className="border-b border-slate-100 text-[9px] font-black tracking-[.08em] text-slate-400"><th className="px-2 py-2">SEASON</th><th className="px-2 py-2">TEAM</th>{stats.data.columns.map((column) => <th key={column.key} className="px-2 py-2 text-right">{column.label}</th>)}</tr></thead><tbody>{stats.data.seasons.map((season) => <tr key={`${season.season}-${season.team}`} className="border-b border-slate-50 text-[11px] font-bold text-slate-700"><td className="px-2 py-2.5">{season.season}</td><td className="px-2 py-2.5">{season.team}</td>{stats.data.columns.map((column) => <td key={column.key} className="px-2 py-2.5 text-right tabular-nums">{String(atlasStatValue(season.values, column.key))}</td>)}</tr>)}</tbody></table></div> : <p className="py-5 text-center text-xs font-bold text-slate-400">公開成績は確認できませんでした。</p>}
-            </> : null}
-            {detailTab === "contracts" ? <>{contracts.isFetching ? <AtlasDetailLoading label="契約情報" /> : contracts.isError ? <AtlasDetailError onRetry={() => void contracts.refetch()} /> : contracts.data?.available && contracts.data.records.length ? <div className="space-y-2">{contracts.data.records.map((record) => <div key={`${record.team}-${record.yearSigned}`} className="rounded-xl border border-slate-100 px-3 py-3"><div className="flex items-center justify-between gap-3"><span className="text-sm font-extrabold text-slate-800">{record.team}</span><span className="rounded-md bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] font-bold text-slate-500">{record.yearSigned}</span></div><div className="mt-2 grid grid-cols-3 gap-2 text-center"><div><SectionTitle>TOTAL</SectionTitle><p className="mt-1 text-[11px] font-black text-slate-800">{money(record.total)}</p></div><div><SectionTitle>APY</SectionTitle><p className="mt-1 text-[11px] font-black text-slate-800">{money(record.apy)}</p></div><div><SectionTitle>GUAR.</SectionTitle><p className="mt-1 text-[11px] font-black text-slate-800">{money(record.guaranteed)}</p></div></div></div>)}</div> : <div className="py-5 text-center"><p className="text-xs font-bold text-slate-500">{contracts.data?.source.message ?? "公開契約情報は確認できませんでした。"}</p><p className="mt-1 text-[10px] text-slate-400">nflverse / OverTheCap 公開データを参照</p></div>}</> : null}</div>
-          </section>
+    const awardsList = awards.data?.awards ?? [];
+    return <main className="atlas-view min-h-screen bg-[#f7f5f0] pb-12 text-slate-900">
+      <div className="atlas-shell">
+        <header className="flex items-center justify-between px-5 pb-3 pt-5"><button type="button" onClick={closeDetail} className="flex h-10 items-center gap-1.5 rounded-xl px-2 text-sm font-bold text-slate-700 transition hover:bg-white active:scale-95"><ArrowLeft className="h-4 w-4" />検索へ戻る</button><span className="text-[10px] font-extrabold tracking-[0.18em] text-slate-400">PLAYER CARD</span></header>
+        {!player ? <DetailSkeleton /> : <>
+          <section className="mx-4 overflow-hidden rounded-[2rem] text-white shadow-[0_18px_50px_rgba(15,23,42,0.18)]" style={{ background: `linear-gradient(135deg, ${teamColor} 0%, #091423 100%)` }}><div className="relative overflow-hidden px-5 pb-6 pt-5"><div className="absolute -right-9 -top-9 h-44 w-44 rounded-full border-[20px] border-white/[0.07]" /><div className="absolute bottom-0 left-20 h-24 w-24 rounded-full bg-amber-300/[0.10] blur-2xl" /><div className="relative flex items-start justify-between gap-4"><div><div className="mb-4 flex items-center gap-2"><span className="rounded-md bg-white/15 px-2 py-1 text-[10px] font-extrabold tracking-[0.12em]">{player.rosterStatus === "past" ? "PAST PLAYER" : player.team.abbreviation}</span><span className="text-xs font-semibold text-white/65">{player.rosterStatus === "past" ? `LAST ACTIVE ${player.lastSeason ?? "—"}` : `#${player.number}`}</span></div><h1 className="atlas-display text-[2.15rem] leading-[0.95] tracking-[-0.035em]">{player.name}</h1><p className="mt-2 text-sm font-bold text-white/70">{player.position} <span className="mx-1.5 text-white/35">/</span> {player.rosterStatus === "past" ? `Last Team ${player.team.name}` : player.team.name}</p></div><PlayerAvatar player={player} size="lg" /></div><div className="relative mt-6 grid grid-cols-3 divide-x divide-white/15 border-t border-white/15 pt-4"><div><p className="text-[10px] font-bold tracking-[0.1em] text-white/50">AGE</p><p className="mt-1 text-base font-extrabold">{profile.data?.profile.age ?? "—"}</p><p className="mt-1 text-[10px] font-semibold text-white/60">{profile.data?.profile.birthDate ?? "—"}</p></div><div className="pl-4"><p className="text-[10px] font-bold tracking-[0.1em] text-white/50">HEIGHT</p><p className="mt-1 text-base font-extrabold">{profile.data?.profile.displayHeight ?? "—"}</p></div><div className="pl-4"><p className="text-[10px] font-bold tracking-[0.1em] text-white/50">WEIGHT</p><p className="mt-1 text-base font-extrabold">{profile.data?.profile.displayWeight ?? "—"}</p></div></div></div></section>
+          <section className="mx-4 mt-4 grid grid-cols-2 gap-3 rounded-2xl bg-white p-3 shadow-sm ring-1 ring-slate-900/[0.04]"><div className="flex gap-2.5 px-1 py-1"><GraduationCap className="mt-0.5 h-4 w-4 shrink-0 text-amber-700" /><div><p className="text-[10px] font-bold tracking-[0.1em] text-slate-400">COLLEGE</p><p className="mt-1 text-xs font-bold leading-snug text-slate-700">{profile.data?.profile.college ?? "—"}</p></div></div><div className="flex gap-2.5 border-l border-slate-100 px-3 py-1"><Hash className="mt-0.5 h-4 w-4 shrink-0 text-amber-700" /><div><p className="text-[10px] font-bold tracking-[0.1em] text-slate-400">DRAFT</p><p className="mt-1 text-xs font-bold leading-snug text-slate-700">{profile.data?.profile.draft ?? "—"}</p></div></div></section>
+          <nav className="mx-4 mt-6 flex gap-5 border-b border-slate-200" aria-label="選手情報タブ">{(["career", "stats", "contract"] as DetailTab[]).map((tab) => <button key={tab} type="button" onClick={() => setTab(tab)} className={`relative shrink-0 pb-3 text-sm font-extrabold transition ${detailTab === tab ? "text-slate-900" : "text-slate-400"}`}>{tab === "career" ? "キャリア" : tab === "stats" ? "シーズン成績" : "契約情報"}{detailTab === tab ? <span className="absolute inset-x-0 -bottom-px h-0.5 rounded-full bg-amber-600" /> : null}</button>)}</nav>
+          {detailTab === "career" ? <section className="px-5 pb-4 pt-6">{career.isLoading ? <CareerSkeleton /> : awards.isFetching || !shouldFetchAwards ? <CareerSkeleton /> : awardsList.length ? <div className="mb-7 rounded-2xl bg-amber-50 p-4 ring-1 ring-amber-100"><SectionLabel icon={Trophy}>受賞歴</SectionLabel><div className="flex flex-wrap gap-2">{awardsList.map((award) => <span key={award} className="rounded-lg bg-white px-2.5 py-1.5 text-xs font-bold text-amber-950 shadow-sm">{award}</span>)}</div></div> : null}<SectionLabel icon={Clock3}>所属チームの遍歴</SectionLabel>{career.isLoading ? <CareerSkeleton /> : career.data?.spans.length ? <div className="relative ml-2 border-l border-slate-200 pl-5">{career.data.spans.map((span, index) => <div key={`${span.startSeason}-${span.team.abbreviation}`} className="relative pb-6 last:pb-0"><span className={`absolute -left-[1.62rem] top-1 h-3 w-3 rounded-full border-[3px] border-[#f7f5f0] ${index === 0 ? "bg-amber-500" : "bg-slate-300"}`} /><p className="text-xs font-extrabold text-amber-700">{span.startSeason === span.endSeason ? span.startSeason : `${span.startSeason}〜${span.endSeason}`}</p><p className="mt-1 text-sm font-bold text-slate-800">{span.team.name}</p></div>)}</div> : <EmptySearch text="所属チームの履歴データは準備中です" />}</section> : null}
+          {detailTab === "stats" ? <section className="px-4 pb-4 pt-6"><SectionLabel icon={Shield}>{stats.data?.position || player.position} のシーズン成績</SectionLabel>{stats.isLoading ? <StatsSkeleton /> : stats.data?.seasons.length ? <div className="overflow-x-auto rounded-2xl bg-white shadow-sm ring-1 ring-slate-900/[0.05]"><table className="w-max min-w-full border-separate border-spacing-0 text-right text-xs"><thead className="bg-slate-900 text-white"><tr><th className="sticky left-0 z-20 bg-slate-900 px-3 py-3 text-left text-[10px] tracking-wider">SEASON</th><th className="px-3 py-3 text-left text-[10px] text-white/65">TEAM</th>{stats.data.columns.map((column) => <th key={column.key} className="px-3 py-3 text-[10px] text-white/65">{column.label}</th>)}</tr></thead><tbody>{stats.data.seasons.map((season, index) => <tr key={`${season.season}-${season.team}`} className={index % 2 === 0 ? "bg-slate-50" : "bg-white"}><td className="sticky left-0 bg-inherit border-b border-slate-100 px-3 py-3 text-left font-extrabold text-slate-800">{season.season}</td><td className="border-b border-slate-100 px-3 py-3 text-left font-bold text-slate-700">{season.team}</td>{stats.data.columns.map((column) => <td key={column.key} className="border-b border-slate-100 px-3 py-3 font-semibold tabular-nums text-slate-700">{atlasValue(season.values, column.key).toLocaleString()}</td>)}</tr>)}</tbody><tfoot className="bg-amber-100 text-amber-950"><tr><td className="px-3 py-3 text-left text-[10px] font-extrabold">CAREER</td><td className="px-3 py-3 text-left text-[10px] font-extrabold">TOTAL</td>{stats.data.columns.map((column) => <td key={column.key} className="px-3 py-3 font-extrabold tabular-nums">{atlasValue(stats.data.total, column.key).toLocaleString()}</td>)}</tr></tfoot></table></div> : <EmptySearch text="NFLverseで表示可能なレギュラーシーズン成績がありません" />}</section> : null}
+          {detailTab === "contract" ? <section className="px-4 pb-4 pt-6">{contracts.isLoading ? <CareerSkeleton /> : contracts.data?.available && contracts.data.records.length ? <><div className="mb-5 overflow-hidden rounded-2xl bg-slate-900 p-5 text-white"><p className="text-[11px] font-extrabold tracking-[0.14em] text-amber-300">LATEST CONTRACT</p><h2 className="atlas-display mt-2 text-3xl">{contracts.data.records[0]?.yearSigned}</h2><p className="mt-1 text-sm font-semibold text-white/65">{contracts.data.records[0]?.team}</p></div><div className="space-y-2">{contracts.data.records.map((record) => <article key={`${record.team}-${record.yearSigned}`} className="rounded-xl bg-white px-3 py-2.5 shadow-sm ring-1 ring-slate-900/[0.04]"><div className="flex items-center gap-2"><span className="text-xs font-extrabold text-amber-700">{record.yearSigned}</span><h3 className="text-xs font-extrabold text-slate-900">{record.team}</h3><span className="ml-auto text-[10px] font-bold text-slate-400">{record.years} YRS</span></div><div className="mt-2 grid grid-cols-3 gap-1 border-t border-slate-100 pt-1.5 text-center">{[["TOTAL", record.total], ["APY", record.apy], ["GTD", record.guaranteed]].map(([label, value]) => <div key={String(label)}><p className="text-[8px] font-bold tracking-wide text-slate-400">{label}</p><p className="text-[10px] font-extrabold text-slate-800">{Number(value) ? `$${(Number(value) / 1_000_000).toFixed(1)}M` : "—"}</p></div>)}</div></article>)}</div></> : <EmptySearch text={contracts.data?.source.message ?? "公開契約データに表示可能な契約情報がありません"} />}</section> : null}
         </>}
-        {profile.isError ? <button type="button" onClick={() => void profile.refetch()} className="mx-auto mt-4 flex items-center gap-2 rounded-lg bg-white px-3 py-2 text-xs font-bold text-rose-700 shadow-sm ring-1 ring-rose-100"><LoaderCircle className="h-3.5 w-3.5" />プロフィールを再試行</button> : null}
       </div>
     </main>;
   }
 
-  return <main className="min-h-[100dvh] bg-[#f7f5f0] pb-12 text-slate-900">
-    <EmbeddedAppNav current="ATLAS" />
-    <div className="mx-auto w-full max-w-3xl px-4 pb-10 pt-8 sm:px-6"><header className="mb-7 pr-12"><p className="font-mono text-[10px] font-bold tracking-[.18em] text-[#e85d2a]">FAN/HUB · PLAYER ATLAS</p><h1 className="mt-2 text-4xl font-black tracking-[-.06em] text-[#10213a]">NFL PLAYER<br />DIRECTORY</h1><p className="mt-3 max-w-lg text-sm font-medium leading-6 text-slate-600">現役選手と過去のNFL選手を、名前・チーム・ポジション・背番号から検索できます。</p></header>
-      <section className="overflow-hidden rounded-[1.8rem] bg-white shadow-[0_12px_35px_rgba(15,23,42,.08)] ring-1 ring-slate-900/[.05]"><div className="flex border-b border-slate-100"><button type="button" onClick={() => setMode("name")} className={`flex flex-1 items-center justify-center gap-2 px-3 py-3 text-xs font-extrabold ${mode === "name" ? "border-b-2 border-[#e85d2a] text-[#10213a]" : "text-slate-400"}`}><Search className="h-3.5 w-3.5" />名前から検索</button><button type="button" onClick={() => setMode("filter")} className={`flex flex-1 items-center justify-center gap-2 px-3 py-3 text-xs font-extrabold ${mode === "filter" ? "border-b-2 border-[#e85d2a] text-[#10213a]" : "text-slate-400"}`}><SlidersHorizontal className="h-3.5 w-3.5" />条件で探す</button></div>
-        <div className="p-4">{mode === "name" ? <div><label htmlFor="atlas-name" className="sr-only">選手名</label><div className="flex items-center rounded-xl bg-slate-50 px-3 ring-1 ring-slate-200 focus-within:ring-2 focus-within:ring-[#e85d2a]/50"><Search className="h-4 w-4 text-slate-400" /><input ref={inputRef} id="atlas-name" value={nameQuery} onChange={(event) => setNameQuery(event.target.value)} placeholder="選手名を入力（2文字以上）" className="h-12 min-w-0 flex-1 bg-transparent px-3 text-sm font-semibold outline-none placeholder:text-slate-400" />{nameQuery ? <button type="button" onClick={clearName} aria-label="検索語を消去" className="rounded-md p-1 text-slate-400 hover:bg-white"><X className="h-4 w-4" /></button> : null}</div><p className="mt-2 text-[11px] font-medium text-slate-400">例: Mahomes, Allen, Brady</p></div> : <div className="grid gap-3 sm:grid-cols-3"><label className="block"><span className="mb-1.5 block font-mono text-[10px] font-bold tracking-[.12em] text-slate-400">TEAM</span><select value={team} onChange={(event) => { setTeam(event.target.value); setPosition(""); }} className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold outline-none focus:border-[#e85d2a]"><option value="">チームを選択</option>{filters.data?.teams.map((item) => <option key={item.abbreviation} value={item.abbreviation}>{item.name}</option>)}</select></label><label className="block"><span className="mb-1.5 block font-mono text-[10px] font-bold tracking-[.12em] text-slate-400">POSITION</span><select value={position} onChange={(event) => setPosition(event.target.value)} disabled={!team} className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold outline-none disabled:opacity-40 focus:border-[#e85d2a]"><option value="">すべて</option>{availablePositions.map((item) => <option key={item} value={item}>{item}</option>)}</select></label><label className="block"><span className="mb-1.5 block font-mono text-[10px] font-bold tracking-[.12em] text-slate-400">JERSEY</span><input value={jersey} onChange={(event) => setJersey(event.target.value.replace(/\D/g, "").slice(0, 3))} disabled={!team} inputMode="numeric" placeholder="#" className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold outline-none disabled:opacity-40 focus:border-[#e85d2a]" /></label></div>}</div>
-      </section>
-      <section className="mt-7"><div className="mb-3 flex items-center justify-between"><SectionTitle>{mode === "name" ? "SEARCH RESULTS" : "FILTER RESULTS"}</SectionTitle>{resultsLoading ? <LoaderCircle className="h-4 w-4 animate-spin text-[#e85d2a]" /> : null}</div>{resultsError ? <div className="rounded-2xl border border-rose-100 bg-rose-50 px-5 py-6 text-center text-sm font-semibold text-rose-800">選手データを取得できませんでした。接続を確認して再度お試しください。</div> : results.length ? <div className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-900/[.05]">{results.map((item) => <button key={item.id} type="button" onClick={() => selectPlayer(item)} className="flex w-full items-center gap-3 border-b border-slate-100 px-3 py-3 text-left transition last:border-b-0 hover:bg-slate-50 active:scale-[.995]"><PlayerAvatar player={item} size="sm" /><span className="min-w-0 flex-1"><span className="block truncate text-sm font-extrabold text-slate-900">{item.name}</span><span className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] font-bold text-slate-500"><span className="rounded-md bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-700">{item.position}</span><span className={`rounded-md px-1.5 py-0.5 text-[10px] ${item.rosterStatus === "current" ? "bg-emerald-50 text-emerald-700" : "bg-stone-100 text-stone-500"}`}>{item.rosterStatus === "current" ? "現役" : "過去"}</span><span>{item.rosterStatus === "current" ? `${item.team.abbreviation} · #${item.number}` : `Last Team: ${item.team.abbreviation} · ${item.lastSeason ?? "—"}`}</span></span></span><span className="h-8 w-1 shrink-0 rounded-full" style={{ backgroundColor: item.team.color }} /></button>)}</div> : <div className="rounded-2xl border border-dashed border-slate-200 bg-white/60 px-5 py-9 text-center"><UserRoundSearch className="mx-auto h-5 w-5 text-slate-300" /><p className="mt-2 text-sm font-semibold text-slate-500">{mode === "name" ? "選手名を2文字以上入力してください" : "チームとポジション、または背番号を選択してください"}</p></div>}</section>
-      <footer className="mt-8 flex items-center gap-2 text-[10px] font-medium leading-5 text-slate-400"><CalendarDays className="h-3.5 w-3.5 shrink-0" />選手索引はNFLverse公開データをもとに更新されます。</footer>
-    </div>
-  </main>;
+  const nameResults = nameSearch.data?.players ?? [];
+  const typedQuery = nameQuery.trim();
+  const isWaiting = typedQuery !== debouncedQuery.trim();
+  const currentResults = nameResults.filter((entry) => entry.rosterStatus === "current");
+  const pastResults = nameResults.filter((entry) => entry.rosterStatus === "past");
+  const browseResults = browse.data?.players ?? [];
+  return <main className="atlas-view atlas-soft-grid min-h-screen bg-[#f7f5f0] pb-10 text-slate-900"><div className="atlas-shell px-4 pt-5">
+    <header className="flex items-center justify-center px-1 pb-2"><div className="flex items-center gap-2.5"><div className="atlas-display grid h-9 w-9 place-items-center rounded-xl bg-slate-900 text-lg text-amber-300 shadow-lg shadow-slate-900/15">A</div><div><p className="text-[10px] font-extrabold tracking-[0.18em] text-slate-400">NFL PLAYER</p><p className="atlas-display text-lg leading-none tracking-tight text-slate-900">Atlas</p></div></div></header>
+    <section className="rounded-[1.65rem] bg-white p-2 shadow-[0_14px_42px_rgba(15,23,42,0.07)] ring-1 ring-slate-900/[0.04]"><div className="grid grid-cols-2 gap-1 rounded-xl bg-slate-100 p-1"><button type="button" onClick={() => setMode("name")} className={`flex items-center justify-center gap-1.5 rounded-lg px-3 py-2.5 text-xs font-extrabold transition ${mode === "name" ? "bg-white text-slate-900 shadow-sm" : "text-slate-400"}`}><Search className="h-3.5 w-3.5" />名前から探す</button><button type="button" onClick={() => setMode("filter")} className={`flex items-center justify-center gap-1.5 rounded-lg px-3 py-2.5 text-xs font-extrabold transition ${mode === "filter" ? "bg-white text-slate-900 shadow-sm" : "text-slate-400"}`}><SlidersHorizontal className="h-3.5 w-3.5" />チームから探す</button></div>
+      {mode === "name" ? <div className="p-2 pt-4"><label className="relative block"><Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><input ref={inputRef} value={nameQuery} onChange={(event) => setNameQuery(event.target.value)} placeholder="例: Tom Brady" className="h-12 w-full rounded-xl border border-slate-200 bg-slate-50 pl-10 pr-11 text-sm font-semibold outline-none transition placeholder:font-medium placeholder:text-slate-400 focus:border-amber-500 focus:bg-white focus:ring-4 focus:ring-amber-100" />{nameQuery ? <button type="button" onClick={clearName} aria-label="検索文字をクリア" className="absolute right-2 top-1/2 grid h-8 w-8 -translate-y-1/2 place-items-center rounded-lg text-slate-400 transition hover:bg-slate-200 hover:text-slate-700"><X className="h-4 w-4" /></button> : null}</label><div className="mt-3">{typedQuery.length < 2 ? <div><p className="px-1 text-[11px] font-medium text-slate-400">現役選手・引退選手を、2文字以上で表示します</p><p className="mt-1 px-1 text-[11px] font-medium text-slate-400">1998年以前の成績は表示されません。</p></div> : null}{isWaiting || nameSearch.isLoading ? <div className="flex items-center gap-2 px-2 py-4 text-xs font-semibold text-slate-400"><Loader2 className="h-4 w-4 animate-spin" />候補を検索中</div> : null}{typedQuery.length >= 2 && !isWaiting && !nameSearch.isLoading && !nameResults.length ? <EmptySearch text="該当する選手が見つかりません" /> : null}{!isWaiting && currentResults.length ? <><p className="px-2 pb-1 pt-2 text-[10px] font-extrabold tracking-[0.14em] text-emerald-700">CURRENT ROSTER</p>{currentResults.map((entry) => <PlayerResult key={entry.id} player={entry} onSelect={selectPlayer} />)}</> : null}{!isWaiting && pastResults.length ? <><p className="mt-2 border-t border-slate-100 px-2 pb-1 pt-3 text-[10px] font-extrabold tracking-[0.14em] text-stone-500">PAST PLAYERS · RETIRED INCLUDED</p>{pastResults.map((entry) => <PlayerResult key={entry.id} player={entry} onSelect={selectPlayer} />)}</> : null}</div></div> : <div className="p-2 pt-4"><div className="grid gap-3"><label><span className="mb-1.5 block px-1 text-[10px] font-extrabold tracking-[0.12em] text-slate-400">STEP 1 · TEAM</span><select value={team} onChange={(event) => { setTeam(event.target.value); setPosition(""); setJersey(""); }} className="h-12 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-bold text-slate-700 outline-none focus:border-amber-500 focus:ring-4 focus:ring-amber-100"><option value="">チームを選択</option>{filters.data?.teams.map((entry) => <option key={entry.abbreviation} value={entry.abbreviation}>{entry.abbreviation} — {entry.name}</option>)}</select></label><label><span className="mb-1.5 block px-1 text-[10px] font-extrabold tracking-[0.12em] text-slate-400">STEP 2 · POSITION</span><select value={position} disabled={!team} onChange={(event) => setPosition(event.target.value)} className="h-12 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-bold text-slate-700 outline-none disabled:cursor-not-allowed disabled:opacity-45 focus:border-amber-500 focus:ring-4 focus:ring-amber-100"><option value="">ポジションを選択</option>{(teamFilters.data?.positions ?? []).map((entry) => <option key={entry} value={entry}>{entry}</option>)}</select></label><div className="relative"><span className="mb-1.5 block px-1 text-[10px] font-extrabold tracking-[0.12em] text-slate-400">JERSEY NUMBER</span><Hash className="pointer-events-none absolute bottom-4 left-3 h-4 w-4 text-slate-400" /><input value={jersey} disabled={!team} onChange={(event) => setJersey(event.target.value.replace(/\D/g, "").slice(0, 3))} inputMode="numeric" placeholder="例: 15" className="h-12 w-full rounded-xl border border-slate-200 bg-slate-50 pl-9 pr-3 text-sm font-bold text-slate-700 outline-none disabled:cursor-not-allowed disabled:opacity-45 focus:border-amber-500 focus:ring-4 focus:ring-amber-100" /></div></div><div className="mt-4">{!team ? <p className="px-1 pb-1 text-[11px] font-medium text-slate-400">まず現在所属チームを選択してください</p> : null}{team && !position && !jersey ? <p className="px-1 pb-1 text-[11px] font-medium text-slate-400">ポジションまたは背番号を指定してください</p> : null}{browse.isLoading ? <div className="flex items-center gap-2 px-2 py-4 text-xs font-semibold text-slate-400"><Loader2 className="h-4 w-4 animate-spin" />ロスターを検索中</div> : null}{browse.data && !browseResults.length ? <EmptySearch text="該当する現所属選手が見つかりません" /> : null}{browseResults.map((entry) => <PlayerResult key={entry.id} player={entry} onSelect={selectPlayer} />)}</div></div>}</section>
+    <footer className="mt-6 px-1"><div className="flex items-center justify-between text-[10px] font-semibold text-slate-400"><span className="flex items-center gap-1"><Database className="h-3 w-3" /> Data: nflverse + ESPN</span><span>current roster · {filters.data?.season ?? "—"}</span></div></footer>
+  </div></main>;
 }
