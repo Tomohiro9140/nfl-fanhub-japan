@@ -10,7 +10,7 @@ const embeddedNavSource = readFileSync(resolve(process.cwd(), "client/src/compon
 const indexHtml = readFileSync(resolve(process.cwd(), "client/index.html"), "utf8");
 
 describe("ATLAS and FIELDLINE integration routes", () => {
-  it("registers both public reference routes and preserves the original apps behind permanent URLs", () => {
+  it("registers both public reference routes and opens the original apps through their permanent URLs", () => {
     expect(appSource).toContain('path="/atlas"');
     expect(appSource).toContain('path="/fieldline"');
     expect(homeSource).toContain('ATLAS');
@@ -19,12 +19,12 @@ describe("ATLAS and FIELDLINE integration routes", () => {
     expect(fieldlineSource).toContain('https://nflteamstats-4q87cnse.manus.space/');
     expect(atlasSource).toContain('EmbeddedAppNav current="ATLAS"');
     expect(fieldlineSource).toContain('EmbeddedAppNav current="FIELDLINE"');
-    expect(atlasSource).toContain('onLoad={() => setIsLoaded(true)}');
-    expect(fieldlineSource).toContain('onLoad={() => setIsLoaded(true)}');
-    expect(atlasSource).toContain('loading="eager"');
-    expect(fieldlineSource).toContain('loading="eager"');
-    expect(atlasSource).toContain('pointer-events-none');
-    expect(fieldlineSource).toContain('pointer-events-none');
+    expect(atlasSource).toContain('window.location.replace(originalAtlasUrl)');
+    expect(fieldlineSource).toContain('window.location.replace(originalFieldlineUrl)');
+    expect(atlasSource).toContain('OPEN ATLAS DIRECTLY');
+    expect(fieldlineSource).toContain('OPEN FIELDLINE DIRECTLY');
+    expect(atlasSource).not.toContain('<iframe');
+    expect(fieldlineSource).not.toContain('<iframe');
     expect(indexHtml).toContain('rel="preconnect" href="https://nflplayeratl-tus9mrqw.manus.space"');
     expect(indexHtml).toContain('rel="preconnect" href="https://nflteamstats-4q87cnse.manus.space"');
     expect(embeddedNavSource).toContain('Menu');

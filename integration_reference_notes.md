@@ -49,3 +49,9 @@ ATLAS・FIELDLINE共通の三本線メニューは、FIELDLINEの実画面で開
 同時点のFIELDLINE正式公開URLの単体計測では、DOMContentLoadedは約2.7秒、load完了も約2.7秒だった。転送量は約3KB・42リソースで、比較データAPIが約0.9〜1.0秒を占めた。ATLASの初回表示がより遅いため、両アプリ共通で接続の事前確立を行い、ATLASについては元プロジェクト側のJavaScript分割・初期データ取得の遅延化を次の優先候補とする。
 
 FAN/HUB側では、両正式公開URLへのDNS解決・接続確立をHTMLヘッドから開始するよう変更した。読み込み中オーバーレイはpointer-eventsを無効化して三本線メニューを常に操作可能とし、iframe完了時は200msのフェードで解除する。390px幅のATLAS・FIELDLINEで、ローディング表示とメニューの同時表示を確認した。
+
+2026-08-19に公開済みFAN/HUBの`/atlas/`を再確認すると、LOADING ATLAS表示のまま元アプリがフレーム内に描画されなかった。一方、ATLAS正式公開URLを単体で開くと検索画面が正常に表示された。HTTP応答もATLAS・FIELDLINEとも200で、`X-Frame-Options`および`Content-Security-Policy`のフレーム制限ヘッダーは応答ヘッダーに見当たらなかった。原因は元アプリそのものの停止ではなく、クロスオリジンiframeの読み込み完了・描画が公開FAN/HUB上で保証されない構成にある。
+
+同日に`/fieldline/`でもLOADING FIELDLINE表示のままフレーム内容が描画されないことを確認した。FIELDLINE正式公開URLを単体で開くと、2025 Seasonの2チーム比較画面は正常に操作できた。両アプリとも同じ挙動であるため、公開FAN/HUBでのクロスオリジンiframe依存を解消し、正式URLへ直接遷移する導線に切り替える必要がある。
+
+復旧後、FAN/HUB開発ルートの`/atlas/`はATLAS正式公開URLへ、`/fieldline/`はFIELDLINE正式公開URLへ自動的に直接遷移し、両方の元アプリ画面が描画されることを実機で確認した。`replace`遷移を使うため、ブラウザの戻る操作で壊れた埋め込み画面に戻ることはない。フレーム内メニューはクロスオリジン制約のため廃止し、FAN/HUBへはブラウザの戻る操作または元アプリのURLから戻る運用とする。
