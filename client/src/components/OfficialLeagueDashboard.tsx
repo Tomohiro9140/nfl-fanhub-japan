@@ -112,10 +112,14 @@ export function OfficialLeagueDashboard({ favorite, dashboard, loading, calendar
     const target = teamScheduleLink ? "_blank" : (game.daznUrl ? watchTarget : "_blank");
     const isHomeTeamGame = teamScheduleLink && game.homeAway === "home";
     const isAwayTeamGame = teamScheduleLink && game.homeAway === "away";
-    const venueStyle = teamScheduleLink ? isHomeTeamGame ? "border-l-4" : "border-[#9ca3af] bg-[#f3f4f6]" : (game.teamCode === favorite.code || game.opponentCode === favorite.code ? "border-[#e85d2a] bg-[#fffdf8]" : "border-[#d7d1c4] bg-[#fffdf8]");
-    const homeBrandStyle = isHomeTeamGame ? { backgroundColor: favorite.brand.primary, borderLeftColor: favorite.brand.accent, color: favorite.brand.onPrimary } : undefined;
-    const venueLabel = teamScheduleLink ? game.homeAway === "home" ? "HOME" : "AWAY" : null;
-    return <a key={game.id} href={href} target={target} rel="noreferrer" style={homeBrandStyle} className={`min-w-0 border-l-2 px-2 py-2 ${venueStyle}`}><p className="truncate font-mono text-[11px] font-bold">{abbreviatedMatchup(game)}</p><p className={`mt-0.5 truncate text-[9px] ${isHomeTeamGame ? "opacity-80" : "text-[#5b6472]"}`}>{calendarDate(game.kickoffAt)} JST</p><p className={`mt-1 flex min-w-0 items-center gap-1 truncate font-mono text-[9px] font-bold tracking-[.04em] ${isHomeTeamGame ? "opacity-90" : "text-[#4b5563]"}`}>{venueLabel ? <span className={isHomeTeamGame ? "font-black" : "text-[#4b5563]"}>{venueLabel}</span> : null}<span className="truncate">{seasonWeekLabel(game)}{game.broadcast ? ` · ${game.broadcast}` : ""}</span></p></a>;
+    const favoriteVenue = game.teamCode === favorite.code ? game.homeAway : game.opponentCode === favorite.code ? game.homeAway === "home" ? "away" : "home" : undefined;
+    const isFavoriteHomeGame = !teamScheduleLink && favoriteVenue === "home";
+    const isFavoriteAwayGame = !teamScheduleLink && favoriteVenue === "away";
+    const usesFavoriteBrand = isHomeTeamGame || isFavoriteHomeGame;
+    const usesAwayGray = isAwayTeamGame || isFavoriteAwayGame;
+    const venueStyle = usesFavoriteBrand ? "border-l-4" : usesAwayGray ? "border-[#9ca3af] bg-[#f3f4f6]" : "border-[#d7d1c4] bg-[#fffdf8]";
+    const brandStyle = usesFavoriteBrand ? { backgroundColor: favorite.brand.primary, borderLeftColor: favorite.brand.accent, color: favorite.brand.onPrimary } : undefined;
+    return <a key={game.id} href={href} target={target} rel="noreferrer" style={brandStyle} className={`min-w-0 border-l-2 px-2 py-2 ${venueStyle}`}><p className="truncate font-mono text-[11px] font-bold">{abbreviatedMatchup(game)}</p><p className={`mt-0.5 truncate text-[9px] ${usesFavoriteBrand ? "opacity-80" : "text-[#5b6472]"}`}>{calendarDate(game.kickoffAt)} JST</p><p className={`mt-1 truncate font-mono text-[9px] font-bold tracking-[.04em] ${usesFavoriteBrand ? "opacity-90" : "text-[#4b5563]"}`}>{seasonWeekLabel(game)}{game.broadcast ? ` · ${game.broadcast}` : ""}</p></a>;
   };
 
   return <section id="league" data-layout-scope="league-dashboard" className="scroll-mt-24 space-y-3"><div className="flex items-center gap-2 font-mono text-[10px] font-semibold tracking-[0.2em] text-[#64748b]"><span className="text-[#10213a]">04</span><span>LEAGUE DESK</span><span className="h-px flex-1 bg-[#d9d5cc]" /></div>
