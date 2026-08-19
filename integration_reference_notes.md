@@ -55,3 +55,21 @@ FAN/HUB側では、両正式公開URLへのDNS解決・接続確立をHTMLヘッ
 同日に`/fieldline/`でもLOADING FIELDLINE表示のままフレーム内容が描画されないことを確認した。FIELDLINE正式公開URLを単体で開くと、2025 Seasonの2チーム比較画面は正常に操作できた。両アプリとも同じ挙動であるため、公開FAN/HUBでのクロスオリジンiframe依存を解消し、正式URLへ直接遷移する導線に切り替える必要がある。
 
 復旧後、FAN/HUB開発ルートの`/atlas/`はATLAS正式公開URLへ、`/fieldline/`はFIELDLINE正式公開URLへ自動的に直接遷移し、両方の元アプリ画面が描画されることを実機で確認した。`replace`遷移を使うため、ブラウザの戻る操作で壊れた埋め込み画面に戻ることはない。フレーム内メニューはクロスオリジン制約のため廃止し、FAN/HUBへはブラウザの戻る操作または元アプリのURLから戻る運用とする。
+
+## ネイティブATLAS移植のデータ設計メモ（2026-08-19）
+
+元ATLASは、NFLverseの公開リリース（`https://github.com/nflverse/nflverse-data/releases/download`）から`players.csv`、年度別`roster_{season}.csv`、週別ロスター、年度別選手成績を取得し、ESPNの公開NFL teams API、athlete API、awards APIを補完データとして使用する。検索はNFLverseの全選手マスターと直近ロスターを統合して、現役優先・名前前方一致優先で最大16件を返す。プロフィールはNFLverseで氏名・ポジション・背番号・生年月日・体格・大学・ドラフトを構成し、ESPNプロフィール画像を補完する。
+
+キャリアはNFLverse週別ロスターを年度単位で集約し、連続年度と同じチーム構成を期間に畳み込む。元ATLASでは1999年以降の歴史ロスター索引を`/manus-storage/nfl-career-team-index_a331c990.json`、現役契約を`/manus-storage/nfl-active-contracts_9489346f.json`として保持し、Hall of FameはWikipedia API（`https://en.wikipedia.org/w/api.php?action=parse&page=List_of_Pro_Football_Hall_of_Fame_inductees&prop=wikitext&format=json&origin=*`）を週次キャッシュする。検索結果の先頭2件のプロフィール、プロフィール後の成績・契約、キャリア確認後の受賞歴を段階的にプリフェッチし、遅いデータで初期表示を阻害しない設計である。
+
+2026-08-19のネイティブATLAS第1段階では、`/atlas/`が外部URLへ遷移せず、FAN/HUB内に「NFL PLAYER DIRECTORY」と名前検索入力（プレースホルダー「選手名を入力（2文字以上）」）を描画することをDOMで確認した。スクリーンショット環境では白いキャンバスとして描画されることがあったため、以後の検証ではDOMテキスト、検索API応答、モバイル画面確認を併用する。
+
+同日、ネイティブATLASの名前検索へ`Mahomes`を入力し、NFLverse選手索引からPatrick Mahomes（QB、現役、KC、#15）が検索結果として返ることを実機で確認した。検索画面、FAN/HUBの三本線メニュー、チームカラーアクセントは同一ページ内で描画され、外部アプリへのリダイレクトは発生していない。
+
+同日、Patrick MahomesのネイティブプロフィールでCAREER・AWARDS・STATS・CONTRACTの4タブが描画され、初期CAREERタブはNFLverse年度別ロスターからKansas City Chiefs（2017—2026、KC）を実データとして返すことを確認した。キャリア詳細は選手プロフィールの後に読み込まれ、検索の初期表示を阻害しない。
+
+AWARDSタブはESPN公開プロフィールを後続リクエストとして取得する。Patrick Mahomesでは同APIが受賞項目を返さなかったため、「公開受賞歴は確認できませんでした。」という空状態を表示し、画面全体や他の詳細タブをブロックしないことを確認した。
+
+シーズン成績タブは、選択直後に「シーズン成績を読み込んでいます」と非遮断のローディング表示を出し、CAREER・AWARDS・CONTRACTのタブ操作を維持する。開発中のHMR後も4タブとキャリア実データが再描画されることを確認した。
+
+Patrick MahomesのSTATSタブでは、2017年から2025年までのNFLverseレギュラーシーズン成績（GP、CMP%、PASS YDS、TD、INT）が実データとして表示された。CONTRACTタブはnflverse/OverTheCapの公開契約アーカイブを取得するが、現時点では配布URLが応答しないため「公開契約アーカイブを現在取得できません。」と明確に表示する。これはプロフィール、キャリア、成績表示に影響しない独立した空状態である。

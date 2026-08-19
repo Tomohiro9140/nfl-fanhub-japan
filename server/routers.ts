@@ -7,6 +7,7 @@ import { getOfficialFeedItemById, getOfficialLeagueCalendar, getOfficialLeagueDa
 import { generateOfficialNewsEnglishSummary, generateOfficialNewsJapaneseSummary } from "./newsJapaneseSummary";
 import { NEWS_SUMMARIES_ENABLED } from "@shared/newsSummaryFeature";
 import { z } from "zod";
+import { atlasAwards, atlasBrowse, atlasCareer, atlasContracts, atlasFilters, atlasProfile, atlasSearch, atlasStats } from "./atlasData";
 
 export const appRouter = router({
     // if you need to use socket.io, read and register route in server/_core/index.ts, all api should start with '/api/' so that the gateway can route correctly
@@ -70,6 +71,16 @@ export const appRouter = router({
   leagueDashboard: router({
     summary: publicProcedure.query(() => getOfficialLeagueDashboardSummary()),
     calendar: publicProcedure.input(z.object({ teamCode: z.string().length(2).or(z.string().length(3)) })).query(({ input }) => getOfficialLeagueCalendar(input.teamCode.toUpperCase())),
+  }),
+  atlas: router({
+    filters: publicProcedure.input(z.object({ team: z.string().min(2).optional() }).optional()).query(({ input }) => atlasFilters(input?.team)),
+    search: publicProcedure.input(z.object({ query: z.string().trim().max(80) })).query(({ input }) => atlasSearch(input.query)),
+    browse: publicProcedure.input(z.object({ team: z.string().min(2), position: z.string().min(1).optional(), jersey: z.string().trim().max(3).optional() })).query(({ input }) => atlasBrowse(input)),
+    profile: publicProcedure.input(z.object({ playerId: z.string().min(1) })).query(({ input }) => atlasProfile(input.playerId)),
+    career: publicProcedure.input(z.object({ playerId: z.string().min(1) })).query(({ input }) => atlasCareer(input.playerId)),
+    awards: publicProcedure.input(z.object({ playerId: z.string().min(1) })).query(({ input }) => atlasAwards(input.playerId)),
+    stats: publicProcedure.input(z.object({ playerId: z.string().min(1) })).query(({ input }) => atlasStats(input.playerId)),
+    contracts: publicProcedure.input(z.object({ playerId: z.string().min(1) })).query(({ input }) => atlasContracts(input.playerId)),
   }),
 });
 
