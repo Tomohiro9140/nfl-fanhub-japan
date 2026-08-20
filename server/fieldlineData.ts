@@ -60,6 +60,18 @@ const keyString = (value: unknown) => value === null || value === undefined ? ""
 const normalizedTeam = (value: unknown) => TEAM_ALIASES[asString(value)] ?? asString(value);
 const teamKnown = (team: string) => team in FIELDLINE_TEAM_NAMES;
 
+/**
+ * Reproduces the original FIELDLINE definition of total offense/defense yards.
+ * nflverse no longer exposes sack_yards, so a sack's negative yards_gained is
+ * used solely as its replacement. Raw yards_gained cannot be used directly:
+ * it also carries return and other non-offensive yardage that the original
+ * pass + rush - sack_yards calculation deliberately excluded.
+ */
+export function fieldlineTotalYardsForPlay(row: PbpRow) {
+  const sackLoss = asNumber(row.sack) === 1 ? Math.max(0, -asNumber(row.yards_gained)) : 0;
+  return asNumber(row.passing_yards) + asNumber(row.rushing_yards) - sackLoss;
+}
+
 function emptyAggregate(season: number, team: string, week: number): Aggregate {
   return {
     season, team, week, games: 0, pointsFor: 0, pointsAgainst: 0, yardsFor: 0, yardsAgainst: 0,
@@ -265,9 +277,9 @@ export async function importFieldlineSeasonFromNflverse(season: number, imported
         game.homeScore = Math.max(game.homeScore, asNumber(row.total_home_score)); game.awayScore = Math.max(game.awayScore, asNumber(row.total_away_score)); gameScores.set(gameId, game);
       }
       if (teamKnown(offense)) {
-        const stat = get(offense, week); const passYards = asNumber(row.passing_yards); const rushYards = asNumber(row.rushing_yards); const yardsGained = asNumber(row.yards_gained);
+        const stat = get(offense, week); const passYards = asNumber(row.passing_yards); const rushYards = asNumber(row.rushing_yards); const totalYards = fieldlineTotalYardsForPlay(row);
         if (asNumber(row.two_point_attempt) !== 1) {
-          stat.passYardsFor += passYards; stat.rushYardsFor += rushYards; stat.yardsFor += yardsGained;
+          stat.passYardsFor += passYards; stat.rushYardsFor += rushYards; stat.yardsFor += totalYards;
           const epa = asFiniteNumber(row.epa); if (epa !== null) { stat.offenseEpa += epa; stat.offenseEpaPlays += 1; }
           stat.passAttempts += asNumber(row.pass_attempt) - asNumber(row.sack); stat.passCompletions += asNumber(row.complete_pass); stat.passTouchdowns += asNumber(row.pass_touchdown); stat.interceptionsThrown += asNumber(row.interception); stat.sacksAllowed += asNumber(row.sack);
           stat.thirdDownAttempts += asNumber(row.third_down_converted) + asNumber(row.third_down_failed); stat.thirdDownConversions += asNumber(row.third_down_converted);
@@ -280,9 +292,9 @@ export async function importFieldlineSeasonFromNflverse(season: number, imported
         drive.entered ||= asNumber(row.drive_inside20) === 1; const result = asString(row.fixed_drive_result); if (result) drive.result = result; redZoneDrives.set(driveId, drive);
       }
       if (teamKnown(defense)) {
-        const stat = get(defense, week); const passYards = asNumber(row.passing_yards); const rushYards = asNumber(row.rushing_yards); const yardsGained = asNumber(row.yards_gained);
+        const stat = get(defense, week); const passYards = asNumber(row.passing_yards); const rushYards = asNumber(row.rushing_yards); const totalYards = fieldlineTotalYardsForPlay(row);
         if (asNumber(row.two_point_attempt) !== 1) {
-          stat.yardsAgainst += yardsGained; stat.passYardsAgainst += passYards; stat.rushYardsAgainst += rushYards;
+          stat.yardsAgainst += totalYards; stat.passYardsAgainst += passYards; stat.rushYardsAgainst += rushYards;
           const epa = asFiniteNumber(row.epa); if (epa !== null) { stat.defenseEpaAllowed += epa; stat.defenseEpaPlays += 1; }
           stat.sacksDefense += asNumber(row.sack); stat.interceptionsDefense += asNumber(row.interception); stat.turnovers += asNumber(row.interception) + asNumber(row.fumble_lost);
           stat.opponentThirdDownAttempts += asNumber(row.third_down_converted) + asNumber(row.third_down_failed); stat.opponentThirdDownConversions += asNumber(row.third_down_converted);
