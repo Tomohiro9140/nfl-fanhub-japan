@@ -9,6 +9,7 @@ import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
 import { receiveOfficialFeedAgentHandler, refreshOfficialFeedHandler } from "../officialFeedScheduler";
+import { refreshFieldlineSeasonHandler } from "../fieldlineScheduler";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -39,6 +40,7 @@ async function startServer() {
   registerOAuthRoutes(app);
   app.post("/api/scheduled/official-feed-refresh", refreshOfficialFeedHandler);
   app.post("/api/scheduled/official-feed-agent", receiveOfficialFeedAgentHandler);
+  app.post("/api/scheduled/fieldline-season-refresh", refreshFieldlineSeasonHandler);
   // tRPC API
   app.use(
     "/api/trpc",

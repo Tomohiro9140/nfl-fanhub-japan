@@ -7,11 +7,12 @@ import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import Atlas from "./pages/Atlas";
 import Fieldline from "./pages/Fieldline";
+import FieldlineAdmin from "./pages/FieldlineAdmin";
 import Home from "./pages/Home";
 
 function Router() {
   // make sure to consider if you need authentication for certain routes
-  return <Switch><Route path="/" component={Home} /><Route path="/atlas" component={Atlas} /><Route path="/atlas/" component={Atlas} /><Route path="/fieldline" component={Fieldline} /><Route path="/fieldline/" component={Fieldline} /><Route path="/404" component={NotFound} /><Route component={NotFound} /></Switch>;
+  return <Switch><Route path="/" component={Home} /><Route path="/atlas" component={Atlas} /><Route path="/atlas/" component={Atlas} /><Route path="/fieldline/admin" component={FieldlineAdmin} /><Route path="/fieldline/admin/" component={FieldlineAdmin} /><Route path="/fieldline" component={Fieldline} /><Route path="/fieldline/" component={Fieldline} /><Route path="/404" component={NotFound} /><Route component={NotFound} /></Switch>;
 }
 
 export default function App() {

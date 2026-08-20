@@ -428,3 +428,9 @@
 - [x] UTC 12時グループ（LAC、LAR、LV、MIA、MIN、NE、NO、NYG）の公式RSSを検証する。
 - [x] 検証済み公式RSS 21件をteam_officialとしてofficial_feed_itemsへUPSERTする。
 - [x] NFL公式負傷者ページの対象記事を公開日時と本文で照合し、2026年の検証可能な新規項目がないため保存を見送る。
+- [x] 参照タスクのFIELDLINE完成版について、画面・機能・データ表示・操作を正確に取得する。
+- [x] 元FIELDLINEのソース・依存関係・静的資産・データ経路を現行FAN/HUBと比較する。
+- [x] 元FIELDLINEのUI、ロジック、データ表示を省略せずFAN/HUB内へネイティブ移植する。
+- [x] FIELDLINEをFAN/HUBのルーティングと共通ナビゲーションへ統合する。
+- [x] 元FIELDLINEと移植版のモバイル画面、操作、数値表示を照合し、回帰テスト・型チェック・本番ビルドを実施する。
+- [ ] 公開後にFIELDLINE 2025週次nflverse更新Heartbeatを作成し、永続タスクIDを保存する。

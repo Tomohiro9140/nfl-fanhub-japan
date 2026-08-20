@@ -1,13 +1,27 @@
 import { COOKIE_NAME } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
-import { publicProcedure, router } from "./_core/trpc";
+import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
 import { getFreshOfficialTeamFeed, refreshOfficialTeamFeed } from "./officialFeeds";
 import { getOfficialFeedItemById, getOfficialLeagueCalendar, getOfficialLeagueDashboardSummary, getOfficialTeamSnapshot, saveOfficialFeedEnglishSummary, saveOfficialFeedJapaneseSummary } from "./db";
 import { generateOfficialNewsEnglishSummary, generateOfficialNewsJapaneseSummary } from "./newsJapaneseSummary";
 import { NEWS_SUMMARIES_ENABLED } from "@shared/newsSummaryFeature";
 import { z } from "zod";
+import { TRPCError } from "@trpc/server";
 import { atlasAwards, atlasBrowse, atlasCareer, atlasContracts, atlasFilters, atlasProfile, atlasSearch, atlasStats } from "./atlasData";
+import { compareFieldlineSelections, FIELDLINE_TEAM_CODES, FIELDLINE_TEAM_NAMES, getFieldlineFreshness, getFieldlineRefreshSchedules, getFieldlineSeasons, getFieldlineWeeks, importFieldlineSeasonFromNflverse } from "./fieldlineData";
+
+const fieldlineVenueSchema = z.enum(["all", "home", "away"]);
+const fieldlineSelectionSchema = z.object({
+  season: z.number().int().min(2025).max(2100),
+  team: z.string().length(2).or(z.string().length(3)),
+  weeks: z.array(z.number().int().min(1).max(18)).min(1).max(18),
+  venue: fieldlineVenueSchema.default("all"),
+});
+const fieldlineAdminProcedure = protectedProcedure.use(async ({ ctx, next }) => {
+  if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN", message: "管理者権限が必要です。" });
+  return next({ ctx });
+});
 
 export const appRouter = router({
     // if you need to use socket.io, read and register route in server/_core/index.ts, all api should start with '/api/' so that the gateway can route correctly
@@ -81,6 +95,21 @@ export const appRouter = router({
     awards: publicProcedure.input(z.object({ playerId: z.string().min(1) })).query(({ input }) => atlasAwards(input.playerId)),
     stats: publicProcedure.input(z.object({ playerId: z.string().min(1) })).query(({ input }) => atlasStats(input.playerId)),
     contracts: publicProcedure.input(z.object({ playerId: z.string().min(1) })).query(({ input }) => atlasContracts(input.playerId)),
+  }),
+  fieldline: router({
+    teams: publicProcedure.query(() => FIELDLINE_TEAM_CODES.map(code => ({ code, name: FIELDLINE_TEAM_NAMES[code] }))),
+    seasons: publicProcedure.query(getFieldlineSeasons),
+    freshness: publicProcedure.input(z.object({ seasons: z.array(z.number().int().min(2025).max(2100)).min(1).max(2) })).query(({ input }) => getFieldlineFreshness(input.seasons)),
+    weeks: publicProcedure.input(z.object({ season: z.number().int().min(2025).max(2100), team: z.string().length(2).or(z.string().length(3)), venue: fieldlineVenueSchema.default("all") })).query(({ input }) => getFieldlineWeeks(input.season, input.team, input.venue)),
+    compare: publicProcedure.input(z.object({ left: fieldlineSelectionSchema, right: fieldlineSelectionSchema })).query(async ({ input }) => {
+      const [left, right] = await compareFieldlineSelections([input.left, input.right]);
+      return { left, right };
+    }),
+  }),
+  fieldlineAdmin: router({
+    imports: fieldlineAdminProcedure.query(getFieldlineSeasons),
+    refreshSchedules: fieldlineAdminProcedure.query(getFieldlineRefreshSchedules),
+    importSeason: fieldlineAdminProcedure.input(z.object({ season: z.number().int().min(2025).max(2100) })).mutation(({ input, ctx }) => importFieldlineSeasonFromNflverse(input.season, ctx.user.openId)),
   }),
 });
 

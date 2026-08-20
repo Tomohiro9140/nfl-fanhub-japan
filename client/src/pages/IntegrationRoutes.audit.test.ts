@@ -6,16 +6,17 @@ const appSource = readFileSync(resolve(process.cwd(), "client/src/App.tsx"), "ut
 const homeSource = readFileSync(resolve(process.cwd(), "client/src/pages/Home.tsx"), "utf8");
 const atlasSource = readFileSync(resolve(process.cwd(), "client/src/pages/Atlas.tsx"), "utf8");
 const fieldlineSource = readFileSync(resolve(process.cwd(), "client/src/pages/Fieldline.tsx"), "utf8");
+const fieldlineAdminSource = readFileSync(resolve(process.cwd(), "client/src/pages/FieldlineAdmin.tsx"), "utf8");
+const fieldlineDataSource = readFileSync(resolve(process.cwd(), "server/fieldlineData.ts"), "utf8");
 const embeddedNavSource = readFileSync(resolve(process.cwd(), "client/src/components/EmbeddedAppNav.tsx"), "utf8");
 const indexHtml = readFileSync(resolve(process.cwd(), "client/index.html"), "utf8");
 
 describe("ATLAS and FIELDLINE integration routes", () => {
-  it("registers both public reference routes and renders the native ATLAS route without restoring the broken iframe flow", () => {
+  it("registers native ATLAS and FIELDLINE routes without restoring either external redirect flow", () => {
     expect(appSource).toContain('path="/atlas"');
     expect(appSource).toContain('path="/fieldline"');
     expect(homeSource).toContain('ATLAS');
     expect(homeSource).toContain('FIELDLINE');
-    expect(fieldlineSource).toContain('https://nflteamstats-4q87cnse.manus.space/');
     expect(atlasSource).toContain('atlas-shell');
     expect(atlasSource).toContain('atlas-display');
     expect(fieldlineSource).toContain('EmbeddedAppNav current="FIELDLINE"');
@@ -37,12 +38,24 @@ describe("ATLAS and FIELDLINE integration routes", () => {
     expect(atlasSource).toContain('NFL PLAYER');
     expect(atlasSource).not.toContain('window.location.replace');
     expect(atlasSource).not.toContain('nflplayeratl-tus9mrqw.manus.space');
-    expect(fieldlineSource).toContain('window.location.replace(originalFieldlineUrl)');
-    expect(fieldlineSource).toContain('OPEN FIELDLINE DIRECTLY');
+    expect(fieldlineSource).toContain('trpc.fieldline.compare.useQuery');
+    expect(fieldlineSource).toContain('trpc.fieldline.weeks.useQuery');
+    expect(fieldlineSource).toContain('LEFT COMPARISON');
+    expect(fieldlineSource).toContain('RIGHT COMPARISON');
+    expect(fieldlineSource).toContain('OFFENSE');
+    expect(fieldlineSource).toContain('SPECIAL TEAMS');
+    expect(fieldlineSource).toContain('EmbeddedAppNav current="FIELDLINE"');
+    expect(fieldlineDataSource).toContain('importFieldlineSeasonFromNflverse');
+    expect(fieldlineDataSource).toContain('compareFieldlineSelections');
+    expect(fieldlineDataSource).toContain('fieldlinePbpSource');
+    expect(fieldlineAdminSource).toContain('trpc.fieldlineAdmin.importSeason');
+    expect(appSource).toContain('path="/fieldline/admin"');
     expect(atlasSource).not.toContain('<iframe');
     expect(fieldlineSource).not.toContain('<iframe');
     expect(indexHtml).not.toContain('nflplayeratl-tus9mrqw.manus.space');
-    expect(indexHtml).toContain('rel="preconnect" href="https://nflteamstats-4q87cnse.manus.space"');
+    expect(indexHtml).not.toContain('nflteamstats-4q87cnse.manus.space');
+    expect(fieldlineSource).not.toContain('nflteamstats-4q87cnse.manus.space');
+    expect(fieldlineSource).not.toContain('window.location.replace');
     expect(embeddedNavSource).toContain('Menu');
     expect(embeddedNavSource).toContain('HOME');
     expect(embeddedNavSource).toContain('ATLAS');

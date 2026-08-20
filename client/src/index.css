@@ -63,6 +63,7 @@
   .atlas-soft-grid:has(input:not(:placeholder-shown)) > .atlas-shell > header { position: static; transform: none; margin-bottom: 1rem; }
   .atlas-soft-grid:has(input:not(:placeholder-shown)) > .atlas-shell > footer { position: static; margin-top: 1.5rem; }
   .atlas-view p:empty { display: none; }
+  .fieldline-hub-surface { background-color: #f7f5f0; background-image: radial-gradient(circle at 8% -10%, rgba(232, 93, 42, .10), transparent 26rem), radial-gradient(circle at 95% 14%, rgba(16, 33, 58, .06), transparent 28rem); }
 }
 
 @media (max-width: 639px) {
