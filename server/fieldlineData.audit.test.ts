@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { FIELDLINE_TEAM_CODES, FIELDLINE_TEAM_NAMES, fieldlinePbpSource, fieldlineTotalYardsForPlay } from "./fieldlineData";
+import { FIELDLINE_TEAM_CODES, FIELDLINE_TEAM_NAMES, fieldlineNetPassingYardsForPlay, fieldlinePbpSource, fieldlineTotalYardsForPlay } from "./fieldlineData";
 
 describe("FIELDLINE canonical data contract", () => {
   it("retains every NFL club and a stable nflverse source URL", () => {
@@ -20,5 +20,11 @@ describe("FIELDLINE canonical data contract", () => {
     expect(fieldlineTotalYardsForPlay({ passing_yards: 0, rushing_yards: -3, yards_gained: -3, sack: 0 })).toBe(-3);
     expect(fieldlineTotalYardsForPlay({ passing_yards: 0, rushing_yards: 0, yards_gained: -9, sack: 1 })).toBe(-9);
     expect(fieldlineTotalYardsForPlay({ passing_yards: 0, rushing_yards: 0, yards_gained: 17, sack: 0 })).toBe(0);
+    expect(fieldlineTotalYardsForPlay({ passing_yards: 0, rushing_yards: 0, lateral_rushing_yards: 3, yards_gained: 3, sack: 0 })).toBe(3);
+  });
+
+  it("uses net passing yards, matching Pro Football Reference's passing-yards convention", () => {
+    expect(fieldlineNetPassingYardsForPlay({ passing_yards: 27, rushing_yards: 0, yards_gained: 27, sack: 0 })).toBe(27);
+    expect(fieldlineNetPassingYardsForPlay({ passing_yards: 0, rushing_yards: 0, yards_gained: -8, sack: 1 })).toBe(-8);
   });
 });

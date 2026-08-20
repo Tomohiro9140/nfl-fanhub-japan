@@ -67,9 +67,13 @@ const teamKnown = (team: string) => team in FIELDLINE_TEAM_NAMES;
  * it also carries return and other non-offensive yardage that the original
  * pass + rush - sack_yards calculation deliberately excluded.
  */
-export function fieldlineTotalYardsForPlay(row: PbpRow) {
+export function fieldlineNetPassingYardsForPlay(row: PbpRow) {
   const sackLoss = asNumber(row.sack) === 1 ? Math.max(0, -asNumber(row.yards_gained)) : 0;
-  return asNumber(row.passing_yards) + asNumber(row.rushing_yards) - sackLoss;
+  return asNumber(row.passing_yards) - sackLoss;
+}
+
+export function fieldlineTotalYardsForPlay(row: PbpRow) {
+  return fieldlineNetPassingYardsForPlay(row) + asNumber(row.rushing_yards) + asNumber(row.lateral_rushing_yards);
 }
 
 function emptyAggregate(season: number, team: string, week: number): Aggregate {
@@ -259,7 +263,7 @@ export async function importFieldlineSeasonFromNflverse(season: number, imported
   const sourceUrl = fieldlinePbpSource(season);
   await db.insert(seasonImports).values({ season, status: "importing", sourceUrl, importedBy: importedBy ?? null, gamesImported: 0, rowsImported: 0, errorMessage: null }).onDuplicateKeyUpdate({ set: { status: "importing", sourceUrl, importedBy: importedBy ?? null, errorMessage: null } });
   try {
-    const columns = ["season_type", "week", "game_id", "home_team", "away_team", "posteam", "defteam", "penalty_team", "fixed_drive", "fixed_drive_result", "drive_inside20", "total_home_score", "total_away_score", "epa", "yards_gained", "passing_yards", "rushing_yards", "pass_attempt", "complete_pass", "pass_touchdown", "interception", "sack", "fumble_lost", "third_down_converted", "third_down_failed", "two_point_attempt", "field_goal_attempt", "field_goal_result", "extra_point_attempt", "extra_point_result", "punt_attempt", "punt_inside_twenty", "penalty", "penalty_yards"];
+    const columns = ["season_type", "week", "game_id", "home_team", "away_team", "posteam", "defteam", "penalty_team", "fixed_drive", "fixed_drive_result", "drive_inside20", "total_home_score", "total_away_score", "epa", "yards_gained", "passing_yards", "rushing_yards", "lateral_rushing_yards", "pass_attempt", "complete_pass", "pass_touchdown", "interception", "sack", "fumble_lost", "third_down_converted", "third_down_failed", "two_point_attempt", "field_goal_attempt", "field_goal_result", "extra_point_attempt", "extra_point_result", "punt_attempt", "punt_inside_twenty", "penalty", "penalty_yards"];
     const file = await asyncBufferFromUrl({ url: sourceUrl });
     const rawRows = await parquetReadObjects({ file, columns }) as PbpRow[];
     const pbp = rawRows.filter(row => asString(row.season_type) === "REG" && asNumber(row.week) >= 1 && asNumber(row.week) <= 18);
@@ -277,9 +281,9 @@ export async function importFieldlineSeasonFromNflverse(season: number, imported
         game.homeScore = Math.max(game.homeScore, asNumber(row.total_home_score)); game.awayScore = Math.max(game.awayScore, asNumber(row.total_away_score)); gameScores.set(gameId, game);
       }
       if (teamKnown(offense)) {
-        const stat = get(offense, week); const passYards = asNumber(row.passing_yards); const rushYards = asNumber(row.rushing_yards); const totalYards = fieldlineTotalYardsForPlay(row);
+        const stat = get(offense, week); const netPassYards = fieldlineNetPassingYardsForPlay(row); const rushYards = asNumber(row.rushing_yards) + asNumber(row.lateral_rushing_yards); const totalYards = fieldlineTotalYardsForPlay(row);
         if (asNumber(row.two_point_attempt) !== 1) {
-          stat.passYardsFor += passYards; stat.rushYardsFor += rushYards; stat.yardsFor += totalYards;
+          stat.passYardsFor += netPassYards; stat.rushYardsFor += rushYards; stat.yardsFor += totalYards;
           const epa = asFiniteNumber(row.epa); if (epa !== null) { stat.offenseEpa += epa; stat.offenseEpaPlays += 1; }
           stat.passAttempts += asNumber(row.pass_attempt) - asNumber(row.sack); stat.passCompletions += asNumber(row.complete_pass); stat.passTouchdowns += asNumber(row.pass_touchdown); stat.interceptionsThrown += asNumber(row.interception); stat.sacksAllowed += asNumber(row.sack);
           stat.thirdDownAttempts += asNumber(row.third_down_converted) + asNumber(row.third_down_failed); stat.thirdDownConversions += asNumber(row.third_down_converted);
@@ -292,9 +296,9 @@ export async function importFieldlineSeasonFromNflverse(season: number, imported
         drive.entered ||= asNumber(row.drive_inside20) === 1; const result = asString(row.fixed_drive_result); if (result) drive.result = result; redZoneDrives.set(driveId, drive);
       }
       if (teamKnown(defense)) {
-        const stat = get(defense, week); const passYards = asNumber(row.passing_yards); const rushYards = asNumber(row.rushing_yards); const totalYards = fieldlineTotalYardsForPlay(row);
+        const stat = get(defense, week); const netPassYards = fieldlineNetPassingYardsForPlay(row); const rushYards = asNumber(row.rushing_yards) + asNumber(row.lateral_rushing_yards); const totalYards = fieldlineTotalYardsForPlay(row);
         if (asNumber(row.two_point_attempt) !== 1) {
-          stat.yardsAgainst += totalYards; stat.passYardsAgainst += passYards; stat.rushYardsAgainst += rushYards;
+          stat.yardsAgainst += totalYards; stat.passYardsAgainst += netPassYards; stat.rushYardsAgainst += rushYards;
           const epa = asFiniteNumber(row.epa); if (epa !== null) { stat.defenseEpaAllowed += epa; stat.defenseEpaPlays += 1; }
           stat.sacksDefense += asNumber(row.sack); stat.interceptionsDefense += asNumber(row.interception); stat.turnovers += asNumber(row.interception) + asNumber(row.fumble_lost);
           stat.opponentThirdDownAttempts += asNumber(row.third_down_converted) + asNumber(row.third_down_failed); stat.opponentThirdDownConversions += asNumber(row.third_down_converted);

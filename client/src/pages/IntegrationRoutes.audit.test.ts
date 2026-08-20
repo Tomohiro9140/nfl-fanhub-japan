@@ -8,7 +8,6 @@ const atlasSource = readFileSync(resolve(process.cwd(), "client/src/pages/Atlas.
 const fieldlineSource = readFileSync(resolve(process.cwd(), "client/src/pages/Fieldline.tsx"), "utf8");
 const fieldlineAdminSource = readFileSync(resolve(process.cwd(), "client/src/pages/FieldlineAdmin.tsx"), "utf8");
 const fieldlineDataSource = readFileSync(resolve(process.cwd(), "server/fieldlineData.ts"), "utf8");
-const globalStyles = readFileSync(resolve(process.cwd(), "client/src/index.css"), "utf8");
 const embeddedNavSource = readFileSync(resolve(process.cwd(), "client/src/components/EmbeddedAppNav.tsx"), "utf8");
 const indexHtml = readFileSync(resolve(process.cwd(), "client/index.html"), "utf8");
 
@@ -57,7 +56,7 @@ describe("ATLAS and FIELDLINE integration routes", () => {
     expect(indexHtml).not.toContain('nflteamstats-4q87cnse.manus.space');
     expect(fieldlineSource).not.toContain('nflteamstats-4q87cnse.manus.space');
     expect(fieldlineSource).not.toContain('window.location.replace');
-    expect(globalStyles).toContain('.fieldline-hub-surface > main.container { padding-inline: 1rem; }');
+    expect(fieldlineSource).toContain('container mx-auto max-w-6xl px-4 pt-1 pb-6 sm:px-6 sm:pt-2 sm:pb-8');
     expect(embeddedNavSource).toContain('Menu');
     expect(embeddedNavSource).toContain('HOME');
     expect(embeddedNavSource).toContain('ATLAS');
