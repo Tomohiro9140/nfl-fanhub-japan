@@ -53,8 +53,14 @@
   .atlas-display { font-family: "DM Serif Display", "Noto Sans JP", serif; }
   .atlas-shell { width: min(100%, 32rem); margin-inline: auto; }
   .atlas-soft-grid { background-image: linear-gradient(rgba(15, 23, 42, .012) 1px, transparent 1px), linear-gradient(90deg, rgba(15, 23, 42, .012) 1px, transparent 1px); background-size: 24px 24px; }
-  .atlas-soft-grid > .atlas-shell { display: flex; min-height: 100svh; flex-direction: column; justify-content: center; }
-  .atlas-soft-grid:has(input:not(:placeholder-shown)) > .atlas-shell { justify-content: flex-start; }
+  .atlas-soft-grid > .atlas-shell { position: relative; display: flex; min-height: 100svh; flex-direction: column; justify-content: center; }
+  .atlas-soft-grid > .atlas-shell > header { position: absolute; inset-inline: 0; top: 25svh; transform: translateY(-50%); }
+  .atlas-soft-grid > .atlas-shell > header > div > .atlas-display { display: none !important; }
+  .atlas-soft-grid > .atlas-shell > header > div > div { text-align: center; }
+  .atlas-soft-grid > .atlas-shell > footer { position: absolute; inset-inline: 1rem; bottom: 1.25rem; }
+  .atlas-soft-grid:has(input:not(:placeholder-shown)) > .atlas-shell { justify-content: flex-start; padding-top: 7rem; }
+  .atlas-soft-grid:has(input:not(:placeholder-shown)) > .atlas-shell > header { position: static; transform: none; margin-bottom: 1rem; }
+  .atlas-soft-grid:has(input:not(:placeholder-shown)) > .atlas-shell > footer { position: static; margin-top: 1.5rem; }
   .atlas-view p:empty { display: none; }
 }
 
