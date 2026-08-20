@@ -433,4 +433,4 @@
 - [x] 元FIELDLINEのUI、ロジック、データ表示を省略せずFAN/HUB内へネイティブ移植する。
 - [x] FIELDLINEをFAN/HUBのルーティングと共通ナビゲーションへ統合する。
 - [x] 元FIELDLINEと移植版のモバイル画面、操作、数値表示を照合し、回帰テスト・型チェック・本番ビルドを実施する。
-- [ ] 公開後にFIELDLINE 2025週次nflverse更新Heartbeatを作成し、永続タスクIDを保存する。
+- [x] 公開後にFIELDLINE 2025週次nflverse更新Heartbeatを作成し、永続タスクIDを保存する。
