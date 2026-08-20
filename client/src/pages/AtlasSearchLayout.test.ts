@@ -8,6 +8,7 @@ describe("ATLAS検索トップのレイアウト", () => {
   it("旧ロゴを非表示にし、タイトルを画面上部と中央の中間へ置く", () => {
     expect(atlasStyles).toContain(".atlas-soft-grid > .atlas-shell > header { position: absolute; inset-inline: 0; top: 25svh; transform: translateY(-50%); }");
     expect(atlasStyles).toContain(".atlas-soft-grid > .atlas-shell > header > div > .atlas-display { display: none !important; }");
+    expect(atlasStyles).toContain('font-family: "Barlow Condensed", "Noto Sans JP", sans-serif !important; font-size: clamp(4.25rem, 21vw, 5.5rem) !important; font-style: italic !important; font-weight: 800 !important;');
   });
 
   it("検索フォーム本体を縦中央に置き、入力後は結果表示用に上へ展開する", () => {
