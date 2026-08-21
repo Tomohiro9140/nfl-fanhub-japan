@@ -134,10 +134,20 @@ describe("compact mobile result and schedule UI", () => {
       favorite,
       loading: false,
       hasWatchedTicket: true,
+      canRestoreLastGame: true,
       onRestoreLastGame: () => undefined,
       snapshot: { ...snapshot, gameDayStatus: undefined, nextGame: { ...snapshot.nextGame, gameState: null, awayScore: null, homeScore: null } },
     }));
     expect(nextGameMarkup).toContain("RETURN TO LAST GAME");
+    const cutoverMarkup = renderToStaticMarkup(createElement(OfficialGameTicket, {
+      favorite,
+      loading: false,
+      hasWatchedTicket: true,
+      canRestoreLastGame: false,
+      onRestoreLastGame: () => undefined,
+      snapshot: { ...snapshot, gameDayStatus: undefined, nextGame: { ...snapshot.nextGame, gameState: null, awayScore: null, homeScore: null } },
+    }));
+    expect(cutoverMarkup).not.toContain("RETURN TO LAST GAME");
   });
 
   it("keeps the availability-only PFT watch below official injury items, removes the result icon, and uses tighter result spacing", () => {

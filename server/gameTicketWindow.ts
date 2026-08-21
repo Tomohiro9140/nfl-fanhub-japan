@@ -43,7 +43,7 @@ export function selectGameTicketGame<T extends GameTicketCandidate>({
   /** Set only after the viewer explicitly asks to return to the previously watched final. */
   forceLastGame?: boolean;
 }) {
-  if (forceLastGame && latestCompletedGame) return latestCompletedGame;
+  if (forceLastGame && latestCompletedGame && isWithinJstReplayWindow(latestCompletedGame, now)) return latestCompletedGame;
   if (activeGame && !isOfficialFinal(activeGame)) return activeGame;
   if (!skipReplayWindow && latestCompletedGame && isWithinJstReplayWindow(latestCompletedGame, now)) return latestCompletedGame;
   return scheduledGame ?? activeGame ?? latestCompletedGame;

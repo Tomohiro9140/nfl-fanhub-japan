@@ -1,6 +1,6 @@
 import { and, asc, desc, eq, gt, gte, inArray, lt, sql } from "drizzle-orm";
 import { attachOfficialScore, findOfficialScoreForGame } from "./gameStatus";
-import { isOfficialFinal, selectGameTicketGame } from "./gameTicketWindow";
+import { isOfficialFinal, isWithinJstReplayWindow, selectGameTicketGame } from "./gameTicketWindow";
 import { selectRelevantCalendarGames } from "./leagueDashboardPayload";
 import { isNull } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
@@ -277,6 +277,7 @@ export async function getOfficialTeamSnapshot(teamCode: string, skipGameUrl?: st
   const completedScheduleCandidates = recentWithScores.filter((game): game is NonNullable<typeof game> => Boolean(game) && isOfficialFinal(game));
   const latestCompletedGame = [...completedScheduleCandidates, ...scoreboardCompletedCandidates]
     .sort((left, right) => right.kickoffAt.getTime() - left.kickoffAt.getTime())[0];
+  const canRestoreLastGame = Boolean(latestCompletedGame && isWithinJstReplayWindow(latestCompletedGame, now));
   const nextGame = selectGameTicketGame({ now, activeGame: activeWithScore, latestCompletedGame, scheduledGame: scheduledWithScore, skipReplayWindow: Boolean(skipGameUrl && latestCompletedGame?.sourceUrl === skipGameUrl), forceLastGame });
   const rosterCounts = Array.from(roster.reduce((counts, entry) => {
     counts.set(entry.rosterStatus, (counts.get(entry.rosterStatus) ?? 0) + 1);
@@ -297,7 +298,7 @@ export async function getOfficialTeamSnapshot(teamCode: string, skipGameUrl?: st
     sourceUrl: nextGame.sourceUrl,
     fetchedAt: nextGame.fetchedAt,
   } : undefined;
-  return { nextGame, gameDayStatus, roster, rosterCounts, injuries, rosterMoves, news, externalInsights, sources: { schedule: nextGame?.sourceUrl ?? null, roster: roster[0]?.sourceUrl ?? null, injury: injuries[0]?.sourceUrl ?? null, moves: rosterMoves[0]?.sourceUrl ?? null, gameDay: nextGame?.sourceUrl ?? null }, lastUpdatedAt };
+  return { nextGame, gameDayStatus, canRestoreLastGame, roster, rosterCounts, injuries, rosterMoves, news, externalInsights, sources: { schedule: nextGame?.sourceUrl ?? null, roster: roster[0]?.sourceUrl ?? null, injury: injuries[0]?.sourceUrl ?? null, moves: rosterMoves[0]?.sourceUrl ?? null, gameDay: nextGame?.sourceUrl ?? null }, lastUpdatedAt };
 }
 
 /** Avoids external score polling unless an official game is underway or has just ended. */

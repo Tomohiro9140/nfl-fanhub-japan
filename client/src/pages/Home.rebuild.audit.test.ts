@@ -76,6 +76,7 @@ describe("mobile team page information hierarchy", () => {
     expect(source).not.toContain("視聴済みを解除しました。LAST GAMEへ戻します。");
     expect(source).not.toContain("toast(");
     expect(source).toContain("setForceLastGame(true)");
+    expect(source).toContain("!snapshot.canRestoreLastGame");
     expect(source).not.toContain("localStorage.removeItem(`${watchedTicketStorageKey}:${favorite.code}`)");
   });
 });
