@@ -1,10 +1,19 @@
 import json
 import sys
+from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 from pathlib import Path
 
 
 TEAM_BY_DOMAIN = {
+    "azcardinals.com": ("ARI", "Arizona Cardinals"),
+    "atlantafalcons.com": ("ATL", "Atlanta Falcons"),
+    "baltimoreravens.com": ("BAL", "Baltimore Ravens"),
+    "buffalobills.com": ("BUF", "Buffalo Bills"),
+    "panthers.com": ("CAR", "Carolina Panthers"),
+    "chicagobears.com": ("CHI", "Chicago Bears"),
+    "bengals.com": ("CIN", "Cincinnati Bengals"),
+    "clevelandbrowns.com": ("CLE", "Cleveland Browns"),
     "newyorkjets.com": ("NYJ", "New York Jets"),
     "philadelphiaeagles.com": ("PHI", "Philadelphia Eagles"),
     "steelers.com": ("PIT", "Pittsburgh Steelers"),
@@ -21,7 +30,9 @@ def quote(value):
 
 
 def published_at(value):
-    return parsedate_to_datetime(value).astimezone().strftime("%Y-%m-%d %H:%M:%S")
+    if "T" in value and value.endswith("Z"):
+        return datetime.fromisoformat(value.replace("Z", "+00:00")).astimezone(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+    return parsedate_to_datetime(value).astimezone(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
 
 
 
