@@ -1,8 +1,10 @@
 import json
 import sys
+import re
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 from pathlib import Path
+from urllib.parse import urlparse
 
 
 TEAM_BY_DOMAIN = {
@@ -30,7 +32,17 @@ TEAM_BY_DOMAIN = {
     "buccaneers.com": ("TB", "Tampa Bay Buccaneers"),
     "titansonline.com": ("TEN", "Tennessee Titans"),
     "commanders.com": ("WAS", "Washington Commanders"),
+    "chargers.com": ("LAC", "Los Angeles Chargers"),
+    "therams.com": ("LAR", "Los Angeles Rams"),
+    "raiders.com": ("LV", "Las Vegas Raiders"),
+    "miamidolphins.com": ("MIA", "Miami Dolphins"),
+    "vikings.com": ("MIN", "Minnesota Vikings"),
+    "patriots.com": ("NE", "New England Patriots"),
+    "neworleanssaints.com": ("NO", "New Orleans Saints"),
+    "giants.com": ("NYG", "New York Giants"),
 }
+
+INJURY_PATTERN = re.compile(r"\b(?:injury|injured|questionable|doubtful|out|ir|pup|practice report)\b|故障|負傷", re.I)
 
 
 def quote(value):
@@ -48,18 +60,23 @@ if __name__ == "__main__":
     source = json.loads(Path(sys.argv[1]).read_text())
     rows = []
     for result in source["results"]:
-        domain = result["input"]
-        team_code, source_name = TEAM_BY_DOMAIN[domain]
         output = result["output"]
-        if not output["success"]:
+        input_value = result["input"]
+        rss_url = input_value.split("|", 1)[-1]
+        domain = urlparse(rss_url).netloc.removeprefix("www.")
+        if result.get("error") or output.get("failure_reason") or domain not in TEAM_BY_DOMAIN:
             continue
+        team_code, source_name = TEAM_BY_DOMAIN[domain]
+        if output.get("team_code") and output["team_code"] != team_code:
+            raise ValueError(f"Team code mismatch for {rss_url}")
         for item in json.loads(output["items_json"]):
             summary = item.get("summary", "")[:280]
             url = item["source_url"]
+            category = "injury" if INJURY_PATTERN.search(f"{item['title']} {summary}") else "news"
             row = "(" + ", ".join([
                 f"SHA2(CONCAT({quote(team_code + '|')}, {quote(url)}), 256)",
                 quote(team_code), quote("team_official"), quote(source_name), quote(url),
-                quote(item["title"]), quote(summary), quote(item["category"]), quote(published_at(item["published_at"])), "UTC_TIMESTAMP()",
+                quote(item["title"]), quote(summary), quote(category), quote(published_at(item["published_at"])), "UTC_TIMESTAMP()",
             ]) + ")"
             rows.append(row)
     sql = "INSERT INTO official_feed_items (external_id, team_code, source_kind, source_name, source_url, title, summary, category, published_at, fetched_at) VALUES\n"
