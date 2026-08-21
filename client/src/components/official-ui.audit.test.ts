@@ -39,6 +39,7 @@ describe("compact mobile result and schedule UI", () => {
       snapshot: { nextGame: { opponentCode: "CLE", homeAway: "away", seasonPhase: "preseason", weekLabel: "PRESEASON WEEK 2", kickoffAt, venue: null, broadcast: null, sourceUrl: "https://www.nfl.com/schedules", daznUrl: null, gameState: null, awayScore: null, homeScore: null }, roster: [], rosterCounts: [], injuries: [], news: [], sources: { schedule: null, roster: null, injury: null } },
     }));
     expect(markup).toContain("観戦する");
+    expect(markup).toContain("block sm:inline");
     expect(markup).not.toContain("APP / BROWSER");
     expect(markup).not.toContain("SPOILER SAFE");
     expect(markup).not.toContain("NFL OFFICIAL SCHEDULE");

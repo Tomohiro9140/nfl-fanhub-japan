@@ -219,7 +219,7 @@ export async function replaceExternalAvailabilityInsightsForSources(sourceUrls: 
   await upsertExternalAvailabilityInsights(items);
 }
 
-export async function getOfficialTeamSnapshot(teamCode: string, skipGameUrl?: string) {
+export async function getOfficialTeamSnapshot(teamCode: string, skipGameUrl?: string, forceLastGame = false) {
   const db = await getDb();
   if (!db) return { nextGame: undefined, roster: [], rosterCounts: [], injuries: [], news: [], sources: { schedule: null, roster: null, injury: null }, lastUpdatedAt: undefined };
   const now = new Date();
@@ -277,7 +277,7 @@ export async function getOfficialTeamSnapshot(teamCode: string, skipGameUrl?: st
   const completedScheduleCandidates = recentWithScores.filter((game): game is NonNullable<typeof game> => Boolean(game) && isOfficialFinal(game));
   const latestCompletedGame = [...completedScheduleCandidates, ...scoreboardCompletedCandidates]
     .sort((left, right) => right.kickoffAt.getTime() - left.kickoffAt.getTime())[0];
-  const nextGame = selectGameTicketGame({ now, activeGame: activeWithScore, latestCompletedGame, scheduledGame: scheduledWithScore, skipReplayWindow: Boolean(skipGameUrl && latestCompletedGame?.sourceUrl === skipGameUrl) });
+  const nextGame = selectGameTicketGame({ now, activeGame: activeWithScore, latestCompletedGame, scheduledGame: scheduledWithScore, skipReplayWindow: Boolean(skipGameUrl && latestCompletedGame?.sourceUrl === skipGameUrl), forceLastGame });
   const rosterCounts = Array.from(roster.reduce((counts, entry) => {
     counts.set(entry.rosterStatus, (counts.get(entry.rosterStatus) ?? 0) + 1);
     return counts;

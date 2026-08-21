@@ -55,6 +55,7 @@ export default function Home() {
   const [teamDialogOpen, setTeamDialogOpen] = useState(false);
   const [pickerConference, setPickerConference] = useState<"AFC" | "NFC">("AFC");
   const [watchedTicketUrl, setWatchedTicketUrl] = useState<string | null>(null);
+  const [forceLastGame, setForceLastGame] = useState(false);
   const [leagueSection, setLeagueSection] = useState<HTMLElement | null>(null);
   const leagueSectionRef = useCallback((element: HTMLElement | null) => setLeagueSection(element), []);
   const debugTeamCode = typeof window !== "undefined" && import.meta.env.DEV ? new URLSearchParams(window.location.search).get("teamDebug") : null;
@@ -62,7 +63,7 @@ export default function Home() {
     if (typeof window === "undefined") return nflTeams[0];
     return getTeamByCode(debugTeamCode) ?? getTeamByCode(window.localStorage.getItem(favoriteTeamStorageKey)) ?? nflTeams[0];
   });
-  const snapshotInput = useMemo(() => ({ teamCode: favorite.code, skipGameUrl: watchedTicketUrl ?? undefined }), [favorite.code, watchedTicketUrl]);
+  const snapshotInput = useMemo(() => ({ teamCode: favorite.code, skipGameUrl: watchedTicketUrl ?? undefined, forceLastGame: forceLastGame || undefined }), [favorite.code, watchedTicketUrl, forceLastGame]);
   const leagueCalendarInput = useMemo(() => ({ teamCode: favorite.code }), [favorite.code]);
   const shouldLoadLeagueCalendar = useNearViewport(leagueSection);
   const snapshotQuery = trpc.teamSnapshot.byTeam.useQuery(snapshotInput, { refetchInterval: 60 * 1000, staleTime: 45 * 1000, refetchOnWindowFocus: true, refetchOnReconnect: true, retry: 1 });
@@ -76,8 +77,9 @@ export default function Home() {
 
   useEffect(() => { if (!debugTeamCode) window.localStorage.setItem(favoriteTeamStorageKey, favorite.code); }, [debugTeamCode, favorite.code]);
   useEffect(() => {
-    if (debugTeamCode) { setWatchedTicketUrl(null); return; }
+    if (debugTeamCode) { setWatchedTicketUrl(null); setForceLastGame(false); return; }
     setWatchedTicketUrl(window.localStorage.getItem(`${watchedTicketStorageKey}:${favorite.code}`));
+    setForceLastGame(false);
   }, [debugTeamCode, favorite.code]);
 
   const toggleSpoiler = () => {
@@ -86,10 +88,10 @@ export default function Home() {
   const markTicketWatched = (gameSourceUrl: string) => {
     window.localStorage.setItem(`${watchedTicketStorageKey}:${favorite.code}`, gameSourceUrl);
     setWatchedTicketUrl(gameSourceUrl);
+    setForceLastGame(false);
   };
   const restoreLastGame = () => {
-    window.localStorage.removeItem(`${watchedTicketStorageKey}:${favorite.code}`);
-    setWatchedTicketUrl(null);
+    setForceLastGame(true);
   };
 
   return <div className="min-h-screen overflow-x-clip bg-[#f5f2ea] text-[#10213a] selection:bg-[#e85d2a] selection:text-white">

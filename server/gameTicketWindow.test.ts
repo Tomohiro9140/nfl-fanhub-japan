@@ -26,4 +26,9 @@ describe("JST replay window for Game Ticket", () => {
     const beforeCutoff = new Date("2026-08-18T20:59:59.000Z");
     expect(selectGameTicketGame({ now: beforeCutoff, latestCompletedGame: completed, scheduledGame: upcoming, skipReplayWindow: true })).toBe(upcoming);
   });
+
+  it("returns to the watched final when a viewer explicitly requests it", () => {
+    const afterCutoff = new Date("2026-08-18T21:00:00.000Z");
+    expect(selectGameTicketGame({ now: afterCutoff, latestCompletedGame: completed, scheduledGame: upcoming, skipReplayWindow: true, forceLastGame: true })).toBe(completed);
+  });
 });

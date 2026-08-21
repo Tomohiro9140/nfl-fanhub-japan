@@ -78,8 +78,8 @@ export const appRouter = router({
     }),
   }),
   teamSnapshot: router({
-    byTeam: publicProcedure.input(z.object({ teamCode: z.string().length(2).or(z.string().length(3)), skipGameUrl: z.string().url().optional() })).query(({ input }) => {
-      return getOfficialTeamSnapshot(input.teamCode.toUpperCase(), input.skipGameUrl);
+    byTeam: publicProcedure.input(z.object({ teamCode: z.string().length(2).or(z.string().length(3)), skipGameUrl: z.string().url().optional(), forceLastGame: z.boolean().optional() })).query(({ input }) => {
+      return getOfficialTeamSnapshot(input.teamCode.toUpperCase(), input.skipGameUrl, input.forceLastGame);
     }),
   }),
   leagueDashboard: router({

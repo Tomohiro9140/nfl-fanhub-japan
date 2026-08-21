@@ -75,5 +75,7 @@ describe("mobile team page information hierarchy", () => {
     expect(source).not.toContain("視聴済みにしました。次の未完了試合を表示します。");
     expect(source).not.toContain("視聴済みを解除しました。LAST GAMEへ戻します。");
     expect(source).not.toContain("toast(");
+    expect(source).toContain("setForceLastGame(true)");
+    expect(source).not.toContain("localStorage.removeItem(`${watchedTicketStorageKey}:${favorite.code}`)");
   });
 });
