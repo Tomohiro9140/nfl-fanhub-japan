@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { abbreviatedMatchup, getFavoriteSchedule, getNextSevenDayGames, seasonWeekLabel, type LeagueCalendarGame } from "./leagueCalendar";
+import { nflTeams } from "./nflTeams";
+import { abbreviatedMatchup, getFavoriteLatestResults, getFavoriteSchedule, getNextSevenDayGames, seasonWeekLabel, type LeagueCalendarGame } from "./leagueCalendar";
 
 const games: LeagueCalendarGame[] = [
   { id: 1, teamCode: "CLE", opponentCode: "BUF", homeAway: "home", seasonPhase: "preseason", weekLabel: "Week 2", kickoffAt: new Date("2026-08-22T17:00:00.000Z"), broadcast: null, sourceUrl: "https://nfl.com/schedules", daznUrl: null, gameState: null, awayScore: null, homeScore: null },
@@ -14,6 +15,28 @@ describe("league calendar presentation", () => {
     expect(bills).toHaveLength(2);
     expect(abbreviatedMatchup(bills[0]!)).toBe("BUF @ CLE");
     expect(abbreviatedMatchup(bills[1]!)).toBe("BUF @ PIT");
+  });
+
+  it("never falls back to other clubs when the selected team has no latest result", () => {
+    const results = [
+      { id: 1, awayTeamCode: "LV", homeTeamCode: "HOU" },
+      { id: 2, awayTeamCode: "BUF", homeTeamCode: "PIT" },
+    ];
+
+    expect(getFavoriteLatestResults(results, "MIA")).toEqual([]);
+    expect(getFavoriteLatestResults(results, "LV").map((game) => game.id)).toEqual([1]);
+  });
+
+  it("filters latest results to the selected club for all 32 teams", () => {
+    const results = nflTeams.map((team, index) => ({
+      id: index + 1,
+      awayTeamCode: team.code,
+      homeTeamCode: "NFL",
+    }));
+
+    for (const team of nflTeams) {
+      expect(getFavoriteLatestResults(results, team.code).map((game) => game.awayTeamCode)).toEqual([team.code]);
+    }
   });
 
   it("uses the official away club first with @ for either stored team perspective", () => {

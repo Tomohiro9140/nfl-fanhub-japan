@@ -10,12 +10,20 @@ type CalendarCandidate = {
  */
 export function selectRelevantCalendarGames<T extends CalendarCandidate>(games: T[], favoriteTeamCode: string, now: Date) {
   const windowEnd = now.getTime() + 7 * 24 * 60 * 60 * 1_000;
+  const japanDayParts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Tokyo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(now);
+  const japanDayValue = (type: "year" | "month" | "day") => Number(japanDayParts.find((part) => part.type === type)?.value);
+  const japanDayStart = Date.UTC(japanDayValue("year"), japanDayValue("month") - 1, japanDayValue("day")) - 9 * 60 * 60 * 1_000;
   const seen = new Set<string>();
   return games.filter((game) => {
     const kickoff = new Date(game.kickoffAt).getTime();
     const isFavoriteSchedule = game.teamCode === favoriteTeamCode || game.opponentCode === favoriteTeamCode;
-    const isUpcomingLeagueGame = kickoff >= now.getTime() && kickoff < windowEnd;
-    if (!isFavoriteSchedule && !isUpcomingLeagueGame) return false;
+    const isTodayOrUpcomingLeagueGame = kickoff >= japanDayStart && kickoff < windowEnd;
+    if (!isFavoriteSchedule && !isTodayOrUpcomingLeagueGame) return false;
     const key = `${new Date(game.kickoffAt).toISOString()}:${[game.teamCode, game.opponentCode].sort().join("-")}`;
     if (seen.has(key)) return false;
     seen.add(key);

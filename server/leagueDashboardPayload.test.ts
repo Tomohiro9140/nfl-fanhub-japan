@@ -17,4 +17,14 @@ describe("selectRelevantCalendarGames", () => {
       games[2],
     ]);
   });
+
+  it("keeps all clubs' games from earlier on the current Japan calendar day", () => {
+    const now = new Date("2026-08-21T06:00:00.000Z"); // 15:00 JST
+    const games = [
+      { teamCode: "LV", opponentCode: "HOU", kickoffAt: new Date("2026-08-20T17:00:00.000Z") }, // 02:00 JST
+      { teamCode: "DAL", opponentCode: "PHI", kickoffAt: new Date("2026-08-21T18:00:00.000Z") },
+    ];
+
+    expect(selectRelevantCalendarGames(games, "BUF", now)).toEqual(games);
+  });
 });

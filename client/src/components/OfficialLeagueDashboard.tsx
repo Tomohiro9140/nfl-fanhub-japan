@@ -1,7 +1,7 @@
 import { CalendarDays, ChevronRight, CircleAlert, ListOrdered, Trophy } from "lucide-react";
 import React, { useMemo, useState } from "react";
 import { nflTeams, officialTeamScheduleUrl, type FavoriteTeam } from "@/lib/nflTeams";
-import { abbreviatedMatchup, getFavoriteSchedule, getNextSevenDayGames, seasonWeekLabel, type LeagueCalendarGame } from "@/lib/leagueCalendar";
+import { abbreviatedMatchup, getFavoriteLatestResults, getFavoriteSchedule, getNextSevenDayGames, seasonWeekLabel, type LeagueCalendarGame } from "@/lib/leagueCalendar";
 import { daznWatchTarget } from "@/lib/daznWatch";
 import { hasIndividualOfficialHighlight } from "@/lib/nflHighlights";
 
@@ -30,8 +30,7 @@ function calendarDayLabel(value: Date) {
 
 export function OfficialLatestResults({ favorite, dashboard, loading, spoilerMode }: { favorite: FavoriteTeam; dashboard?: LeagueDashboard; loading: boolean; spoilerMode: boolean }) {
   const resultGames = useMemo(() => {
-    const favoriteGames = dashboard?.results.filter((game) => game.awayTeamCode === favorite.code || game.homeTeamCode === favorite.code) ?? [];
-    return (favoriteGames.length ? favoriteGames : dashboard?.results ?? []).slice(0, 3);
+    return getFavoriteLatestResults(dashboard?.results ?? [], favorite.code);
   }, [dashboard, favorite]);
   const footerHighlightGame = resultGames.find((game) => hasIndividualOfficialHighlight(game.nflHighlightUrl));
   const footerHighlightAway = footerHighlightGame ? nflTeams.find((team) => team.code === footerHighlightGame.awayTeamCode) : undefined;

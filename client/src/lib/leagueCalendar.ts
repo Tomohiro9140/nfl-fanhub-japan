@@ -27,6 +27,13 @@ export function getFavoriteSchedule(games: LeagueCalendarGame[], favoriteCode: s
     .sort((a, b) => new Date(a.kickoffAt).getTime() - new Date(b.kickoffAt).getTime());
 }
 
+/** Returns only the selected club's latest completed games; it must never fall back to league-wide results. */
+export function getFavoriteLatestResults<T extends { awayTeamCode: string; homeTeamCode: string }>(results: T[], favoriteCode: string) {
+  return results
+    .filter((game) => game.awayTeamCode === favoriteCode || game.homeTeamCode === favoriteCode)
+    .slice(0, 3);
+}
+
 /** Keeps every card on the current Japan calendar day while retaining the rolling seven-day future range. */
 export function getNextSevenDayGames(games: LeagueCalendarGame[], now: Date) {
   const dayParts = new Intl.DateTimeFormat("en-CA", {
