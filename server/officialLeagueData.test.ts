@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { officialStandingsUrl, parseNFLScoresPage, parseNFLStandingsPage } from "./officialLeagueData";
+import { officialPreseasonWeekScoresUrl, officialStandingsUrl, parseNFLScoresPage, parseNFLStandingsPage } from "./officialLeagueData";
 
 const standingsFixture = `<table><tr><td>Buffalo Bills</td><td>2</td><td>1</td><td>0</td><td>0.667</td><td>71</td><td>55</td></tr><tr><td>New York Jets</td><td>1</td><td>2</td><td>0</td><td>0.333</td><td>42</td><td>60</td></tr></table>`;
 const scoresFixture = `<section>PRESEASON WEEK 1 <a data-analytics="{&quot;gameState&quot;:&quot;FINAL&quot;,&quot;linkName&quot;:&quot;Panthers 14, Bills 29, FINAL, Saturday, August 15th&quot;}" href="/games/panthers-at-bills-2026-pre-1"></a></section>`;
@@ -7,6 +7,11 @@ const scoresFixture = `<section>PRESEASON WEEK 1 <a data-analytics="{&quot;gameS
 describe("official league dashboard parsers", () => {
   it("uses the official NFL standings URL", () => {
     expect(officialStandingsUrl(2026)).toBe("https://www.nfl.com/standings/league/2026/reg");
+  });
+
+  it("uses official NFL week-specific score pages for preseason backfill", () => {
+    expect(officialPreseasonWeekScoresUrl(2026, 1)).toBe("https://www.nfl.com/schedules/2026/by-week/preseason-week-1");
+    expect(officialPreseasonWeekScoresUrl(2026, 3)).toBe("https://www.nfl.com/schedules/2026/by-week/preseason-week-3");
   });
 
   it("parses official win-loss records and scoring totals", () => {

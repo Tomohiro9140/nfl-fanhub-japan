@@ -6,6 +6,14 @@ import { TEAM_NAMES } from "./officialTeamData";
 
 const officialScheduleUrl = "https://www.nfl.com/schedules";
 
+export function officialPreseasonWeekScoresUrl(season: number, week: number) {
+  return `https://www.nfl.com/schedules/${season}/by-week/preseason-week-${week}`;
+}
+
+function officialPreseasonScoreUrls(season: number) {
+  return [1, 2, 3].map((week) => officialPreseasonWeekScoresUrl(season, week));
+}
+
 function currentSeason() {
   const now = new Date();
   return now.getUTCMonth() < 2 ? now.getUTCFullYear() - 1 : now.getUTCFullYear();
@@ -104,9 +112,14 @@ export async function refreshOfficialScorePulse() {
 export async function refreshOfficialLeagueDashboard() {
   const season = currentSeason();
   const standingsUrl = officialStandingsUrl(season);
-  const [standingsHtml, scoresHtml] = await Promise.all([fetchOfficialHtml(standingsUrl), fetchOfficialHtml(officialScheduleUrl)]);
+  const scoreSourceUrls = [officialScheduleUrl, ...officialPreseasonScoreUrls(season)];
+  const [standingsHtml, ...scorePages] = await Promise.all([fetchOfficialHtml(standingsUrl), ...scoreSourceUrls.map((url) => fetchOfficialHtml(url))]);
   const standings = parseNFLStandingsPage(standingsHtml, season, standingsUrl);
-  const scores = parseNFLScoresPage(scoresHtml, season);
+  const scoresByExternalId = new Map<string, InsertOfficialScoreboardGame>();
+  scorePages.forEach((html, index) => {
+    for (const score of parseNFLScoresPage(html, season, scoreSourceUrls[index]!)) scoresByExternalId.set(score.externalId, score);
+  });
+  const scores = Array.from(scoresByExternalId.values());
   await upsertOfficialStandings(standings);
   await replaceOfficialScoreboardGames(season, scores);
   const highlights = await refreshOfficialGameHighlights();
