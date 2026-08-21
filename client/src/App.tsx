@@ -2,17 +2,23 @@
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/NotFound";
+import { lazy, Suspense } from "react";
 import { Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
-import Atlas from "./pages/Atlas";
-import Fieldline from "./pages/Fieldline";
-import FieldlineAdmin from "./pages/FieldlineAdmin";
 import Home from "./pages/Home";
+
+const Atlas = lazy(() => import("./pages/Atlas"));
+const Fieldline = lazy(() => import("./pages/Fieldline"));
+const FieldlineAdmin = lazy(() => import("./pages/FieldlineAdmin"));
+
+function RouteLoading() {
+  return <main className="grid min-h-screen place-items-center bg-[#f5f2ea] font-mono text-[10px] font-bold tracking-[.18em] text-[#526173]">LOADING…</main>;
+}
 
 function Router() {
   // make sure to consider if you need authentication for certain routes
-  return <Switch><Route path="/" component={Home} /><Route path="/atlas" component={Atlas} /><Route path="/atlas/" component={Atlas} /><Route path="/fieldline/admin" component={FieldlineAdmin} /><Route path="/fieldline/admin/" component={FieldlineAdmin} /><Route path="/fieldline" component={Fieldline} /><Route path="/fieldline/" component={Fieldline} /><Route path="/404" component={NotFound} /><Route component={NotFound} /></Switch>;
+  return <Suspense fallback={<RouteLoading />}><Switch><Route path="/" component={Home} /><Route path="/atlas" component={Atlas} /><Route path="/atlas/" component={Atlas} /><Route path="/fieldline/admin" component={FieldlineAdmin} /><Route path="/fieldline/admin/" component={FieldlineAdmin} /><Route path="/fieldline" component={Fieldline} /><Route path="/fieldline/" component={Fieldline} /><Route path="/404" component={NotFound} /><Route component={NotFound} /></Switch></Suspense>;
 }
 
 export default function App() {

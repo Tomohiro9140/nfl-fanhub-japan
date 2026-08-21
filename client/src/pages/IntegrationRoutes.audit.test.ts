@@ -15,6 +15,9 @@ describe("ATLAS and FIELDLINE integration routes", () => {
   it("registers native ATLAS and FIELDLINE routes without restoring either external redirect flow", () => {
     expect(appSource).toContain('path="/atlas"');
     expect(appSource).toContain('path="/fieldline"');
+    expect(appSource).toContain('lazy(() => import("./pages/Atlas"))');
+    expect(appSource).toContain('lazy(() => import("./pages/Fieldline"))');
+    expect(appSource).toContain("<Suspense fallback={<RouteLoading />}>");
     expect(homeSource).toContain('ATLAS');
     expect(homeSource).toContain('FIELDLINE');
     expect(atlasSource).toContain('atlas-shell');

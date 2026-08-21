@@ -3,7 +3,8 @@ import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
 import { getFreshOfficialTeamFeed, refreshOfficialTeamFeed } from "./officialFeeds";
-import { getOfficialFeedItemById, getOfficialLeagueCalendar, getOfficialLeagueDashboardSummary, getOfficialTeamSnapshot, saveOfficialFeedEnglishSummary, saveOfficialFeedJapaneseSummary } from "./db";
+import { getOfficialFeedItemById, saveOfficialFeedEnglishSummary, saveOfficialFeedJapaneseSummary } from "./db";
+import { getCachedOfficialLeagueCalendar, getCachedOfficialLeagueDashboardSummary, getCachedOfficialTeamSnapshot } from "./officialDashboardCache";
 import { generateOfficialNewsEnglishSummary, generateOfficialNewsJapaneseSummary } from "./newsJapaneseSummary";
 import { NEWS_SUMMARIES_ENABLED } from "@shared/newsSummaryFeature";
 import { z } from "zod";
@@ -79,12 +80,12 @@ export const appRouter = router({
   }),
   teamSnapshot: router({
     byTeam: publicProcedure.input(z.object({ teamCode: z.string().length(2).or(z.string().length(3)), skipGameUrl: z.string().url().optional(), forceLastGame: z.boolean().optional() })).query(({ input }) => {
-      return getOfficialTeamSnapshot(input.teamCode.toUpperCase(), input.skipGameUrl, input.forceLastGame);
+      return getCachedOfficialTeamSnapshot(input.teamCode, input.skipGameUrl, input.forceLastGame);
     }),
   }),
   leagueDashboard: router({
-    summary: publicProcedure.query(() => getOfficialLeagueDashboardSummary()),
-    calendar: publicProcedure.input(z.object({ teamCode: z.string().length(2).or(z.string().length(3)) })).query(({ input }) => getOfficialLeagueCalendar(input.teamCode.toUpperCase())),
+    summary: publicProcedure.query(() => getCachedOfficialLeagueDashboardSummary()),
+    calendar: publicProcedure.input(z.object({ teamCode: z.string().length(2).or(z.string().length(3)) })).query(({ input }) => getCachedOfficialLeagueCalendar(input.teamCode)),
   }),
   atlas: router({
     filters: publicProcedure.input(z.object({ team: z.string().min(2).optional() }).optional()).query(({ input }) => atlasFilters(input?.team)),
