@@ -23,7 +23,7 @@ describe("compact mobile result and schedule UI", () => {
     expect(markup).toContain("RESULT HIDDEN");
     expect(markup).toContain("PRESEASON WEEK 1");
     expect(markup).toContain("GAME DATE · 8/16(日) JST");
-    expect(markup).toContain("min-h-[10px]");
+    expect(markup).toContain("absolute bottom-full right-0 mb-1.5");
     const fallbackDashboard: LeagueDashboard = { ...dashboard, results: [{ ...dashboard.results[0]!, kickoffAt: null }] };
     const fallbackMarkup = renderToStaticMarkup(createElement(OfficialLatestResults, { favorite, dashboard: fallbackDashboard, loading: false, spoilerMode: true }));
     expect(fallbackMarkup).toContain("OFFICIAL DATE · 8/15(土)");
@@ -32,7 +32,7 @@ describe("compact mobile result and schedule UI", () => {
     expect(revealedMarkup).toContain("font-extrabold text-[#a84420]");
     expect(markup).not.toContain("font-extrabold text-[#a84420]");
     expect(revealedMarkup).toMatch(/>14<\/span><span> - <\/span><span[^>]*text-\[#a84420\][^>]*>29<\/span>/);
-    expect(revealedMarkup).toContain("py-2.5");
+    expect(revealedMarkup).toContain("py-7 pb-2.5");
     expect(revealedMarkup).toContain("leading-[1.25]");
     expect(revealedMarkup).not.toContain("memo-slip");
   });

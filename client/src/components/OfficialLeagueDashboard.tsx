@@ -68,15 +68,17 @@ export function OfficialLatestResults({ favorite, dashboard, loading, spoilerMod
               const hasExactKickoff = Boolean(game.kickoffAt);
               const resultMeta = [game.weekLabel ?? "OFFICIAL", spoilerMode ? "RESULT HIDDEN" : game.gameState !== "FINAL" ? game.gameState : null].filter(Boolean).join(" · ");
               return (
-                <div key={game.id} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 py-2.5">
+                <div key={game.id} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 py-7 pb-2.5">
                   <a href={game.gameUrl} target="_blank" rel="noreferrer" className="min-w-0 self-center text-[13px] leading-[1.25]">
                     <p className={`truncate ${awayWon ? "font-extrabold text-[#a84420]" : "font-bold"}`}>{away?.name ?? game.awayTeamCode}</p>
                     <p className={`mt-1 truncate ${homeWon ? "font-extrabold text-[#a84420]" : "font-bold"}`}>@ {home?.name ?? game.homeTeamCode}</p>
                   </a>
-                  <div className="min-w-[106px] self-center text-right">
+                  <div className="relative min-w-[106px] self-center text-right">
+                    <div className="absolute bottom-full right-0 mb-1.5 whitespace-nowrap text-right">
+                      {gameDate ? <p className="font-mono text-[8px] font-bold leading-[10px] tracking-[.08em] text-[#526173]">{hasExactKickoff ? "GAME DATE" : "OFFICIAL DATE"} · {gameDate}{hasExactKickoff ? " JST" : ""}</p> : null}
+                      <p className="font-mono text-[8px] font-bold leading-[10px] tracking-[.08em] text-[#64748b]">{resultMeta}</p>
+                    </div>
                     <p className="font-mono text-[26px] font-black leading-[.85] tracking-[-.06em]">{spoilerMode ? "—" : <><span className={awayWon ? "text-[#a84420]" : undefined}>{game.awayScore ?? "—"}</span><span> - </span><span className={homeWon ? "text-[#a84420]" : undefined}>{game.homeScore ?? "—"}</span></>}</p>
-                    {gameDate ? <p className="mt-1 font-mono text-[8px] font-bold leading-[10px] tracking-[.08em] text-[#526173]">{hasExactKickoff ? "GAME DATE" : "OFFICIAL DATE"} · {gameDate}{hasExactKickoff ? " JST" : ""}</p> : null}
-                    <p className="mt-1 min-h-[10px] font-mono text-[8px] font-bold leading-[10px] tracking-[.08em] text-[#64748b]">{resultMeta}</p>
                   </div>
                 </div>
               );
