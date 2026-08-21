@@ -3,6 +3,8 @@ export type GameTicketCandidate = {
   gameState: string | null;
   awayScore: number | null;
   homeScore: number | null;
+  seasonPhase?: "preseason" | "regular" | "postseason";
+  weekLabel?: string | null;
 };
 
 const JST_OFFSET_MS = 9 * 60 * 60 * 1_000;
@@ -23,6 +25,21 @@ export function isOfficialFinal(game?: Pick<GameTicketCandidate, "gameState">) {
 /** Keeps the latest officially final game until the following Wednesday at 06:00 JST for replay viewers. */
 export function isWithinJstReplayWindow(game: Pick<GameTicketCandidate, "kickoffAt" | "gameState">, now: Date) {
   return isOfficialFinal(game) && new Date(game.kickoffAt).getTime() >= latestWednesdaySixJst(now).getTime();
+}
+
+function regularWeekNumber(game?: Pick<GameTicketCandidate, "seasonPhase" | "weekLabel">) {
+  if (game?.seasonPhase !== "regular") return null;
+  const week = game.weekLabel?.match(/^WEEK\s+(\d+)$/i)?.[1];
+  return week ? Number(week) : null;
+}
+
+/** Identifies the intervening regular-season week only after the prior game's replay window has closed. */
+export function getRegularSeasonByeWeek<T extends GameTicketCandidate>({ now, scheduledGame, latestCompletedGame }: { now: Date; scheduledGame?: T; latestCompletedGame?: T }) {
+  const nextWeek = regularWeekNumber(scheduledGame);
+  const previousWeek = regularWeekNumber(latestCompletedGame);
+  if (!scheduledGame || !latestCompletedGame || nextWeek === null || previousWeek === null) return undefined;
+  if (nextWeek !== previousWeek + 2 || isWithinJstReplayWindow(latestCompletedGame, now)) return undefined;
+  return { weekLabel: `WEEK ${previousWeek + 1}`, nextGameWeekLabel: scheduledGame.weekLabel };
 }
 
 /** Chooses a live game first, then the protected replay window, and only then the next unfinished game. */

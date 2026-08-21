@@ -155,6 +155,8 @@ export const officialScoreboardGames = mysqlTable("official_scoreboard_games", {
   gameState: varchar("game_state", { length: 32 }).notNull(),
   /** Official local calendar date for a completed game when a kickoff time is no longer published. */
   gameDate: varchar("game_date", { length: 10 }),
+  /** Exact official kickoff timestamp, retained to render completed games in Japan time. */
+  kickoffAt: timestamp("kickoff_at"),
   /** First time this game was confirmed FINAL/COMPLETED by the official scoreboard. */
   finalRecordedAt: timestamp("final_recorded_at"),
   gameUrl: varchar("game_url", { length: 1024 }).notNull(),

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isWithinJstReplayWindow, selectGameTicketGame } from "./gameTicketWindow";
+import { getRegularSeasonByeWeek, isWithinJstReplayWindow, selectGameTicketGame } from "./gameTicketWindow";
 
 const completed = { kickoffAt: new Date("2026-08-16T12:00:00.000Z"), gameState: "FINAL", awayScore: 14, homeScore: 20 };
 const upcoming = { kickoffAt: new Date("2026-08-23T12:00:00.000Z"), gameState: null, awayScore: null, homeScore: null };
@@ -40,5 +40,12 @@ describe("JST replay window for Game Ticket", () => {
     const nextAfterBye = { kickoffAt: new Date("2026-11-01T17:00:00.000Z"), gameState: null, awayScore: null, homeScore: null };
 
     expect(selectGameTicketGame({ now: new Date("2026-10-26T12:00:00.000Z"), latestCompletedGame: lastBeforeBye, scheduledGame: nextAfterBye, skipReplayWindow: true })).toBe(nextAfterBye);
+  });
+
+  it("shows a bye-week notice only after the prior replay window closes", () => {
+    const latestCompletedGame = { kickoffAt: new Date("2026-10-18T17:00:00.000Z"), gameState: "FINAL", awayScore: 17, homeScore: 24, seasonPhase: "regular" as const, weekLabel: "WEEK 6" };
+    const scheduledGame = { kickoffAt: new Date("2026-10-30T00:15:00.000Z"), gameState: null, awayScore: null, homeScore: null, seasonPhase: "regular" as const, weekLabel: "WEEK 8" };
+    expect(getRegularSeasonByeWeek({ now: new Date("2026-10-20T00:00:00.000Z"), latestCompletedGame, scheduledGame })).toBeUndefined();
+    expect(getRegularSeasonByeWeek({ now: new Date("2026-10-22T00:00:00.000Z"), latestCompletedGame, scheduledGame })).toEqual({ weekLabel: "WEEK 7", nextGameWeekLabel: "WEEK 8" });
   });
 });

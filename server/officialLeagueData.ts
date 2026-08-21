@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import type { InsertOfficialScoreboardGame, InsertOfficialStanding } from "../drizzle/schema";
-import { hasOfficialScorePulseWindow, replaceOfficialScoreboardGames, upsertOfficialStandings } from "./db";
+import { getOfficialScoreboardKickoffTimes, hasOfficialScorePulseWindow, replaceOfficialScoreboardGames, upsertOfficialStandings } from "./db";
 import { refreshOfficialGameHighlights } from "./nflGameHighlights";
 import { TEAM_NAMES } from "./officialTeamData";
 
@@ -99,13 +99,46 @@ export function parseNFLScoresPage(html: string, season: number, sourceUrl = off
   });
 }
 
+/** Reads the exact kickoff timestamp supplied by an official NFL Game Center page. */
+export function parseNFLGameKickoffAt(html: string) {
+  const timestamp = html.match(/data-testid=["']game-date["'][^>]*dateTime=["']([^"']+)["']/i)?.[1];
+  if (!timestamp) return null;
+  const kickoffAt = new Date(timestamp);
+  return Number.isNaN(kickoffAt.getTime()) ? null : kickoffAt;
+}
+
+async function enrichScoresWithOfficialKickoffTimes(season: number, scores: InsertOfficialScoreboardGame[]) {
+  const cachedKickoffs = await getOfficialScoreboardKickoffTimes(season, scores.map((score) => score.externalId));
+  const enriched = [...scores];
+  let cursor = 0;
+  const worker = async () => {
+    while (cursor < scores.length) {
+      const index = cursor++;
+      const score = scores[index]!;
+      const cachedKickoffAt = cachedKickoffs.get(score.externalId);
+      if (cachedKickoffAt) {
+        enriched[index] = { ...score, kickoffAt: cachedKickoffAt };
+        continue;
+      }
+      try {
+        const html = await fetchOfficialHtml(score.gameUrl);
+        enriched[index] = { ...score, kickoffAt: parseNFLGameKickoffAt(html) };
+      } catch {
+        // Retain the official score even if a single Game Center page is temporarily unavailable.
+      }
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(4, scores.length) }, worker));
+  return enriched;
+}
+
 /** Refreshes scores at high frequency only around an official game's start and finish window. */
 export async function refreshOfficialScorePulse() {
   if (!await hasOfficialScorePulseWindow()) return { refreshed: false as const, reason: "outside-game-window" as const, scores: 0 };
   const season = currentSeason();
   const scoresHtml = await fetchOfficialHtml(officialScheduleUrl);
   const scores = parseNFLScoresPage(scoresHtml, season);
-  await replaceOfficialScoreboardGames(season, scores);
+  await replaceOfficialScoreboardGames(season, await enrichScoresWithOfficialKickoffTimes(season, scores));
   return { refreshed: true as const, scores: scores.length, season };
 }
 
@@ -119,7 +152,7 @@ export async function refreshOfficialLeagueDashboard() {
   scorePages.forEach((html, index) => {
     for (const score of parseNFLScoresPage(html, season, scoreSourceUrls[index]!)) scoresByExternalId.set(score.externalId, score);
   });
-  const scores = Array.from(scoresByExternalId.values());
+  const scores = await enrichScoresWithOfficialKickoffTimes(season, Array.from(scoresByExternalId.values()));
   await upsertOfficialStandings(standings);
   await replaceOfficialScoreboardGames(season, scores);
   const highlights = await refreshOfficialGameHighlights();

@@ -7,7 +7,7 @@ import { hasIndividualOfficialHighlight } from "@/lib/nflHighlights";
 
 export type LeagueDashboard = {
   standings: Array<{ teamCode: string; wins: number; losses: number; ties: number; pct: string; pointsFor: number | null; pointsAgainst: number | null; sourceUrl: string; fetchedAt: Date }>;
-  results: Array<{ id: number; weekLabel: string | null; awayTeamCode: string; homeTeamCode: string; awayScore: number | null; homeScore: number | null; gameState: string; gameUrl: string; nflHighlightUrl: string | null; daznUrl: string | null; sourceUrl: string; fetchedAt: Date }>;
+  results: Array<{ id: number; weekLabel: string | null; awayTeamCode: string; homeTeamCode: string; awayScore: number | null; homeScore: number | null; gameState: string; gameDate: string | null; kickoffAt: Date | null; gameUrl: string; nflHighlightUrl: string | null; daznUrl: string | null; sourceUrl: string; fetchedAt: Date }>;
   calendar: LeagueCalendarGame[];
   lastUpdatedAt?: Date;
 };
@@ -26,6 +26,12 @@ function calendarDayKey(value: Date) {
 
 function calendarDayLabel(value: Date) {
   return new Intl.DateTimeFormat("ja-JP", { month: "numeric", day: "numeric", weekday: "short", timeZone: "Asia/Tokyo" }).format(new Date(value));
+}
+
+export function jstResultDate(value: Date | null, officialDate?: string | null) {
+  const date = value ?? (officialDate ? new Date(`${officialDate}T12:00:00.000Z`) : null);
+  if (!date || Number.isNaN(new Date(date).getTime())) return null;
+  return new Intl.DateTimeFormat("ja-JP", { month: "numeric", day: "numeric", weekday: "short", timeZone: "Asia/Tokyo" }).format(new Date(date));
 }
 
 export function OfficialLatestResults({ favorite, dashboard, loading, spoilerMode }: { favorite: FavoriteTeam; dashboard?: LeagueDashboard; loading: boolean; spoilerMode: boolean }) {
@@ -58,6 +64,8 @@ export function OfficialLatestResults({ favorite, dashboard, loading, spoilerMod
               const homeScore = game.homeScore ?? 0;
               const awayWon = !spoilerMode && hasOfficialScore && awayScore > homeScore;
               const homeWon = !spoilerMode && hasOfficialScore && homeScore > awayScore;
+              const gameDate = jstResultDate(game.kickoffAt, game.gameDate);
+              const hasExactKickoff = Boolean(game.kickoffAt);
               const resultMeta = [game.weekLabel ?? "OFFICIAL", spoilerMode ? "RESULT HIDDEN" : game.gameState !== "FINAL" ? game.gameState : null].filter(Boolean).join(" · ");
               return (
                 <div key={game.id} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 py-2.5">
@@ -67,6 +75,7 @@ export function OfficialLatestResults({ favorite, dashboard, loading, spoilerMod
                   </a>
                   <div className="min-w-[106px] self-center text-right">
                     <p className="font-mono text-[26px] font-black leading-[.85] tracking-[-.06em]">{spoilerMode ? "—" : <><span className={awayWon ? "text-[#a84420]" : undefined}>{game.awayScore ?? "—"}</span><span> - </span><span className={homeWon ? "text-[#a84420]" : undefined}>{game.homeScore ?? "—"}</span></>}</p>
+                    {gameDate ? <p className="mt-1 font-mono text-[8px] font-bold leading-[10px] tracking-[.08em] text-[#526173]">{hasExactKickoff ? "GAME DATE" : "OFFICIAL DATE"} · {gameDate}{hasExactKickoff ? " JST" : ""}</p> : null}
                     <p className="mt-1 min-h-[10px] font-mono text-[8px] font-bold leading-[10px] tracking-[.08em] text-[#64748b]">{resultMeta}</p>
                   </div>
                 </div>

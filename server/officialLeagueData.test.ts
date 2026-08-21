@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { officialPreseasonWeekScoresUrl, officialStandingsUrl, parseNFLScoresPage, parseNFLStandingsPage } from "./officialLeagueData";
+import { officialPreseasonWeekScoresUrl, officialStandingsUrl, parseNFLGameKickoffAt, parseNFLScoresPage, parseNFLStandingsPage } from "./officialLeagueData";
 
 const standingsFixture = `<table><tr><td>Buffalo Bills</td><td>2</td><td>1</td><td>0</td><td>0.667</td><td>71</td><td>55</td></tr><tr><td>New York Jets</td><td>1</td><td>2</td><td>0</td><td>0.333</td><td>42</td><td>60</td></tr></table>`;
 const scoresFixture = `<section>PRESEASON WEEK 1 <a data-analytics="{&quot;gameState&quot;:&quot;FINAL&quot;,&quot;linkName&quot;:&quot;Panthers 14, Bills 29, FINAL, Saturday, August 15th&quot;}" href="/games/panthers-at-bills-2026-pre-1"></a></section>`;
@@ -26,6 +26,11 @@ describe("official league dashboard parsers", () => {
     const rows = parseNFLScoresPage(scoresFixture, 2026);
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({ seasonPhase: "preseason", weekLabel: "PRESEASON WEEK 1", awayTeamCode: "CAR", homeTeamCode: "BUF", awayScore: 14, homeScore: 29, gameState: "FINAL", gameDate: "2026-08-15" });
+  });
+
+  it("reads the exact official Game Center kickoff timestamp", () => {
+    const kickoffAt = parseNFLGameKickoffAt('<time data-testid="game-date" dateTime="2026-08-15T17:00:00Z"></time>');
+    expect(kickoffAt?.toISOString()).toBe("2026-08-15T17:00:00.000Z");
   });
 
   it("uses the individual official game URL to retain each preseason week", () => {

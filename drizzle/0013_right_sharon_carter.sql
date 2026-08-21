@@ -1,0 +1,1 @@
+ALTER TABLE `official_scoreboard_games` ADD `kickoff_at` timestamp;

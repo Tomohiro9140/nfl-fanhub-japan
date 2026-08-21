@@ -11,7 +11,7 @@ const kickoffAt = new Date("2026-08-23T06:00:00.000Z");
 
 const dashboard: LeagueDashboard = {
   standings: [],
-  results: [{ id: 1, weekLabel: "PRESEASON WEEK 1", awayTeamCode: "CAR", homeTeamCode: "BUF", awayScore: 14, homeScore: 29, gameState: "FINAL", gameUrl: "https://www.nfl.com/games/panthers-at-bills-2026-pre-1", nflHighlightUrl: "https://www.nfl.com/videos/panthers-vs-bills-highlights-preseason-week-1", daznUrl: null, sourceUrl: "https://www.nfl.com/scores", fetchedAt: kickoffAt }],
+  results: [{ id: 1, weekLabel: "PRESEASON WEEK 1", awayTeamCode: "CAR", homeTeamCode: "BUF", awayScore: 14, homeScore: 29, gameState: "FINAL", gameDate: "2026-08-15", kickoffAt: new Date("2026-08-15T17:00:00.000Z"), gameUrl: "https://www.nfl.com/games/panthers-at-bills-2026-pre-1", nflHighlightUrl: "https://www.nfl.com/videos/panthers-vs-bills-highlights-preseason-week-1", daznUrl: null, sourceUrl: "https://www.nfl.com/scores", fetchedAt: kickoffAt }],
   calendar: [{ id: 1, teamCode: "BUF", opponentCode: "CLE", homeAway: "away", seasonPhase: "preseason", weekLabel: "PRESEASON WEEK 2", kickoffAt, broadcast: null, sourceUrl: "https://www.nfl.com/schedules", daznUrl: null, gameState: null, awayScore: null, homeScore: null }],
 };
 
@@ -22,7 +22,11 @@ describe("compact mobile result and schedule UI", () => {
     expect(markup).not.toContain("リンク済");
     expect(markup).toContain("RESULT HIDDEN");
     expect(markup).toContain("PRESEASON WEEK 1");
+    expect(markup).toContain("GAME DATE · 8/16(日) JST");
     expect(markup).toContain("min-h-[10px]");
+    const fallbackDashboard: LeagueDashboard = { ...dashboard, results: [{ ...dashboard.results[0]!, kickoffAt: null }] };
+    const fallbackMarkup = renderToStaticMarkup(createElement(OfficialLatestResults, { favorite, dashboard: fallbackDashboard, loading: false, spoilerMode: true }));
+    expect(fallbackMarkup).toContain("OFFICIAL DATE · 8/15(土)");
     const revealedMarkup = renderToStaticMarkup(createElement(OfficialLatestResults, { favorite, dashboard, loading: false, spoilerMode: false }));
     expect(revealedMarkup).not.toContain(">FINAL<");
     expect(revealedMarkup).toContain("font-extrabold text-[#a84420]");
@@ -149,6 +153,14 @@ describe("compact mobile result and schedule UI", () => {
       snapshot: { ...snapshot, gameDayStatus: undefined, nextGame: { ...snapshot.nextGame, gameState: null, awayScore: null, homeScore: null } },
     }));
     expect(cutoverMarkup).not.toContain("RETURN TO LAST GAME");
+  });
+
+  it("adds a compact bye-week notice beside the Game Ticket details", () => {
+    const snapshot = { nextGame: { opponentCode: "CLE", homeAway: "away" as const, seasonPhase: "regular" as const, weekLabel: "WEEK 8", kickoffAt, venue: null, broadcast: null, sourceUrl: "https://www.nfl.com/schedules", daznUrl: null, gameState: null, awayScore: null, homeScore: null, fetchedAt: kickoffAt }, byeWeek: { weekLabel: "WEEK 7", nextGameWeekLabel: "WEEK 8" }, roster: [], rosterCounts: [], injuries: [], news: [], sources: { schedule: null, roster: null, injury: null } };
+    const markup = renderToStaticMarkup(createElement(OfficialGameTicket, { favorite, snapshot, loading: false }));
+    expect(markup).toContain("BYE WEEK");
+    expect(markup).toContain("WEEK 7 · NEXT WEEK 8");
+    expect(markup).toContain("bg-white/[.07]");
   });
 
   it("keeps the availability-only PFT watch below official injury items, removes the result icon, and uses tighter result spacing", () => {
