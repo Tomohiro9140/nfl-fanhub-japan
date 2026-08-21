@@ -22,4 +22,12 @@ describe("official league dashboard parsers", () => {
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({ seasonPhase: "preseason", weekLabel: "PRESEASON WEEK 1", awayTeamCode: "CAR", homeTeamCode: "BUF", awayScore: 14, homeScore: 29, gameState: "FINAL", gameDate: "2026-08-15" });
   });
+
+  it("uses the individual official game URL to retain each preseason week", () => {
+    const mixedWeekFixture = `<section>PRESEASON WEEK 1 <a data-analytics="{&quot;gameState&quot;:&quot;FINAL&quot;,&quot;linkName&quot;:&quot;Raiders 22, Texans 20, FINAL, Thursday, August 20th&quot;}" href="/games/raiders-at-texans-2026-pre-2"></a></section>`;
+    const rows = parseNFLScoresPage(mixedWeekFixture, 2026);
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ seasonPhase: "preseason", weekLabel: "PRESEASON WEEK 2", awayTeamCode: "LV", homeTeamCode: "HOU", awayScore: 22, homeScore: 20 });
+  });
 });

@@ -304,8 +304,11 @@ export async function getOfficialTeamSnapshot(teamCode: string, skipGameUrl?: st
 export async function hasOfficialScorePulseWindow(now = new Date()) {
   const db = await getDb();
   if (!db) return false;
-  const windowStart = new Date(now.getTime() - 6 * 60 * 60 * 1_000);
-  const windowEnd = new Date(now.getTime() + 5 * 60 * 1_000);
+  const jst = new Date(now.getTime() + 9 * 60 * 60 * 1_000);
+  const japanDayStart = new Date(Date.UTC(jst.getUTCFullYear(), jst.getUTCMonth(), jst.getUTCDate()) - 9 * 60 * 60 * 1_000);
+  // Retain the whole Japan game day and a small prior-day buffer for US evening kickoffs.
+  const windowStart = new Date(japanDayStart.getTime() - 6 * 60 * 60 * 1_000);
+  const windowEnd = new Date(japanDayStart.getTime() + 24 * 60 * 60 * 1_000);
   const games = await db.select({ id: officialGames.id }).from(officialGames)
     .where(and(gte(officialGames.kickoffAt, windowStart), lt(officialGames.kickoffAt, windowEnd))).limit(1);
   return games.length > 0;

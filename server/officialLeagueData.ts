@@ -52,7 +52,11 @@ export function parseNFLStandingsPage(html: string, season: number, sourceUrl: s
   });
 }
 
-function phaseAndWeek(html: string) {
+function phaseAndWeek(html: string, gamePath?: string) {
+  const preseasonFromPath = gamePath?.match(/-pre-(\d+)/i)?.[1];
+  if (preseasonFromPath) return { seasonPhase: "preseason" as const, weekLabel: `PRESEASON WEEK ${preseasonFromPath}` };
+  const regularFromPath = gamePath?.match(/-reg-(\d+)/i)?.[1];
+  if (regularFromPath) return { seasonPhase: "regular" as const, weekLabel: `WEEK ${regularFromPath}` };
   const preseason = html.match(/PRESEASON\s+WEEK\s+(\d+)/i)?.[1];
   if (preseason) return { seasonPhase: "preseason" as const, weekLabel: `PRESEASON WEEK ${preseason}` };
   const regular = html.match(/\bWEEK\s+(\d+)\b/i)?.[1];
@@ -71,7 +75,6 @@ function officialGameDateFromLabel(label: string | undefined, season: number) {
 }
 
 export function parseNFLScoresPage(html: string, season: number, sourceUrl = officialScheduleUrl): InsertOfficialScoreboardGame[] {
-  const { seasonPhase, weekLabel } = phaseAndWeek(html);
   return Array.from(html.matchAll(/data-analytics="([^"]+)"[^>]*href="([^\"]*\/games\/[^\"]+)"/gi)).flatMap((match) => {
     const analytics = match[1].replace(/&quot;/g, '"');
     const gameState = analytics.match(/"gameState":"([^"]+)"/)?.[1];
@@ -83,6 +86,7 @@ export function parseNFLScoresPage(html: string, season: number, sourceUrl = off
     const homeTeamCode = nicknameToCode[homeNickname];
     if (!awayTeamCode || !homeTeamCode) return [];
     const gameUrl = `https://www.nfl.com${match[2]}`;
+    const { seasonPhase, weekLabel } = phaseAndWeek(html, match[2]);
     return [{ externalId: hash(gameUrl), season, seasonPhase, weekLabel, awayTeamCode, homeTeamCode, awayScore: Number(awayScore), homeScore: Number(homeScore), gameState, gameDate: officialGameDateFromLabel(label, season), gameUrl, sourceUrl, fetchedAt: new Date() }];
   });
 }
