@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import type { InsertOfficialScoreboardGame, InsertOfficialStanding } from "../drizzle/schema";
-import { replaceOfficialScoreboardGames, upsertOfficialStandings } from "./db";
+import { hasOfficialScorePulseWindow, replaceOfficialScoreboardGames, upsertOfficialStandings } from "./db";
 import { refreshOfficialGameHighlights } from "./nflGameHighlights";
 import { TEAM_NAMES } from "./officialTeamData";
 
@@ -85,6 +85,16 @@ export function parseNFLScoresPage(html: string, season: number, sourceUrl = off
     const gameUrl = `https://www.nfl.com${match[2]}`;
     return [{ externalId: hash(gameUrl), season, seasonPhase, weekLabel, awayTeamCode, homeTeamCode, awayScore: Number(awayScore), homeScore: Number(homeScore), gameState, gameDate: officialGameDateFromLabel(label, season), gameUrl, sourceUrl, fetchedAt: new Date() }];
   });
+}
+
+/** Refreshes scores at high frequency only around an official game's start and finish window. */
+export async function refreshOfficialScorePulse() {
+  if (!await hasOfficialScorePulseWindow()) return { refreshed: false as const, reason: "outside-game-window" as const, scores: 0 };
+  const season = currentSeason();
+  const scoresHtml = await fetchOfficialHtml(officialScheduleUrl);
+  const scores = parseNFLScoresPage(scoresHtml, season);
+  await replaceOfficialScoreboardGames(season, scores);
+  return { refreshed: true as const, scores: scores.length, season };
 }
 
 export async function refreshOfficialLeagueDashboard() {

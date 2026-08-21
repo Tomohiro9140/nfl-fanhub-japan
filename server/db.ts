@@ -300,6 +300,17 @@ export async function getOfficialTeamSnapshot(teamCode: string, skipGameUrl?: st
   return { nextGame, gameDayStatus, roster, rosterCounts, injuries, rosterMoves, news, externalInsights, sources: { schedule: nextGame?.sourceUrl ?? null, roster: roster[0]?.sourceUrl ?? null, injury: injuries[0]?.sourceUrl ?? null, moves: rosterMoves[0]?.sourceUrl ?? null, gameDay: nextGame?.sourceUrl ?? null }, lastUpdatedAt };
 }
 
+/** Avoids external score polling unless an official game is underway or has just ended. */
+export async function hasOfficialScorePulseWindow(now = new Date()) {
+  const db = await getDb();
+  if (!db) return false;
+  const windowStart = new Date(now.getTime() - 6 * 60 * 60 * 1_000);
+  const windowEnd = new Date(now.getTime() + 5 * 60 * 1_000);
+  const games = await db.select({ id: officialGames.id }).from(officialGames)
+    .where(and(gte(officialGames.kickoffAt, windowStart), lt(officialGames.kickoffAt, windowEnd))).limit(1);
+  return games.length > 0;
+}
+
 export async function upsertOfficialStandings(items: InsertOfficialStanding[]) {
   if (!items.length) return;
   const db = await getDb();

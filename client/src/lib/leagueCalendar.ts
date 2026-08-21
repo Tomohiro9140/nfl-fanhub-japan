@@ -27,10 +27,18 @@ export function getFavoriteSchedule(games: LeagueCalendarGame[], favoriteCode: s
     .sort((a, b) => new Date(a.kickoffAt).getTime() - new Date(b.kickoffAt).getTime());
 }
 
-/** Returns every league game in the rolling seven-day window starting now. */
+/** Keeps every card on the current Japan calendar day while retaining the rolling seven-day future range. */
 export function getNextSevenDayGames(games: LeagueCalendarGame[], now: Date) {
-  const start = now.getTime();
-  const end = start + 7 * 24 * 60 * 60 * 1000;
+  const dayParts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Tokyo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(now);
+  const valueFor = (type: "year" | "month" | "day") => Number(dayParts.find((part) => part.type === type)?.value);
+  // Japan is UTC+9 year-round. Calendar-day boundaries ensure games remain listed until JST midnight.
+  const start = Date.UTC(valueFor("year"), valueFor("month") - 1, valueFor("day")) - 9 * 60 * 60 * 1000;
+  const end = now.getTime() + 7 * 24 * 60 * 60 * 1000;
   return games
     .filter((game) => {
       const kickoff = new Date(game.kickoffAt).getTime();

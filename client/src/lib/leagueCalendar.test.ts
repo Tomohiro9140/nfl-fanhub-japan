@@ -26,6 +26,14 @@ describe("league calendar presentation", () => {
     expect(nextSevenDays.map((game) => game.id)).toEqual([3, 1]);
   });
 
+  it("keeps games from earlier on the current Japan calendar day", () => {
+    const todayGame = { ...games[3]!, id: 5, kickoffAt: new Date("2026-08-21T00:00:00.000Z") }; // 09:00 JST
+    const nextJapanDay = { ...games[3]!, id: 6, kickoffAt: new Date("2026-08-28T06:00:00.000Z") };
+    const nextSevenDays = getNextSevenDayGames([todayGame, nextJapanDay], new Date("2026-08-21T06:00:00.000Z")); // 15:00 JST
+
+    expect(nextSevenDays.map((game) => game.id)).toEqual([5]);
+  });
+
   it("always exposes the phase and numeric week together", () => {
     expect(seasonWeekLabel(games[0]!)).toBe("PRE · WEEK 2");
     expect(seasonWeekLabel(games[1]!)).toBe("REG · WEEK 1");

@@ -65,8 +65,8 @@ export default function Home() {
   const snapshotInput = useMemo(() => ({ teamCode: favorite.code, skipGameUrl: watchedTicketUrl ?? undefined }), [favorite.code, watchedTicketUrl]);
   const leagueCalendarInput = useMemo(() => ({ teamCode: favorite.code }), [favorite.code]);
   const shouldLoadLeagueCalendar = useNearViewport(leagueSection);
-  const snapshotQuery = trpc.teamSnapshot.byTeam.useQuery(snapshotInput, { refetchInterval: 15 * 60 * 1000, staleTime: 15 * 60 * 1000, refetchOnWindowFocus: false, refetchOnReconnect: false, retry: 1 });
-  const leagueQuery = trpc.leagueDashboard.summary.useQuery(undefined, { refetchInterval: 15 * 60 * 1000, staleTime: 15 * 60 * 1000, refetchOnWindowFocus: false, refetchOnReconnect: false, retry: 1 });
+  const snapshotQuery = trpc.teamSnapshot.byTeam.useQuery(snapshotInput, { refetchInterval: 60 * 1000, staleTime: 45 * 1000, refetchOnWindowFocus: true, refetchOnReconnect: true, retry: 1 });
+  const leagueQuery = trpc.leagueDashboard.summary.useQuery(undefined, { refetchInterval: 60 * 1000, staleTime: 45 * 1000, refetchOnWindowFocus: true, refetchOnReconnect: true, retry: 1 });
   const leagueCalendarQuery = trpc.leagueDashboard.calendar.useQuery(leagueCalendarInput, { enabled: shouldLoadLeagueCalendar, refetchInterval: 15 * 60 * 1000, staleTime: 15 * 60 * 1000, refetchOnWindowFocus: false, refetchOnReconnect: false, retry: 1 });
   const snapshot = snapshotQuery.data as TeamSnapshot | undefined;
   const leagueDashboard = useMemo(() => leagueQuery.data ? { ...leagueQuery.data, calendar: leagueCalendarQuery.data?.calendar ?? [] } as LeagueDashboard : undefined, [leagueQuery.data, leagueCalendarQuery.data]);

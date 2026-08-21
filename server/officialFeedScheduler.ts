@@ -2,7 +2,7 @@ import type { Request, Response } from "express";
 import { z } from "zod";
 import { cacheAgentOfficialFeed, refreshOfficialTeamFeedGroup, scheduledTeamGroups } from "./officialFeeds";
 import { refreshExternalTeamNews } from "./externalTeamNews";
-import { refreshOfficialLeagueDashboard } from "./officialLeagueData";
+import { refreshOfficialLeagueDashboard, refreshOfficialScorePulse } from "./officialLeagueData";
 import { refreshDaznGameLinks } from "./daznGameLinks";
 import { refreshPftAvailabilityInsights } from "./pftAvailability";
 import { sdk } from "./_core/sdk";
@@ -39,6 +39,19 @@ export async function refreshOfficialFeedHandler(req: Request, res: Response) {
   } catch (error) {
     const details = error instanceof Error ? { message: error.message, stack: error.stack } : { message: String(error) };
     res.status(500).json({ error: "official-feed-refresh-failed", details, timestamp: new Date().toISOString() });
+  }
+}
+
+/** Project Heartbeat endpoint: checks the official score page every minute only during a game window. */
+export async function refreshOfficialScorePulseHandler(req: Request, res: Response) {
+  try {
+    const user = await sdk.authenticateRequest(req);
+    if (!user.isCron || !user.taskUid) return res.status(403).json({ error: "cron-only" });
+    const scorePulse = await refreshOfficialScorePulse();
+    res.json({ ok: true, scorePulse, timestamp: new Date().toISOString() });
+  } catch (error) {
+    const details = error instanceof Error ? { message: error.message, stack: error.stack } : { message: String(error) };
+    res.status(500).json({ error: "official-score-pulse-failed", details, timestamp: new Date().toISOString() });
   }
 }
 

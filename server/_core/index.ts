@@ -8,7 +8,7 @@ import { registerStorageProxy } from "./storageProxy";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
-import { receiveOfficialFeedAgentHandler, refreshOfficialFeedHandler } from "../officialFeedScheduler";
+import { receiveOfficialFeedAgentHandler, refreshOfficialFeedHandler, refreshOfficialScorePulseHandler } from "../officialFeedScheduler";
 import { refreshFieldlineSeasonHandler } from "../fieldlineScheduler";
 
 function isPortAvailable(port: number): Promise<boolean> {
@@ -39,6 +39,7 @@ async function startServer() {
   registerStorageProxy(app);
   registerOAuthRoutes(app);
   app.post("/api/scheduled/official-feed-refresh", refreshOfficialFeedHandler);
+  app.post("/api/scheduled/official-score-pulse", refreshOfficialScorePulseHandler);
   app.post("/api/scheduled/official-feed-agent", receiveOfficialFeedAgentHandler);
   app.post("/api/scheduled/fieldline-season-refresh", refreshFieldlineSeasonHandler);
   // tRPC API
