@@ -34,4 +34,11 @@ describe("JST replay window for Game Ticket", () => {
     const afterCutoff = new Date("2026-08-18T21:00:00.000Z");
     expect(selectGameTicketGame({ now: afterCutoff, latestCompletedGame: completed, scheduledGame: upcoming, skipReplayWindow: true, forceLastGame: true })).toBe(upcoming);
   });
+
+  it("selects the next actual game when a club has no game during its bye week", () => {
+    const lastBeforeBye = { kickoffAt: new Date("2026-10-18T17:00:00.000Z"), gameState: "FINAL", awayScore: 17, homeScore: 24 };
+    const nextAfterBye = { kickoffAt: new Date("2026-11-01T17:00:00.000Z"), gameState: null, awayScore: null, homeScore: null };
+
+    expect(selectGameTicketGame({ now: new Date("2026-10-26T12:00:00.000Z"), latestCompletedGame: lastBeforeBye, scheduledGame: nextAfterBye, skipReplayWindow: true })).toBe(nextAfterBye);
+  });
 });

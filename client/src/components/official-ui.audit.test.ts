@@ -11,7 +11,7 @@ const kickoffAt = new Date("2026-08-23T06:00:00.000Z");
 
 const dashboard: LeagueDashboard = {
   standings: [],
-  results: [{ id: 1, awayTeamCode: "CAR", homeTeamCode: "BUF", awayScore: 14, homeScore: 29, gameState: "FINAL", gameUrl: "https://www.nfl.com/games/panthers-at-bills-2026-pre-1", nflHighlightUrl: "https://www.nfl.com/videos/panthers-vs-bills-highlights-preseason-week-1", daznUrl: null, sourceUrl: "https://www.nfl.com/scores", fetchedAt: kickoffAt }],
+  results: [{ id: 1, weekLabel: "PRESEASON WEEK 1", awayTeamCode: "CAR", homeTeamCode: "BUF", awayScore: 14, homeScore: 29, gameState: "FINAL", gameUrl: "https://www.nfl.com/games/panthers-at-bills-2026-pre-1", nflHighlightUrl: "https://www.nfl.com/videos/panthers-vs-bills-highlights-preseason-week-1", daznUrl: null, sourceUrl: "https://www.nfl.com/scores", fetchedAt: kickoffAt }],
   calendar: [{ id: 1, teamCode: "BUF", opponentCode: "CLE", homeAway: "away", seasonPhase: "preseason", weekLabel: "PRESEASON WEEK 2", kickoffAt, broadcast: null, sourceUrl: "https://www.nfl.com/schedules", daznUrl: null, gameState: null, awayScore: null, homeScore: null }],
 };
 
@@ -21,6 +21,7 @@ describe("compact mobile result and schedule UI", () => {
     expect(markup).toContain("WATCH HIGHLIGHTS");
     expect(markup).not.toContain("リンク済");
     expect(markup).toContain("RESULT HIDDEN");
+    expect(markup).toContain("PRESEASON WEEK 1");
     expect(markup).toContain("min-h-[10px]");
     const revealedMarkup = renderToStaticMarkup(createElement(OfficialLatestResults, { favorite, dashboard, loading: false, spoilerMode: false }));
     expect(revealedMarkup).not.toContain(">FINAL<");

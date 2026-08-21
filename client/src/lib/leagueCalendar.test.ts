@@ -39,6 +39,15 @@ describe("league calendar presentation", () => {
     }
   });
 
+  it("keeps the last completed game through a bye week without falling back to another club", () => {
+    const results = [
+      { id: 1, weekLabel: "REGULAR WEEK 6", awayTeamCode: "BUF", homeTeamCode: "NYJ" },
+      { id: 2, weekLabel: "REGULAR WEEK 7", awayTeamCode: "MIA", homeTeamCode: "NYJ" },
+    ];
+
+    expect(getFavoriteLatestResults(results, "BUF")).toEqual([results[0]]);
+  });
+
   it("uses the official away club first with @ for either stored team perspective", () => {
     expect(abbreviatedMatchup(games[0]!)).toBe("BUF @ CLE");
     expect(abbreviatedMatchup({ ...games[0]!, teamCode: "BUF", opponentCode: "CLE", homeAway: "away" })).toBe("BUF @ CLE");

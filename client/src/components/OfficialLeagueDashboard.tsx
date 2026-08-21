@@ -7,7 +7,7 @@ import { hasIndividualOfficialHighlight } from "@/lib/nflHighlights";
 
 export type LeagueDashboard = {
   standings: Array<{ teamCode: string; wins: number; losses: number; ties: number; pct: string; pointsFor: number | null; pointsAgainst: number | null; sourceUrl: string; fetchedAt: Date }>;
-  results: Array<{ id: number; awayTeamCode: string; homeTeamCode: string; awayScore: number | null; homeScore: number | null; gameState: string; gameUrl: string; nflHighlightUrl: string | null; daznUrl: string | null; sourceUrl: string; fetchedAt: Date }>;
+  results: Array<{ id: number; weekLabel: string | null; awayTeamCode: string; homeTeamCode: string; awayScore: number | null; homeScore: number | null; gameState: string; gameUrl: string; nflHighlightUrl: string | null; daznUrl: string | null; sourceUrl: string; fetchedAt: Date }>;
   calendar: LeagueCalendarGame[];
   lastUpdatedAt?: Date;
 };
@@ -58,7 +58,7 @@ export function OfficialLatestResults({ favorite, dashboard, loading, spoilerMod
               const homeScore = game.homeScore ?? 0;
               const awayWon = !spoilerMode && hasOfficialScore && awayScore > homeScore;
               const homeWon = !spoilerMode && hasOfficialScore && homeScore > awayScore;
-              const resultMeta = spoilerMode ? "RESULT HIDDEN" : game.gameState !== "FINAL" ? game.gameState : "\u00a0";
+              const resultMeta = [game.weekLabel ?? "OFFICIAL", spoilerMode ? "RESULT HIDDEN" : game.gameState !== "FINAL" ? game.gameState : null].filter(Boolean).join(" · ");
               return (
                 <div key={game.id} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 py-2.5">
                   <a href={game.gameUrl} target="_blank" rel="noreferrer" className="min-w-0 self-center text-[13px] leading-[1.25]">

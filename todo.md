@@ -476,6 +476,10 @@
 - [x] RETURN TO LAST GAMEが切替後に残る状態管理・選択条件の原因を特定する。
 - [x] 水曜06:00 JST以降は戻り操作を表示しないGame Ticket条件へ修正する。
 - [x] 全32チームの切替後表示、ネタバレ防止、回帰テストを検証する。
+- [x] LATEST RESULTSへ渡る公式結果のWeek番号と表示箇所を確認する。
+- [x] Bye Weekを含む日程でGame Ticketの次戦とLATEST RESULTSの直近終了試合を照合する。
+- [x] LATEST RESULTSへWeek番号を表示し、Bye Weekに強い試合選択条件を必要に応じて修正する。
+- [x] 全32チームのBye Week前後・モバイル表示・回帰テストを検証する。
 - [x] 現在UTCの対象8チームと公式RSSの取得可否を確認する。
 - [x] 対象チームの公式RSSとNFL公式負傷者ページを検証し、実在項目だけを選別する。
 - [x] 検証済み公式項目をofficial_feed_itemsへUPSERTし、チーム別保存件数を照合する。
