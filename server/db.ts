@@ -182,6 +182,17 @@ export function isSameJstCalendarDay(left: Date, right: Date) {
   return formatter.format(left) === formatter.format(right);
 }
 
+/** A missing schedule row must not hide a current Japan-day official result after it flips from LIVE to FINAL. */
+export function shouldCreateScoreboardCalendarFallback(
+  score: { gameState: string | null; kickoffAt: Date | null; fetchedAt: Date },
+  hasScheduleRow: boolean,
+  now: Date,
+) {
+  if (hasScheduleRow) return false;
+  if (!isOfficialFinal(score)) return true;
+  return isSameJstCalendarDay(score.kickoffAt ?? score.fetchedAt, now);
+}
+
 export async function upsertOfficialRosterEntries(items: InsertOfficialRosterEntry[]) {
   if (items.length === 0) return;
   const db = await getDb();
@@ -309,8 +320,8 @@ export async function getOfficialTeamSnapshot(teamCode: string, skipGameUrl?: st
     homeAway: score.homeTeamCode === teamCode ? "home" as const : "away" as const,
     seasonPhase: score.seasonPhase,
     weekLabel: score.weekLabel,
-    // A score confirmation/fetch time is not a kickoff time. Use the official game date at a neutral UTC hour only for replay-window ordering; the UI renders it as date-only.
-    kickoffAt: score.gameDate ? new Date(`${score.gameDate}T12:00:00.000Z`) : score.fetchedAt,
+    // Prefer the exact official kickoff. The date-only fallback is for historical rows that have no published kickoff.
+    kickoffAt: score.kickoffAt ?? (score.gameDate ? new Date(`${score.gameDate}T12:00:00.000Z`) : score.fetchedAt),
     gameDate: score.gameDate,
     venue: null,
     broadcast: null,
@@ -445,15 +456,17 @@ export async function getOfficialLeagueCalendar(teamCode: string) {
     db.select({ id: officialGames.id, teamCode: officialGames.teamCode, opponentCode: officialGames.opponentCode, homeAway: officialGames.homeAway, seasonPhase: officialGames.seasonPhase, weekLabel: officialGames.weekLabel, kickoffAt: officialGames.kickoffAt, broadcast: officialGames.broadcast, sourceUrl: officialGames.sourceUrl, daznUrl: officialGames.daznUrl, fetchedAt: officialGames.fetchedAt }).from(officialGames).orderBy(asc(officialGames.kickoffAt)),
     db.select({ externalId: officialScoreboardGames.externalId, seasonPhase: officialScoreboardGames.seasonPhase, weekLabel: officialScoreboardGames.weekLabel, awayTeamCode: officialScoreboardGames.awayTeamCode, homeTeamCode: officialScoreboardGames.homeTeamCode, awayScore: officialScoreboardGames.awayScore, homeScore: officialScoreboardGames.homeScore, gameState: officialScoreboardGames.gameState, kickoffAt: officialScoreboardGames.kickoffAt, gameUrl: officialScoreboardGames.gameUrl, sourceUrl: officialScoreboardGames.sourceUrl, fetchedAt: officialScoreboardGames.fetchedAt, nflHighlightUrl: officialScoreboardGames.nflHighlightUrl }).from(officialScoreboardGames).orderBy(desc(officialScoreboardGames.fetchedAt)),
   ]);
+  const now = new Date();
   const liveScoreboardFallbacks = rawResults.flatMap((score, index) => {
-    if (isOfficialFinal(score) || games.some((game) => findOfficialScoreForGame([score], game))) return [];
+    const hasScheduleRow = games.some((game) => findOfficialScoreForGame([score], game));
+    if (!shouldCreateScoreboardCalendarFallback(score, hasScheduleRow, now)) return [];
     const kickoffAt = score.kickoffAt ?? score.fetchedAt;
     return [
-      { id: -(index * 2 + 1), teamCode: score.awayTeamCode, opponentCode: score.homeTeamCode, homeAway: "away" as const, seasonPhase: score.seasonPhase, weekLabel: score.weekLabel, kickoffAt, broadcast: null, sourceUrl: score.gameUrl, daznUrl: null, fetchedAt: score.fetchedAt, liveScoreboardFallback: !score.kickoffAt },
-      { id: -(index * 2 + 2), teamCode: score.homeTeamCode, opponentCode: score.awayTeamCode, homeAway: "home" as const, seasonPhase: score.seasonPhase, weekLabel: score.weekLabel, kickoffAt, broadcast: null, sourceUrl: score.gameUrl, daznUrl: null, fetchedAt: score.fetchedAt, liveScoreboardFallback: !score.kickoffAt },
+      { id: -(index * 2 + 1), teamCode: score.awayTeamCode, opponentCode: score.homeTeamCode, homeAway: "away" as const, seasonPhase: score.seasonPhase, weekLabel: score.weekLabel, kickoffAt, broadcast: null, sourceUrl: score.gameUrl, daznUrl: null, fetchedAt: score.fetchedAt, liveScoreboardFallback: !isOfficialFinal(score) && !score.kickoffAt },
+      { id: -(index * 2 + 2), teamCode: score.homeTeamCode, opponentCode: score.awayTeamCode, homeAway: "home" as const, seasonPhase: score.seasonPhase, weekLabel: score.weekLabel, kickoffAt, broadcast: null, sourceUrl: score.gameUrl, daznUrl: null, fetchedAt: score.fetchedAt, liveScoreboardFallback: !isOfficialFinal(score) && !score.kickoffAt },
     ];
   });
-  const calendar = selectRelevantCalendarGames([...games, ...liveScoreboardFallbacks], teamCode, new Date()).map((game) => attachOfficialScore(game, rawResults));
+  const calendar = selectRelevantCalendarGames([...games, ...liveScoreboardFallbacks], teamCode, now).map((game) => attachOfficialScore(game, rawResults));
   const lastUpdatedAt = calendar.map((game) => game.fetchedAt).filter((value): value is Date => Boolean(value)).sort((a, b) => b.getTime() - a.getTime())[0];
   return { calendar, lastUpdatedAt };
 }

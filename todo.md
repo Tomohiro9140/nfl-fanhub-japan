@@ -51,6 +51,14 @@
 - [x] ALL GAMES NEXT 7 DAYSがGB@DEN・NYJ@PIT・CAR@JAXを保持する回帰テストを追加する。
 - [x] モバイル・PCの当日GAME TICKETとALL GAMES内容をDOMテキストで記録する。
 - [x] 390pxモバイル幅の実行DOMで当日GAME TICKETとALL GAMESのLIVE・Week 2表示を記録する。
+- [x] 終了試合のOfficial Game Dateが日本時間へ変換される経路を確認する。
+- [x] 終了試合でも公式Inactive情報をGAME TICKETに保持する。
+- [x] ALL GAMESで日本時間の当日終了試合を日付変更まで保持する。
+- [x] NYJ@PIT・CAR@JAXを含む時差・LIVE・FINALの回帰テストを追加する。
+- [x] モバイル・PCで終了試合のGAME TICKETとALL GAMESを確認する。
+- [x] CAR@JAXを明示した同一JST日FINALのALL GAMES保持回帰テストを追加する。
+- [x] NYJ@PIT・CAR@JAXのLIVE・FINAL・日本時間日付境界を網羅する回帰テストを追加する。
+- [x] 390pxモバイル幅で終了試合のGAME TICKETとALL GAMESのDOMテキストを記録する。
 
 - [x] 日本語の大見出しを削除し、必要な文脈は英語の短いラベルとデータ表記で伝える。
 - [x] ヒーローチケット、ブリーフィング、ロスター票の文字サイズ・余白・高さを縮小し、情報密度を上げる。

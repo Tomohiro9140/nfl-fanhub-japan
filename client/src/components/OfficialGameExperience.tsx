@@ -32,8 +32,9 @@ function fmtGameDate(value: Date) {
   return new Intl.DateTimeFormat("ja-JP", { month: "numeric", day: "numeric", weekday: "short", timeZone: "Asia/Tokyo" }).format(new Date(value));
 }
 
-function fmtFinalGameDate(gameDate: string | null | undefined, fallback: Date) {
-  const value = gameDate ? new Date(`${gameDate}T12:00:00.000Z`) : fallback;
+function fmtFinalGameDate(kickoffAt: Date | null | undefined, gameDate?: string | null) {
+  const value = kickoffAt ?? (gameDate ? new Date(`${gameDate}T12:00:00.000Z`) : null);
+  if (!value) return "—";
   return new Intl.DateTimeFormat("ja-JP", { month: "numeric", day: "numeric", weekday: "short", timeZone: "Asia/Tokyo" }).format(value);
 }
 
@@ -71,7 +72,7 @@ export function OfficialGameTicket({ favorite, snapshot, loading, spoilerMode = 
           <div className="border-x border-dashed border-white/25 px-3 text-center">
             {gameStatus.label === "FINAL" ? <>
               <p className="-mt-1 font-mono text-[9px] font-semibold tracking-[.14em] text-[#a5b3c9]">OFFICIAL GAME DATE</p>
-              <p className="mt-1 font-display text-lg font-extrabold leading-none">{fmtFinalGameDate(game.gameDate, game.kickoffAt)}</p>
+              <p className="mt-1 font-display text-lg font-extrabold leading-none">{fmtFinalGameDate(game.kickoffAt, game.gameDate)}</p>
               {isRevealedFinal ? <><p className="mt-1 font-display text-3xl font-black leading-none tracking-[.03em] text-white"><span className={favoriteScore !== null && opponentScore !== null && favoriteScore > opponentScore ? "text-[#ffc1a7]" : ""}>{favoriteScore}</span><span> — </span><span className={favoriteScore !== null && opponentScore !== null && opponentScore > favoriteScore ? "text-[#ffc1a7]" : ""}>{opponentScore}</span></p><p className="mt-1 font-mono text-[8px] font-bold tracking-[.14em] text-[#ffc1a7]">FINAL SCORE</p></> : <p className="mt-2 font-mono text-[8px] font-bold tracking-[.14em] text-[#a5b3c9]">FINAL · SCORE HIDDEN</p>}
             </> : <>
               <p className="font-mono text-[9px] font-semibold tracking-[.14em] text-[#a5b3c9]">{game.kickoffAtEstimated && gameStatus.label === "LIVE" ? "OFFICIAL SCOREBOARD" : "JST"}</p>
@@ -85,7 +86,7 @@ export function OfficialGameTicket({ favorite, snapshot, loading, spoilerMode = 
         {game.broadcast ? <p className="mt-2 font-mono text-[9px] tracking-[.08em] text-[#d9e3f3]">{game.broadcast}</p> : null}
         <div className="border-t border-white/15 pt-2 font-mono text-[9px]">
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1"><span className="font-bold tracking-[.1em] text-[#a5b3c9]">GAME STATUS</span><span className={`rounded px-1.5 py-0.5 font-bold ${gameStatus.label === "LIVE" ? "bg-[#e85d2a] text-white" : gameStatus.label === "FINAL" ? "bg-white text-[#10213a]" : "bg-[#315272] text-white"}`}>{gameStatus.label}</span><span className="text-[#d9e3f3]">{isRevealedFinal ? "OFFICIAL SCORE CONFIRMED" : gameStatus.score ? `OFFICIAL SCORE ${gameStatus.score}` : gameStatus.detail}</span></div>
-          {isGameDay ? <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1"><span className="font-bold tracking-[.1em] text-[#a5b3c9]">INACTIVES</span>{snapshot?.inactiveReport ? <a href={snapshot.inactiveReport.sourceUrl} target="_blank" rel="noreferrer" className="max-w-full truncate font-bold text-[#ffc1a7] underline underline-offset-2" title={snapshot.inactiveReport.title}>REPORTED · {snapshot.inactiveReport.summary || snapshot.inactiveReport.title} <ArrowUpRight className="inline h-3 w-3" /></a> : <span className="font-bold text-[#d9e3f3]">NONE REPORTED</span>}</div> : null}
+          {isGameDay || gameStatus.label === "FINAL" ? <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1"><span className="font-bold tracking-[.1em] text-[#a5b3c9]">INACTIVES</span>{snapshot?.inactiveReport ? <a href={snapshot.inactiveReport.sourceUrl} target="_blank" rel="noreferrer" className="max-w-full truncate font-bold text-[#ffc1a7] underline underline-offset-2" title={snapshot.inactiveReport.title}>REPORTED · {snapshot.inactiveReport.summary || snapshot.inactiveReport.title} <ArrowUpRight className="inline h-3 w-3" /></a> : <span className="font-bold text-[#d9e3f3]">NONE REPORTED</span>}</div> : null}
           <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1"><a href="https://www.nfl.com/inactives/" target="_blank" rel="noreferrer" className="font-bold text-[#ffc1a7] underline underline-offset-2">INACTIVES <ArrowUpRight className="inline h-3 w-3" /></a><a href={game.sourceUrl} target="_blank" rel="noreferrer" className="font-bold text-[#ffc1a7] underline underline-offset-2">{game.sourceUrl.includes("/games/") ? "NFL GAME CENTER" : "OFFICIAL SCHEDULE"} <ArrowUpRight className="inline h-3 w-3" /></a></div>
         </div>
       </> : <div className="mt-4"><EmptyOfficial label="OFFICIAL SCHEDULE PENDING" copy="NFL公式リーグ日程とチーム公式Scheduleを確認後に表示します。" /></div>}

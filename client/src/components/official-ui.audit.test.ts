@@ -105,13 +105,11 @@ describe("compact mobile result and schedule UI", () => {
     for (const team of nflTeams) {
       for (const gameState of states) {
         const kickoff = gameState === null ? new Date(Date.now() + 60 * 60 * 1_000) : kickoffAt;
-        const snapshot = { nextGame: { opponentCode: "CLE", homeAway: "away" as const, seasonPhase: "preseason" as const, weekLabel: "PRESEASON WEEK 2", kickoffAt: kickoff, venue: null, broadcast: null, sourceUrl: "https://www.nfl.com/games/bills-at-browns", daznUrl: null, gameState, awayScore: 41, homeScore: 38, fetchedAt: kickoffAt }, inactiveReport: gameState === "FINAL" ? null : { title: "NFL Official Inactives", summary: "QB Example Player", sourceUrl: "https://www.nfl.com/inactives/", publishedAt: kickoffAt }, roster: [], rosterCounts: [], injuries: [], news: [], sources: { schedule: null, roster: null, injury: null } };
+        const snapshot = { nextGame: { opponentCode: "CLE", homeAway: "away" as const, seasonPhase: "preseason" as const, weekLabel: "PRESEASON WEEK 2", kickoffAt: kickoff, venue: null, broadcast: null, sourceUrl: "https://www.nfl.com/games/bills-at-browns", daznUrl: null, gameState, awayScore: 41, homeScore: 38, fetchedAt: kickoffAt }, inactiveReport: { title: "NFL Official Inactives", summary: "QB Example Player", sourceUrl: "https://www.nfl.com/inactives/", publishedAt: kickoffAt }, roster: [], rosterCounts: [], injuries: [], news: [], sources: { schedule: null, roster: null, injury: null } };
         const markup = renderToStaticMarkup(createElement(OfficialGameTicket, { favorite: team, snapshot, loading: false, spoilerMode: true }));
         expect(markup).not.toContain("41 — 38");
-        if (gameState !== "FINAL") {
-          expect(markup).toContain("INACTIVES");
-          expect(markup).toContain("REPORTED · QB Example Player");
-        }
+        expect(markup).toContain("INACTIVES");
+        expect(markup).toContain("REPORTED · QB Example Player");
       }
     }
   });
@@ -186,18 +184,19 @@ describe("compact mobile result and schedule UI", () => {
 
   it("labels a protected final as the last game while keeping its official score out of spoiler-safe markup", () => {
     const snapshot = { nextGame: { opponentCode: "CLE", homeAway: "away" as const, seasonPhase: "preseason" as const, weekLabel: "PRESEASON WEEK 1", kickoffAt, venue: null, broadcast: null, gameState: "FINAL", awayScore: 10, homeScore: 7, sourceUrl: "https://www.nfl.com/games/bills-at-browns", daznUrl: null, nflHighlightUrl: "https://www.nfl.com/videos/bills-vs-browns-highlights", fetchedAt: kickoffAt }, gameDayStatus: { opponentCode: "CLE", homeAway: "away" as const, weekLabel: "PRESEASON WEEK 1", kickoffAt, gameState: "FINAL", awayScore: 10, homeScore: 7, sourceUrl: "https://www.nfl.com/games/bills-at-browns", fetchedAt: kickoffAt }, roster: [], rosterCounts: [], injuries: [], news: [], sources: { schedule: null, roster: null, injury: null } };
-    const datedSnapshot = { ...snapshot, nextGame: { ...snapshot.nextGame, gameDate: "2026-08-15" }, gameDayStatus: { ...snapshot.gameDayStatus, gameDate: "2026-08-15" } };
+    const datedSnapshot = { ...snapshot, nextGame: { ...snapshot.nextGame, kickoffAt: new Date("2026-08-21T23:00:00.000Z"), gameDate: "2026-08-21" }, gameDayStatus: { ...snapshot.gameDayStatus, kickoffAt: new Date("2026-08-21T23:00:00.000Z"), gameDate: "2026-08-21" }, inactiveReport: { title: "NFL Official Inactives", summary: "QB Example Player", sourceUrl: "https://www.nfl.com/inactives/", publishedAt: kickoffAt } };
     const spoilerMarkup = renderToStaticMarkup(createElement(OfficialGameTicket, { favorite, snapshot: datedSnapshot, loading: false, spoilerMode: true, onMarkWatched: () => undefined }));
     const normalMarkup = renderToStaticMarkup(createElement(OfficialGameTicket, { favorite, snapshot: datedSnapshot, loading: false, spoilerMode: false, onMarkWatched: () => undefined }));
     expect(spoilerMarkup).toContain("LAST GAME");
     expect(spoilerMarkup).toContain("ネタバレ防止中");
     expect(spoilerMarkup).toContain("OFFICIAL GAME DATE");
-    expect(spoilerMarkup).toContain("8/15(土)");
+    expect(spoilerMarkup).toContain("8/22(土)");
     expect(spoilerMarkup).not.toContain("13:57");
     expect(spoilerMarkup).not.toContain("OFFICIAL SCORE 10 — 7");
     expect(spoilerMarkup).toContain("min-h-[248px]");
     expect(spoilerMarkup).toContain("flex min-h-[248px] flex-col justify-between");
     expect(spoilerMarkup).toContain("border-t border-white/15 pt-2");
+    expect(spoilerMarkup).toContain("REPORTED · QB Example Player");
     expect(normalMarkup).toContain("FINAL SCORE");
     expect(normalMarkup).toContain("min-h-[248px]");
     expect(normalMarkup).toMatch(/>10<\/span><span> — <\/span><span[^>]*>7<\/span>/);
@@ -222,6 +221,20 @@ describe("compact mobile result and schedule UI", () => {
       snapshot: { ...snapshot, gameDayStatus: undefined, nextGame: { ...snapshot.nextGame, gameState: null, awayScore: null, homeScore: null } },
     }));
     expect(cutoverMarkup).not.toContain("RETURN TO LAST GAME");
+  });
+
+  it("renders NYJ@PIT and CAR@JAX finals with the correct JST date and preserved Inactives", () => {
+    const currentFinals = [
+      { matchup: "NYJ@PIT", opponentCode: "PIT", kickoffAt: new Date("2026-08-21T23:00:00.000Z") },
+      { matchup: "CAR@JAX", opponentCode: "JAX", kickoffAt: new Date("2026-08-21T23:30:00.000Z") },
+    ];
+    for (const game of currentFinals) {
+      const snapshot = { nextGame: { opponentCode: game.opponentCode, homeAway: "away" as const, seasonPhase: "preseason" as const, weekLabel: "PRESEASON WEEK 2", kickoffAt: game.kickoffAt, gameDate: "2026-08-21", venue: null, broadcast: null, sourceUrl: "https://www.nfl.com/games/example", daznUrl: null, gameState: "FINAL", awayScore: 13, homeScore: 10, fetchedAt: kickoffAt }, inactiveReport: { title: "NFL Official Inactives", summary: "QB Example Player", sourceUrl: "https://www.nfl.com/inactives/", publishedAt: kickoffAt }, roster: [], rosterCounts: [], injuries: [], news: [], sources: { schedule: null, roster: null, injury: null } };
+      const markup = renderToStaticMarkup(createElement(OfficialGameTicket, { favorite, snapshot, loading: false, spoilerMode: true }));
+      expect(markup, game.matchup).toContain("8/22(土)");
+      expect(markup, game.matchup).toContain("INACTIVES");
+      expect(markup, game.matchup).toContain("REPORTED · QB Example Player");
+    }
   });
 
   it("adds a compact bye-week notice beside the Game Ticket details", () => {
