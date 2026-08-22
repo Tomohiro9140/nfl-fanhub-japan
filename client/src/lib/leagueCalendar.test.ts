@@ -20,11 +20,14 @@ describe("league calendar presentation", () => {
   it("never falls back to other clubs when the selected team has no latest result", () => {
     const results = [
       { id: 1, awayTeamCode: "LV", homeTeamCode: "HOU" },
-      { id: 2, awayTeamCode: "BUF", homeTeamCode: "PIT" },
+      { id: 2, awayTeamCode: "HOU", homeTeamCode: "IND" },
+      { id: 3, awayTeamCode: "BUF", homeTeamCode: "PIT" },
+      { id: 4, awayTeamCode: "LV", homeTeamCode: "KC" },
     ];
 
     expect(getFavoriteLatestResults(results, "MIA")).toEqual([]);
     expect(getFavoriteLatestResults(results, "LV").map((game) => game.id)).toEqual([1]);
+    expect(getFavoriteLatestResults(results, "HOU").map((game) => game.id)).toEqual([1]);
   });
 
   it("filters latest results to the selected club for all 32 teams", () => {
@@ -36,6 +39,17 @@ describe("league calendar presentation", () => {
 
     for (const team of nflTeams) {
       expect(getFavoriteLatestResults(results, team.code).map((game) => game.awayTeamCode)).toEqual([team.code]);
+    }
+  });
+
+  it("returns exactly one latest result for every team when multiple completed games are available", () => {
+    const results = nflTeams.flatMap((team, index) => [
+      { id: index * 2 + 1, awayTeamCode: team.code, homeTeamCode: "NFL" },
+      { id: index * 2 + 2, awayTeamCode: team.code, homeTeamCode: "NFL" },
+    ]);
+
+    for (const team of nflTeams) {
+      expect(getFavoriteLatestResults(results, team.code)).toHaveLength(1);
     }
   });
 

@@ -31,7 +31,7 @@ export function getFavoriteSchedule(games: LeagueCalendarGame[], favoriteCode: s
 export function getFavoriteLatestResults<T extends { awayTeamCode: string; homeTeamCode: string }>(results: T[], favoriteCode: string) {
   return results
     .filter((game) => game.awayTeamCode === favoriteCode || game.homeTeamCode === favoriteCode)
-    .slice(0, 3);
+    .slice(0, 1);
 }
 
 /** Keeps every card on the current Japan calendar day while retaining the rolling seven-day future range. */

@@ -369,12 +369,12 @@ export async function getOfficialLeagueDashboardSummary() {
   const [standings, rawResults, games] = await Promise.all([
     db.select({ teamCode: officialStandings.teamCode, wins: officialStandings.wins, losses: officialStandings.losses, ties: officialStandings.ties, pct: officialStandings.pct, pointsFor: officialStandings.pointsFor, pointsAgainst: officialStandings.pointsAgainst, sourceUrl: officialStandings.sourceUrl, fetchedAt: officialStandings.fetchedAt }).from(officialStandings).orderBy(desc(officialStandings.pct), desc(officialStandings.wins), asc(officialStandings.losses)),
     db.select({ id: officialScoreboardGames.id, weekLabel: officialScoreboardGames.weekLabel, awayTeamCode: officialScoreboardGames.awayTeamCode, homeTeamCode: officialScoreboardGames.homeTeamCode, awayScore: officialScoreboardGames.awayScore, homeScore: officialScoreboardGames.homeScore, gameState: officialScoreboardGames.gameState, gameDate: officialScoreboardGames.gameDate, kickoffAt: officialScoreboardGames.kickoffAt, gameUrl: officialScoreboardGames.gameUrl, nflHighlightUrl: officialScoreboardGames.nflHighlightUrl, sourceUrl: officialScoreboardGames.sourceUrl, fetchedAt: officialScoreboardGames.fetchedAt }).from(officialScoreboardGames).orderBy(desc(officialScoreboardGames.gameDate), desc(officialScoreboardGames.fetchedAt)),
-    db.select({ teamCode: officialGames.teamCode, opponentCode: officialGames.opponentCode, weekLabel: officialGames.weekLabel, kickoffAt: officialGames.kickoffAt, daznUrl: officialGames.daznUrl }).from(officialGames),
+    db.select({ teamCode: officialGames.teamCode, opponentCode: officialGames.opponentCode, weekLabel: officialGames.weekLabel, kickoffAt: officialGames.kickoffAt, venue: officialGames.venue, daznUrl: officialGames.daznUrl }).from(officialGames),
   ]);
   const relatedGame = (awayTeamCode: string, homeTeamCode: string, weekLabel: string | null) => games.find((game) => findOfficialScoreForGame([{ awayTeamCode, homeTeamCode, weekLabel, gameState: "", awayScore: null, homeScore: null }], game));
   const results = rawResults.map((result) => {
     const scheduleGame = relatedGame(result.awayTeamCode, result.homeTeamCode, result.weekLabel);
-    return { ...result, kickoffAt: result.kickoffAt ?? scheduleGame?.kickoffAt ?? null, daznUrl: scheduleGame?.daznUrl ?? null };
+    return { ...result, kickoffAt: result.kickoffAt ?? scheduleGame?.kickoffAt ?? null, venue: scheduleGame?.venue ?? null, daznUrl: scheduleGame?.daznUrl ?? null };
   });
   const lastUpdatedAt = [standings[0]?.fetchedAt, results[0]?.fetchedAt].filter((value): value is Date => Boolean(value)).sort((a, b) => b.getTime() - a.getTime())[0];
   return { standings, results, lastUpdatedAt };

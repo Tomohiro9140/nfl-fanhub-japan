@@ -11,7 +11,7 @@ const kickoffAt = new Date("2026-08-23T06:00:00.000Z");
 
 const dashboard: LeagueDashboard = {
   standings: [],
-  results: [{ id: 1, weekLabel: "PRESEASON WEEK 1", awayTeamCode: "CAR", homeTeamCode: "BUF", awayScore: 14, homeScore: 29, gameState: "FINAL", gameDate: "2026-08-15", kickoffAt: new Date("2026-08-15T17:00:00.000Z"), gameUrl: "https://www.nfl.com/games/panthers-at-bills-2026-pre-1", nflHighlightUrl: "https://www.nfl.com/videos/panthers-vs-bills-highlights-preseason-week-1", daznUrl: null, sourceUrl: "https://www.nfl.com/scores", fetchedAt: kickoffAt }],
+  results: [{ id: 1, weekLabel: "PRESEASON WEEK 1", awayTeamCode: "CAR", homeTeamCode: "BUF", awayScore: 14, homeScore: 29, gameState: "FINAL", gameDate: "2026-08-15", kickoffAt: new Date("2026-08-15T17:00:00.000Z"), venue: "Highmark Stadium", gameUrl: "https://www.nfl.com/games/panthers-at-bills-2026-pre-1", nflHighlightUrl: "https://www.nfl.com/videos/panthers-vs-bills-highlights-preseason-week-1", daznUrl: null, sourceUrl: "https://www.nfl.com/scores", fetchedAt: kickoffAt }],
   calendar: [{ id: 1, teamCode: "BUF", opponentCode: "CLE", homeAway: "away", seasonPhase: "preseason", weekLabel: "PRESEASON WEEK 2", kickoffAt, broadcast: null, sourceUrl: "https://www.nfl.com/schedules", daznUrl: null, gameState: null, awayScore: null, homeScore: null }],
 };
 
@@ -20,9 +20,10 @@ describe("compact mobile result and schedule UI", () => {
     const markup = renderToStaticMarkup(createElement(OfficialLatestResults, { favorite, dashboard, loading: false, spoilerMode: true }));
     expect(markup).toContain("WATCH HIGHLIGHTS");
     expect(markup).not.toContain("リンク済");
-    expect(markup).toContain("RESULT HIDDEN");
+    expect(markup).not.toContain("RESULT HIDDEN");
     expect(markup).toContain("PRESEASON WEEK 1");
     expect(markup).toContain("GAME DATE · 8/16(日) JST");
+    expect(markup).toContain("VENUE · Highmark Stdm.");
     expect(markup).toContain("absolute bottom-full right-0 mb-1.5");
     const fallbackDashboard: LeagueDashboard = { ...dashboard, results: [{ ...dashboard.results[0]!, kickoffAt: null }] };
     const fallbackMarkup = renderToStaticMarkup(createElement(OfficialLatestResults, { favorite, dashboard: fallbackDashboard, loading: false, spoilerMode: true }));

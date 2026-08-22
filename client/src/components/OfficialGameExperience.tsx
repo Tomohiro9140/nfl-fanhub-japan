@@ -1,7 +1,7 @@
 import { ArrowUpRight, CircleAlert, Clock3, FileText, Tv, UsersRound } from "lucide-react";
 import React from "react";
 import { getTeamByCode, type FavoriteTeam } from "@/lib/nflTeams";
-import { confirmedVenue } from "@/lib/gameVenue";
+import { compactVenue } from "@/lib/gameVenue";
 import { daznNflGamePassUrl, daznWatchTarget } from "@/lib/daznWatch";
 import { GameCountdown } from "@/components/GameCountdown";
 import { filterRosterByStatus } from "@/lib/rosterFilter";
@@ -49,6 +49,7 @@ export function OfficialGameTicket({ favorite, snapshot, loading, spoilerMode = 
   const gameDay = snapshot?.gameDayStatus ?? game;
   const gameStatus = gameStateCopy(gameDay, spoilerMode);
   const opponent = getTeamByCode(game?.opponentCode ?? null);
+  const venue = compactVenue(game?.venue);
   const watchTarget = typeof navigator === "undefined" ? "_blank" : daznWatchTarget(navigator.userAgent);
   const watchUrl = daznGamePassUrl;
   const favoriteLabel = game?.homeAway === "home" ? `@ ${favorite.name}` : favorite.name;
@@ -74,7 +75,7 @@ export function OfficialGameTicket({ favorite, snapshot, loading, spoilerMode = 
               <p className="font-mono text-[9px] font-semibold tracking-[.14em] text-[#a5b3c9]">JST</p>
               <p className="mt-1 font-display text-lg font-extrabold leading-none">{fmtDate(game.kickoffAt)}</p>
               <GameCountdown kickoffAt={game.kickoffAt} result={{ gameState: game.gameState, awayScore: game.awayScore, homeScore: game.homeScore }} hideFinalScore={spoilerMode} className="mt-1 text-[9px]" />
-              {confirmedVenue(game.venue) ? <p className="mt-1 text-[10px] text-[#ffc1a7]">{confirmedVenue(game.venue)}</p> : null}
+              {venue ? <p className="mt-1 truncate text-[10px] text-[#ffc1a7]" title={game.venue ?? undefined}>{venue}</p> : null}
             </>}
           </div>
           <div className="text-right"><p className={`font-display text-base font-bold leading-tight ${isRevealedFinal && favoriteScore !== null && opponentScore !== null && opponentScore > favoriteScore ? "text-[#ffc1a7]" : ""}`}>{opponentLabel}</p></div>

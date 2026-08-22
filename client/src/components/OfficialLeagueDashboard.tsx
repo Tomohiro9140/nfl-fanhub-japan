@@ -3,11 +3,12 @@ import React, { useMemo, useState } from "react";
 import { nflTeams, officialTeamScheduleUrl, type FavoriteTeam } from "@/lib/nflTeams";
 import { abbreviatedMatchup, getFavoriteLatestResults, getFavoriteSchedule, getNextSevenDayGames, seasonWeekLabel, type LeagueCalendarGame } from "@/lib/leagueCalendar";
 import { daznWatchTarget } from "@/lib/daznWatch";
+import { compactVenue } from "@/lib/gameVenue";
 import { hasIndividualOfficialHighlight } from "@/lib/nflHighlights";
 
 export type LeagueDashboard = {
   standings: Array<{ teamCode: string; wins: number; losses: number; ties: number; pct: string; pointsFor: number | null; pointsAgainst: number | null; sourceUrl: string; fetchedAt: Date }>;
-  results: Array<{ id: number; weekLabel: string | null; awayTeamCode: string; homeTeamCode: string; awayScore: number | null; homeScore: number | null; gameState: string; gameDate: string | null; kickoffAt: Date | null; gameUrl: string; nflHighlightUrl: string | null; daznUrl: string | null; sourceUrl: string; fetchedAt: Date }>;
+  results: Array<{ id: number; weekLabel: string | null; awayTeamCode: string; homeTeamCode: string; awayScore: number | null; homeScore: number | null; gameState: string; gameDate: string | null; kickoffAt: Date | null; venue: string | null; gameUrl: string; nflHighlightUrl: string | null; daznUrl: string | null; sourceUrl: string; fetchedAt: Date }>;
   calendar: LeagueCalendarGame[];
   lastUpdatedAt?: Date;
 };
@@ -66,7 +67,8 @@ export function OfficialLatestResults({ favorite, dashboard, loading, spoilerMod
               const homeWon = !spoilerMode && hasOfficialScore && homeScore > awayScore;
               const gameDate = jstResultDate(game.kickoffAt, game.gameDate);
               const hasExactKickoff = Boolean(game.kickoffAt);
-              const resultMeta = [game.weekLabel ?? "OFFICIAL", spoilerMode ? "RESULT HIDDEN" : game.gameState !== "FINAL" ? game.gameState : null].filter(Boolean).join(" · ");
+              const venue = compactVenue(game.venue);
+              const resultMeta = [game.weekLabel ?? "OFFICIAL", !spoilerMode && game.gameState !== "FINAL" ? game.gameState : null].filter(Boolean).join(" · ");
               return (
                 <div key={game.id} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 py-7 pb-2.5">
                   <a href={game.gameUrl} target="_blank" rel="noreferrer" className="min-w-0 self-center text-[13px] leading-[1.25]">
@@ -74,9 +76,10 @@ export function OfficialLatestResults({ favorite, dashboard, loading, spoilerMod
                     <p className={`mt-1 truncate ${homeWon ? "font-extrabold text-[#a84420]" : "font-bold"}`}>@ {home?.name ?? game.homeTeamCode}</p>
                   </a>
                   <div className="relative min-w-[106px] self-center text-right">
-                    <div className="absolute bottom-full right-0 mb-1.5 whitespace-nowrap text-right">
+                    <div className="absolute bottom-full right-0 mb-1.5 w-[164px] text-right">
                       {gameDate ? <p className="font-mono text-[8px] font-bold leading-[10px] tracking-[.08em] text-[#526173]">{hasExactKickoff ? "GAME DATE" : "OFFICIAL DATE"} · {gameDate}{hasExactKickoff ? " JST" : ""}</p> : null}
                       <p className="font-mono text-[8px] font-bold leading-[10px] tracking-[.08em] text-[#64748b]">{resultMeta}</p>
+                      {venue ? <p className="truncate font-mono text-[8px] font-bold leading-[10px] tracking-[.08em] text-[#7a6557]" title={game.venue ?? undefined}>VENUE · {venue}</p> : null}
                     </div>
                     <p className="font-mono text-[26px] font-black leading-[.85] tracking-[-.06em]">{spoilerMode ? "—" : <><span className={awayWon ? "text-[#a84420]" : undefined}>{game.awayScore ?? "—"}</span><span> - </span><span className={homeWon ? "text-[#a84420]" : undefined}>{game.homeScore ?? "—"}</span></>}</p>
                   </div>
