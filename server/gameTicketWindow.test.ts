@@ -22,6 +22,23 @@ describe("JST replay window for Game Ticket", () => {
     expect(selectGameTicketGame({ now: new Date("2026-08-16T11:00:00.000Z"), activeGame: live, latestCompletedGame: completed, scheduledGame: upcoming })).toBe(live);
   });
 
+  it("keeps a live scoreboard candidate ahead of a later fixture when its schedule row is unavailable", () => {
+    const liveScoreboard = { kickoffAt: new Date("2026-08-22T01:50:00.000Z"), gameState: "INGAME", awayScore: 7, homeScore: 10, weekLabel: "PRESEASON WEEK 2", seasonPhase: "preseason" as const };
+    const weekThree = { kickoffAt: new Date("2026-08-29T01:00:00.000Z"), gameState: null, awayScore: null, homeScore: null, weekLabel: "PRESEASON WEEK 3", seasonPhase: "preseason" as const };
+    expect(selectGameTicketGame({ now: new Date("2026-08-22T02:00:00.000Z"), activeGame: liveScoreboard, scheduledGame: weekThree })).toBe(liveScoreboard);
+  });
+
+  it("keeps every current Week 2 participant on its live score instead of selecting Week 3", () => {
+    const pairs = [["GB", "DEN"], ["NYJ", "PIT"], ["CAR", "JAX"]] as const;
+    for (const [awayTeamCode, homeTeamCode] of pairs) {
+      const liveScoreboard = { awayTeamCode, homeTeamCode, kickoffAt: new Date("2026-08-22T01:50:00.000Z"), gameState: "INGAME", awayScore: 7, homeScore: 10, weekLabel: "PRESEASON WEEK 2", seasonPhase: "preseason" as const };
+      const weekThree = { kickoffAt: new Date("2026-08-29T01:00:00.000Z"), gameState: null, awayScore: null, homeScore: null, weekLabel: "PRESEASON WEEK 3", seasonPhase: "preseason" as const };
+      const selected = selectGameTicketGame({ now: new Date("2026-08-22T02:00:00.000Z"), activeGame: liveScoreboard, scheduledGame: weekThree });
+      expect(selected).toBe(liveScoreboard);
+      expect(selected?.weekLabel).toBe("PRESEASON WEEK 2");
+    }
+  });
+
   it("lets a viewer explicitly skip the protected result and move to the next game before Wednesday", () => {
     const beforeCutoff = new Date("2026-08-18T20:59:59.000Z");
     expect(selectGameTicketGame({ now: beforeCutoff, latestCompletedGame: completed, scheduledGame: upcoming, skipReplayWindow: true })).toBe(upcoming);

@@ -27,4 +27,20 @@ describe("selectRelevantCalendarGames", () => {
 
     expect(selectRelevantCalendarGames(games, "BUF", now)).toEqual(games);
   });
+
+  it("keeps a live scoreboard fallback on the current Japan calendar day", () => {
+    const now = new Date("2026-08-22T02:00:00.000Z"); // 11:00 JST
+    const liveFallback = { teamCode: "GB", opponentCode: "DEN", kickoffAt: new Date("2026-08-22T01:50:00.000Z"), liveScoreboardFallback: true };
+    expect(selectRelevantCalendarGames([liveFallback], "BUF", now)).toEqual([liveFallback]);
+  });
+
+  it("retains every active Week 2 matchup in the ALL GAMES window when schedule rows are missing", () => {
+    const now = new Date("2026-08-22T02:00:00.000Z"); // 11:00 JST
+    const liveFallbacks = [
+      { teamCode: "GB", opponentCode: "DEN", kickoffAt: new Date("2026-08-22T01:50:00.000Z"), liveScoreboardFallback: true },
+      { teamCode: "NYJ", opponentCode: "PIT", kickoffAt: new Date("2026-08-22T01:50:00.000Z"), liveScoreboardFallback: true },
+      { teamCode: "CAR", opponentCode: "JAX", kickoffAt: new Date("2026-08-21T23:30:00.000Z"), liveScoreboardFallback: false },
+    ];
+    expect(selectRelevantCalendarGames(liveFallbacks, "BUF", now)).toEqual(liveFallbacks);
+  });
 });

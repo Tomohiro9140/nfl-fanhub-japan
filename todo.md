@@ -29,6 +29,28 @@
 - [x] 公式Inactive取得、保存処理、全32チームのスナップショット返却を統合回帰テストで検証する。
 - [x] 公式Inactive取得→保存→getOfficialTeamSnapshot返却を同一テストで全32チーム検証する。
 - [x] 公式Inactiveの保存済みレコードを同一DBモックからgetOfficialTeamSnapshotが読む統合テストを追加する。
+- [x] 公式フィードHeartbeatの実行状況と全32チームのキャッシュ鮮度を確認する。
+- [ ] 未更新または失敗した公式チームフィードを再同期する（13チーム更新済み、19チームはWAF/403解除待ち）。
+- [ ] チーム別の保存件数・最新時刻・画面データを照合する（WAF解除後に未更新19チームを再照合）。
+- [ ] 公式サイトのWAFによる403が解消後、未更新の19チームの公式RSSを再同期する。
+- [x] RSSの403時に公式チームニュースページから最新記事を取得するフォールバックは、ユーザー選択Aにより実装しない方針を確定する。
+- [x] 公式ページフォールバックでの未更新19チーム再同期は、ユーザー選択Aにより実施しない方針を確定する。
+- [ ] WAF解除後に全32チームの公式フィード鮮度と代表チームのUI表示を検証する。
+- [x] 全32チームの公式Inactive保存状態とチーム別スナップショット返却を確認する。
+- [x] 全32チームのGame Dayにおける公式発表・NONE REPORTED・ネタバレ防止条件を検証する。
+- [x] 代表チームのGame Day表示をモバイル・PCで確認する。
+- [x] 実データで全32チームのNFL Official Inactives件数とteam_code対応を記録する。
+- [x] 実データの全32チームスナップショットでinactiveReport返却を低負荷に確認する。
+- [x] 代表チームのGame DayをPC幅でも確認する。
+- [x] 代表チームのPC Game DayでINACTIVES表示とネタバレ防止時の非スコア状態をDOMテキストで記録する。
+- [x] 消えた当日Schedule Deskカードと該当GAME TICKETの公式ゲームデータを特定する。
+- [x] JST当日保持・試合中LIVE優先・正しいWeekラベル選択を共通ロジックで修正する。
+- [x] 当日全試合と参加全チームについてSchedule Desk・GAME TICKETの回帰テストを追加する。
+- [x] モバイル・PCで当日試合のSchedule DeskとGAME TICKETを確認する。
+- [x] GB/DEN・NYJ/PIT・CAR/JAXの各参加チームでPRESEASON WEEK 2とLIVE選択を自動回帰テストする。
+- [x] ALL GAMES NEXT 7 DAYSがGB@DEN・NYJ@PIT・CAR@JAXを保持する回帰テストを追加する。
+- [x] モバイル・PCの当日GAME TICKETとALL GAMES内容をDOMテキストで記録する。
+- [x] 390pxモバイル幅の実行DOMで当日GAME TICKETとALL GAMESのLIVE・Week 2表示を記録する。
 
 - [x] 日本語の大見出しを削除し、必要な文脈は英語の短いラベルとデータ表記で伝える。
 - [x] ヒーローチケット、ブリーフィング、ロスター票の文字サイズ・余白・高さを縮小し、情報密度を上げる。

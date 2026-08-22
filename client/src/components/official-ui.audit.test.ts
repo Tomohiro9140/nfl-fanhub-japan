@@ -5,6 +5,7 @@ import { OfficialGameNotes, OfficialGameTicket, OfficialHuddle, OfficialRosterMo
 import { OfficialLatestResults, OfficialLeagueDashboard, type LeagueDashboard } from "./OfficialLeagueDashboard";
 import { SpoilerSwitch } from "@/pages/Home";
 import { nflTeams, type FavoriteTeam } from "@/lib/nflTeams";
+import { getNextSevenDayGames } from "@/lib/leagueCalendar";
 
 const favorite: FavoriteTeam = { code: "BUF", name: "Buffalo Bills", conference: "AFC", division: "East", brand: { primary: "#00338D", accent: "#C60C30", onPrimary: "#FFFFFF" } };
 const kickoffAt = new Date("2026-08-23T06:00:00.000Z");
@@ -80,6 +81,16 @@ describe("compact mobile result and schedule UI", () => {
     expect(reportedMarkup).not.toContain("NONE REPORTED");
   });
 
+  it("treats the NFL official INGAME state as LIVE so a current Preseason week never falls through to the next fixture", () => {
+    const liveSnapshot = { nextGame: { opponentCode: "DEN", homeAway: "away" as const, seasonPhase: "preseason" as const, weekLabel: "PRESEASON WEEK 2", kickoffAt, kickoffAtEstimated: true, venue: null, broadcast: null, sourceUrl: "https://www.nfl.com/games/packers-at-broncos-2026-pre-2", daznUrl: null, gameState: "INGAME", awayScore: 7, homeScore: 10, fetchedAt: kickoffAt }, roster: [], rosterCounts: [], injuries: [], news: [], sources: { schedule: null, roster: null, injury: null } };
+    const markup = renderToStaticMarkup(createElement(OfficialGameTicket, { favorite, snapshot: liveSnapshot, loading: false, spoilerMode: true }));
+    expect(markup).toContain("PRESEASON WEEK 2");
+    expect(markup).toContain("LIVE GAME");
+    expect(markup).toContain("LIVE NOW");
+    expect(markup).toContain("ネタバレ防止中 · スコア非表示");
+    expect(markup).not.toContain("7 — 10");
+  });
+
   it("shows an Inactives state for every team during game day", () => {
     const gameDaySnapshot = { nextGame: { opponentCode: "CLE", homeAway: "away" as const, seasonPhase: "preseason" as const, weekLabel: "PRESEASON WEEK 2", kickoffAt, venue: null, broadcast: null, sourceUrl: "https://www.nfl.com/games/bills-at-browns", daznUrl: null, gameState: "LIVE", awayScore: null, homeScore: null, fetchedAt: kickoffAt }, roster: [], rosterCounts: [], injuries: [], news: [], sources: { schedule: null, roster: null, injury: null } };
     for (const team of nflTeams) {
@@ -124,6 +135,22 @@ describe("compact mobile result and schedule UI", () => {
     expect(homeLeagueMarkup).not.toContain(">HOME<");
     expect(homeLeagueMarkup).toContain("background-color:#00338D");
     expect(homeLeagueMarkup).toContain("border-left-color:#C60C30");
+  });
+
+  it("keeps every live Week 2 matchup in rendered Schedule Desk markup at compact and wide breakpoints", () => {
+    const liveCalendar: LeagueDashboard = {
+      ...dashboard,
+      calendar: [
+        { id: -1, teamCode: "GB", opponentCode: "DEN", homeAway: "away", seasonPhase: "preseason", weekLabel: "PRESEASON WEEK 2", kickoffAt, broadcast: null, sourceUrl: "https://www.nfl.com/games/packers-at-broncos-2026-pre-2", daznUrl: null, gameState: "INGAME", awayScore: 7, homeScore: 10, liveScoreboardFallback: true },
+        { id: -2, teamCode: "NYJ", opponentCode: "PIT", homeAway: "away", seasonPhase: "preseason", weekLabel: "PRESEASON WEEK 2", kickoffAt, broadcast: null, sourceUrl: "https://www.nfl.com/games/jets-at-steelers-2026-pre-2", daznUrl: null, gameState: "INGAME", awayScore: 17, homeScore: 0, liveScoreboardFallback: true },
+        { id: -3, teamCode: "CAR", opponentCode: "JAX", homeAway: "away", seasonPhase: "preseason", weekLabel: "PRESEASON WEEK 2", kickoffAt, broadcast: null, sourceUrl: "https://www.nfl.com/games/panthers-at-jaguars-2026-pre-2", daznUrl: null, gameState: "INGAME", awayScore: 26, homeScore: 6 },
+      ],
+    };
+    const markup = renderToStaticMarkup(createElement(OfficialLeagueDashboard, { favorite: { ...favorite, code: "GB", name: "Green Bay Packers" }, dashboard: liveCalendar, loading: false }));
+    expect(markup).toContain("GB @ DEN");
+    expect(markup).toContain("LIVE · OFFICIAL SCOREBOARD");
+    expect(markup).toContain("grid grid-cols-2");
+    expect(getNextSevenDayGames(liveCalendar.calendar, new Date("2026-08-22T02:00:00.000Z")).map((game) => `${game.teamCode} @ ${game.opponentCode}`)).toEqual(["GB @ DEN", "NYJ @ PIT", "CAR @ JAX"]);
   });
 
   it("uses the reclaimed huddle space for official updates and storylines instead of next-game detail", () => {

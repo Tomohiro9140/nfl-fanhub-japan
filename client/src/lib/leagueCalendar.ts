@@ -12,6 +12,7 @@ export type LeagueCalendarGame = {
   gameState: string | null;
   awayScore: number | null;
   homeScore: number | null;
+  liveScoreboardFallback?: boolean;
 };
 
 /** Converts a canonical league game row into the selected team's perspective. */

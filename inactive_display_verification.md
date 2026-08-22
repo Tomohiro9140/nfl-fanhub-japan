@@ -1,0 +1,3 @@
+# Game Day Inactive Display Verification
+
+Verified on 2026-08-22 JST using the PC preview for the Buffalo Bills. The GAME TICKET text showed `GAME STATUS · GAME DAY · 公式インアクティブ発表前` and `INACTIVES · NONE REPORTED`, with the NFL official Inactives page linked as the source. The spoiler-prevention switch was on; neither the Game Ticket nor the LATEST RESULTS card displayed a numeric score. The current official data record contains zero `NFL Official Inactives` items, so `NONE REPORTED` is the expected live state for every team until the NFL publishes team sections at https://www.nfl.com/inactives/.
