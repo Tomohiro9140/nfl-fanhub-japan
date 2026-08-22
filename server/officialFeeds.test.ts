@@ -13,6 +13,13 @@ describe("official team feed parsing", () => {
     expect(items[1]).toMatchObject({ title: "Team announces community event", category: "news" });
   });
 
+  it("sorts RSS records by published date before selecting the newest entries", () => {
+    const outOfOrderRss = `<?xml version="1.0"?><rss><channel><item><title>Historic item first</title><link>https://www.commanders.com/news/historic</link><description>Archived news.</description><pubDate>Sat, 30 Apr 2022 18:10:58 GMT</pubDate></item><item><title>Current item last</title><link>https://www.commanders.com/news/current</link><description>Current official news.</description><pubDate>Fri, 22 Aug 2026 18:10:58 GMT</pubDate></item></channel></rss>`;
+    const [source] = getOfficialSources("WAS");
+    const items = parseOfficialTeamRss(outOfOrderRss, "WAS", source);
+    expect(items.map((item) => item.title)).toEqual(["Current item last", "Historic item first"]);
+  });
+
   it("does not classify a normal Standout story as an out-status injury report", () => {
     const rss = `<?xml version="1.0"?><rss><channel><item><title>3 Standout Players From Jets-Buccaneers Preseason Game</title><link>https://www.newyorkjets.com/news/standout</link><description>Official game recap.</description><pubDate>Fri, 14 Aug 2026 21:12:14 GMT</pubDate></item></channel></rss>`;
     const [source] = getOfficialSources("NYJ");

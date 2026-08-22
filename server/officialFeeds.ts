@@ -148,6 +148,7 @@ export function parseOfficialTeamRss(xml: string, teamCode: string, source: Offi
     const rawSummary = field(item, "description") || field(item, "content:encoded");
     const summary = rawSummary.slice(0, 560) || null;
     const published = new Date(field(item, "pubDate"));
+    if (Number.isNaN(published.getTime())) continue;
     const externalId = createHash("sha256").update(`${teamCode}:${url}`).digest("hex");
     results.push({
       externalId,
@@ -158,11 +159,11 @@ export function parseOfficialTeamRss(xml: string, teamCode: string, source: Offi
       title,
       summary,
       category: classifyOfficialFeedItem(title, rawSummary, url),
-      publishedAt: Number.isNaN(published.getTime()) ? now : published,
+      publishedAt: published,
       fetchedAt: now,
     });
   }
-  return results.slice(0, 24);
+  return results.sort((left, right) => right.publishedAt.getTime() - left.publishedAt.getTime()).slice(0, 24);
 }
 
 /** Extracts only team-matched injury roundup links from the official NFL injuries page. */
