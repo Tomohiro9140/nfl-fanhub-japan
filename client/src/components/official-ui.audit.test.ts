@@ -92,11 +92,14 @@ describe("compact mobile result and schedule UI", () => {
   });
 
   it("shows an Inactives state for every team during game day", () => {
-    const gameDaySnapshot = { nextGame: { opponentCode: "CLE", homeAway: "away" as const, seasonPhase: "preseason" as const, weekLabel: "PRESEASON WEEK 2", kickoffAt, venue: null, broadcast: null, sourceUrl: "https://www.nfl.com/games/bills-at-browns", daznUrl: null, gameState: "LIVE", awayScore: null, homeScore: null, fetchedAt: kickoffAt }, roster: [], rosterCounts: [], injuries: [], news: [], sources: { schedule: null, roster: null, injury: null } };
+    const gameDayKickoff = new Date(Date.now() + 60 * 60 * 1_000);
+    const gameDaySnapshot = { nextGame: { opponentCode: "CLE", homeAway: "away" as const, seasonPhase: "preseason" as const, weekLabel: "PRESEASON WEEK 2", kickoffAt: gameDayKickoff, venue: null, broadcast: null, sourceUrl: "https://www.nfl.com/games/bills-at-browns", daznUrl: null, gameState: null, awayScore: null, homeScore: null, fetchedAt: kickoffAt }, roster: [], rosterCounts: [], injuries: [], news: [], sources: { schedule: null, roster: null, injury: null } };
     for (const team of nflTeams) {
       const markup = renderToStaticMarkup(createElement(OfficialGameTicket, { favorite: team, snapshot: gameDaySnapshot, loading: false, spoilerMode: true }));
+      expect(markup).toContain("GAME DAY");
       expect(markup).toContain("INACTIVES");
       expect(markup).toContain("NONE REPORTED");
+      expect(markup).not.toContain("公式インアクティブ発表前");
     }
   });
 
