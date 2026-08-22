@@ -29,14 +29,14 @@ export function createTimedLoader<T>(ttlMs: number, load: (key: string) => Promi
 }
 
 const loadTeamSnapshot = createTimedLoader(12_000, async (key) => {
-  const [teamCode, skipGameUrl, forceLastGame] = key.split("|");
-  return getOfficialTeamSnapshot(teamCode!, skipGameUrl || undefined, forceLastGame === "last");
+  const [teamCode, skipGameUrl, forceLastGame, rosterMode] = key.split("|");
+  return getOfficialTeamSnapshot(teamCode!, skipGameUrl || undefined, forceLastGame === "last", undefined, rosterMode === "roster");
 });
 const loadLeagueSummary = createTimedLoader(12_000, async () => getOfficialLeagueDashboardSummary());
 const loadLeagueCalendar = createTimedLoader(45_000, async (teamCode) => getOfficialLeagueCalendar(teamCode));
 
-export function getCachedOfficialTeamSnapshot(teamCode: string, skipGameUrl?: string, forceLastGame = false) {
-  return loadTeamSnapshot(`${teamCode.toUpperCase()}|${skipGameUrl ?? ""}|${forceLastGame ? "last" : "auto"}`);
+export function getCachedOfficialTeamSnapshot(teamCode: string, skipGameUrl?: string, forceLastGame = false, includeRoster = true) {
+  return loadTeamSnapshot(`${teamCode.toUpperCase()}|${skipGameUrl ?? ""}|${forceLastGame ? "last" : "auto"}|${includeRoster ? "roster" : "light"}`);
 }
 
 export function getCachedOfficialLeagueDashboardSummary() {

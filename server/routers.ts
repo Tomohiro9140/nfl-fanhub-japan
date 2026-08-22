@@ -79,8 +79,8 @@ export const appRouter = router({
     }),
   }),
   teamSnapshot: router({
-    byTeam: publicProcedure.input(z.object({ teamCode: z.string().length(2).or(z.string().length(3)), skipGameUrl: z.string().url().optional(), forceLastGame: z.boolean().optional() })).query(({ input }) => {
-      return getCachedOfficialTeamSnapshot(input.teamCode, input.skipGameUrl, input.forceLastGame);
+    byTeam: publicProcedure.input(z.object({ teamCode: z.string().length(2).or(z.string().length(3)), skipGameUrl: z.string().url().optional(), forceLastGame: z.boolean().optional(), includeRoster: z.boolean().optional() })).query(({ input }) => {
+      return getCachedOfficialTeamSnapshot(input.teamCode, input.skipGameUrl, input.forceLastGame, input.includeRoster ?? true);
     }),
   }),
   leagueDashboard: router({
