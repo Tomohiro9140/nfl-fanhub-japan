@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import type { InsertOfficialScoreboardGame, InsertOfficialStanding } from "../drizzle/schema";
 import { getOfficialScoreboardKickoffTimes, hasOfficialScorePulseWindow, replaceOfficialScoreboardGames, upsertOfficialStandings } from "./db";
 import { refreshOfficialGameHighlights } from "./nflGameHighlights";
+import { refreshOfficialNflInactives } from "./officialFeeds";
 import { TEAM_NAMES } from "./officialTeamData";
 
 const officialScheduleUrl = "https://www.nfl.com/schedules";
@@ -139,7 +140,8 @@ export async function refreshOfficialScorePulse() {
   const scoresHtml = await fetchOfficialHtml(officialScheduleUrl);
   const scores = parseNFLScoresPage(scoresHtml, season);
   await replaceOfficialScoreboardGames(season, await enrichScoresWithOfficialKickoffTimes(season, scores));
-  return { refreshed: true as const, scores: scores.length, season };
+  const inactives = await refreshOfficialNflInactives().catch((error) => ({ reports: 0, error: error instanceof Error ? error.message : String(error) }));
+  return { refreshed: true as const, scores: scores.length, season, inactives };
 }
 
 export async function refreshOfficialLeagueDashboard() {

@@ -18,6 +18,7 @@ export type TeamSnapshot = {
   injuries: Array<{ id: number; title: string; sourceName: string; sourceUrl: string; publishedAt: Date; category?: "injury" | "transaction" }>;
   rosterMoves?: Array<{ id: number; title: string; sourceName: string; sourceUrl: string; publishedAt: Date; category?: "injury" | "transaction" }>;
   externalInsights?: Array<{ id: number; playerName: string; statusLabel: string; headline: string; sourceName: string; sourceUrl: string; publishedAt: Date }>;
+  inactiveReport?: { title: string; summary: string | null; sourceUrl: string; publishedAt: Date } | null;
   news: Array<{ id: number; title: string; summary: string | null; sourceName: string; sourceUrl: string; publishedAt: Date }>;
   sources: { schedule: string | null; roster: string | null; injury: string | null; moves?: string | null; gameDay?: string | null };
   lastUpdatedAt?: Date;
@@ -50,6 +51,7 @@ export function OfficialGameTicket({ favorite, snapshot, loading, spoilerMode = 
   const gameStatus = gameStateCopy(gameDay, spoilerMode);
   const opponent = getTeamByCode(game?.opponentCode ?? null);
   const venue = compactVenue(game?.venue);
+  const isGameDay = gameStatus.label === "GAME DAY" || gameStatus.label === "LIVE";
   const watchTarget = typeof navigator === "undefined" ? "_blank" : daznWatchTarget(navigator.userAgent);
   const watchUrl = daznGamePassUrl;
   const favoriteLabel = game?.homeAway === "home" ? `@ ${favorite.name}` : favorite.name;
@@ -83,6 +85,7 @@ export function OfficialGameTicket({ favorite, snapshot, loading, spoilerMode = 
         {game.broadcast ? <p className="mt-2 font-mono text-[9px] tracking-[.08em] text-[#d9e3f3]">{game.broadcast}</p> : null}
         <div className="border-t border-white/15 pt-2 font-mono text-[9px]">
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1"><span className="font-bold tracking-[.1em] text-[#a5b3c9]">GAME STATUS</span><span className={`rounded px-1.5 py-0.5 font-bold ${gameStatus.label === "LIVE" ? "bg-[#e85d2a] text-white" : gameStatus.label === "FINAL" ? "bg-white text-[#10213a]" : "bg-[#315272] text-white"}`}>{gameStatus.label}</span><span className="text-[#d9e3f3]">{isRevealedFinal ? "OFFICIAL SCORE CONFIRMED" : gameStatus.score ? `OFFICIAL SCORE ${gameStatus.score}` : gameStatus.detail}</span></div>
+          {isGameDay ? <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1"><span className="font-bold tracking-[.1em] text-[#a5b3c9]">INACTIVES</span>{snapshot?.inactiveReport ? <a href={snapshot.inactiveReport.sourceUrl} target="_blank" rel="noreferrer" className="max-w-full truncate font-bold text-[#ffc1a7] underline underline-offset-2" title={snapshot.inactiveReport.title}>REPORTED · {snapshot.inactiveReport.summary || snapshot.inactiveReport.title} <ArrowUpRight className="inline h-3 w-3" /></a> : <span className="font-bold text-[#d9e3f3]">NONE REPORTED</span>}</div> : null}
           <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1"><a href="https://www.nfl.com/inactives/" target="_blank" rel="noreferrer" className="font-bold text-[#ffc1a7] underline underline-offset-2">INACTIVES <ArrowUpRight className="inline h-3 w-3" /></a><a href={game.sourceUrl} target="_blank" rel="noreferrer" className="font-bold text-[#ffc1a7] underline underline-offset-2">{game.sourceUrl.includes("/games/") ? "NFL GAME CENTER" : "OFFICIAL SCHEDULE"} <ArrowUpRight className="inline h-3 w-3" /></a></div>
         </div>
       </> : <div className="mt-4"><EmptyOfficial label="OFFICIAL SCHEDULE PENDING" copy="NFL公式リーグ日程とチーム公式Scheduleを確認後に表示します。" /></div>}
@@ -90,15 +93,15 @@ export function OfficialGameTicket({ favorite, snapshot, loading, spoilerMode = 
   </section>;
 }
 
-function gameStateCopy(game?: TeamSnapshot["gameDayStatus"], hideFinalScore = false) {
+function gameStateCopy(game?: TeamSnapshot["gameDayStatus"], hideScores = false) {
   if (!game) return { label: "SCHEDULE PENDING", detail: "公式リーグ日程の更新を待っています。", score: null };
   const state = (game.gameState ?? "").toUpperCase();
   const hasScore = game.awayScore !== null && game.homeScore !== null;
   const score = hasScore ? `${game.awayScore} — ${game.homeScore}` : null;
-  if (state === "FINAL" || state === "COMPLETED") return { label: "FINAL", detail: hideFinalScore ? "ネタバレ防止中 · 結果は隠しています" : "公式スコアを確認済み", score: hideFinalScore ? null : score };
-  if (state.includes("LIVE") || state.includes("IN_PROGRESS") || state.includes("HALFTIME")) return { label: "LIVE", detail: "公式スコアを更新中", score };
+  if (state === "FINAL" || state === "COMPLETED") return { label: "FINAL", detail: hideScores ? "ネタバレ防止中 · 結果は隠しています" : "公式スコアを確認済み", score: hideScores ? null : score };
+  if (state.includes("LIVE") || state.includes("IN_PROGRESS") || state.includes("HALFTIME")) return { label: "LIVE", detail: hideScores ? "ネタバレ防止中 · スコア非表示" : "公式スコアを更新中", score: hideScores ? null : score };
   const hoursUntil = (new Date(game.kickoffAt).getTime() - Date.now()) / 3_600_000;
-  return { label: hoursUntil <= 30 ? "GAME DAY" : "UPCOMING", detail: hoursUntil <= 30 ? "公式インアクティブ発表前" : "試合当日の公式更新を待っています", score };
+  return { label: hoursUntil <= 30 ? "GAME DAY" : "UPCOMING", detail: hoursUntil <= 30 ? "公式インアクティブ発表前" : "試合当日の公式更新を待っています", score: hideScores ? null : score };
 }
 
 export function OfficialRosterMoveDigest({ snapshot, loading }: { snapshot?: TeamSnapshot; loading: boolean }) {

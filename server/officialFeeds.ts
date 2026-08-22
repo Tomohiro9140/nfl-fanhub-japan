@@ -1,9 +1,10 @@
 import { createHash } from "node:crypto";
 import type { InsertOfficialFeedItem } from "../drizzle/schema";
 import { getOfficialFeedItems, upsertOfficialFeedItems } from "./db";
-import { refreshOfficialTeamData } from "./officialTeamData";
+import { refreshOfficialTeamData, TEAM_NAMES } from "./officialTeamData";
 
 const NFL_OFFICIAL_INJURY_URL = "https://www.nfl.com/injuries/";
+const NFL_OFFICIAL_INACTIVES_URL = "https://www.nfl.com/inactives/";
 const refreshWindowMs = 15 * 60 * 1000;
 const nflInjuryMaxAgeMs = 45 * 24 * 60 * 60 * 1000;
 
@@ -191,6 +192,36 @@ export function parseOfficialNflInjuryPage(html: string, teamCode: string, sourc
   return results.slice(0, 3);
 }
 
+/** Reads a team section from the NFL's official Inactives page after reports are published. */
+export function parseOfficialNflInactivesPage(html: string, teamCode: string, now = new Date()): InsertOfficialFeedItem[] {
+  if (/please check back soon for nfl inactive reports/i.test(html)) return [];
+  const teamName = TEAM_NAMES[teamCode];
+  if (!teamName || !/nfl inactive reports/i.test(html)) return [];
+  const lowerHtml = html.toLowerCase();
+  const start = lowerHtml.indexOf(teamName.toLowerCase());
+  if (start < 0) return [];
+  const otherTeamStarts = Object.entries(TEAM_NAMES)
+    .filter(([code]) => code !== teamCode)
+    .map(([, name]) => lowerHtml.indexOf(name.toLowerCase(), start + teamName.length))
+    .filter((index) => index >= 0);
+  const end = otherTeamStarts.length ? Math.min(...otherTeamStarts) : Math.min(html.length, start + 6_000);
+  const section = stripMarkup(html.slice(start, end));
+  const details = section.slice(teamName.length).trim();
+  if (!details) return [];
+  return [{
+    externalId: createHash("sha256").update(`nfl-inactives:${teamCode}:${now.toISOString().slice(0, 10)}`).digest("hex"),
+    teamCode,
+    sourceKind: "nfl_official",
+    sourceName: "NFL Official Inactives",
+    sourceUrl: NFL_OFFICIAL_INACTIVES_URL,
+    title: `NFL Official Inactives · ${teamCode}`,
+    summary: details.slice(0, 560),
+    category: "injury",
+    publishedAt: now,
+    fetchedAt: now,
+  }];
+}
+
 /** NFL injury index cards can surface historic stories; verify each linked article's published timestamp. */
 export function parseNflArticlePublishedAt(html: string) {
   const raw = html.match(/"datePublished"\s*:\s*"([^"]+)"/)?.[1]
@@ -242,6 +273,27 @@ async function fetchRss(url: string) {
   } finally {
     clearTimeout(timeout);
   }
+}
+
+async function fetchOfficialHtml(url: string) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 12_000);
+  try {
+    const response = await fetch(url, { signal: controller.signal, headers: { Accept: "text/html", "User-Agent": "Mozilla/5.0 NFLFanHubJapan/1.0" } });
+    if (!response.ok) throw new Error(`Official page request failed: ${response.status}`);
+    return await response.text();
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+/** Updates team-specific official Inactives while the existing game-window score pulse is active. */
+export async function refreshOfficialNflInactives(options: { fetchHtml?: (url: string) => Promise<string>; saveItems?: (items: InsertOfficialFeedItem[]) => Promise<void>; now?: () => Date } = {}) {
+  const html = await (options.fetchHtml ?? fetchOfficialHtml)(NFL_OFFICIAL_INACTIVES_URL);
+  const now = options.now?.() ?? new Date();
+  const items = supportedOfficialTeamCodes.flatMap((teamCode) => parseOfficialNflInactivesPage(html, teamCode, now));
+  await (options.saveItems ?? upsertOfficialFeedItems)(items);
+  return { reports: items.length };
 }
 
 /** Refreshes only a club's official RSS news, avoiding an unnecessary injury-page pass for a news-panel top-up. */

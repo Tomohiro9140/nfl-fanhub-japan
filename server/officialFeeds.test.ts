@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { classifyOfficialFeedItem, getOfficialSources, isFreshNflInjuryArticle, needsOfficialNewsTopUp, parseNflArticlePublishedAt, parseOfficialNflInjuryPage, parseOfficialTeamRss, scheduledTeamGroups, shouldSynchronouslyTopUpOfficialNews, supportedOfficialTeamCodes } from "./officialFeeds";
+import { classifyOfficialFeedItem, getOfficialSources, isFreshNflInjuryArticle, needsOfficialNewsTopUp, parseNflArticlePublishedAt, parseOfficialNflInactivesPage, parseOfficialNflInjuryPage, parseOfficialTeamRss, refreshOfficialNflInactives, scheduledTeamGroups, shouldSynchronouslyTopUpOfficialNews, supportedOfficialTeamCodes } from "./officialFeeds";
+import { TEAM_NAMES } from "./officialTeamData";
 
 const sampleRss = `<?xml version="1.0"?><rss><channel><item><title><![CDATA[Practice report: player listed as questionable]]></title><link>https://www.packers.com/news/practice-report</link><description><![CDATA[Official practice report with injury updates.]]></description><pubDate>Fri, 14 Aug 2026 21:12:14 GMT</pubDate></item><item><title>Team announces community event</title><link>https://www.packers.com/news/community-event</link><description>Official team news.</description><pubDate>Thu, 13 Aug 2026 21:12:14 GMT</pubDate></item></channel></rss>`;
 
@@ -85,6 +86,33 @@ describe("official team feed parsing", () => {
     const [, jetsSource] = getOfficialSources("NYJ");
     expect(parseOfficialNflInjuryPage(page, "LAR", ramsSource)).toHaveLength(0);
     expect(parseOfficialNflInjuryPage(page, "NYJ", jetsSource)).toHaveLength(0);
+  });
+
+  it("stores only a published team section from the NFL official Inactives page", () => {
+    const page = `<h1>NFL Inactive Reports</h1><h2>Buffalo Bills</h2><ul><li>QB Example Player</li><li>WR Sample Player</li></ul><h2>Houston Texans</h2><ul><li>RB Other Player</li></ul>`;
+    const items = parseOfficialNflInactivesPage(page, "BUF", new Date("2026-08-22T00:00:00.000Z"));
+    expect(items).toHaveLength(1);
+    expect(items[0]).toMatchObject({ teamCode: "BUF", sourceKind: "nfl_official", title: "NFL Official Inactives · BUF" });
+    expect(items[0]?.summary).toContain("QB Example Player");
+    expect(items[0]?.summary).not.toContain("RB Other Player");
+    expect(parseOfficialNflInactivesPage("NFL Inactive Reports Please check back soon for NFL Inactive Reports for this Season", "BUF")).toEqual([]);
+  });
+
+  it("extracts a distinct official Inactives section for all 32 teams", () => {
+    const page = `<h1>NFL Inactive Reports</h1>${supportedOfficialTeamCodes.map((teamCode) => `<h2>${TEAM_NAMES[teamCode]}</h2><p>${teamCode} inactive player</p>`).join("")}`;
+    for (const teamCode of supportedOfficialTeamCodes) {
+      const [item] = parseOfficialNflInactivesPage(page, teamCode, new Date("2026-08-22T00:00:00.000Z"));
+      expect(item).toMatchObject({ teamCode, sourceKind: "nfl_official", title: `NFL Official Inactives · ${teamCode}` });
+      expect(item?.summary).toContain(`${teamCode} inactive player`);
+    }
+  });
+
+  it("saves every published team section from the official Inactives source", async () => {
+    const page = `<h1>NFL Inactive Reports</h1>${supportedOfficialTeamCodes.map((teamCode) => `<h2>${TEAM_NAMES[teamCode]}</h2><p>${teamCode} inactive player</p>`).join("")}`;
+    let savedItems: Array<{ teamCode: string }> = [];
+    const result = await refreshOfficialNflInactives({ fetchHtml: async () => page, saveItems: async (items) => { savedItems = items; }, now: () => new Date("2026-08-22T00:00:00.000Z") });
+    expect(result).toEqual({ reports: 32 });
+    expect(savedItems.map((item) => item.teamCode).sort()).toEqual([...supportedOfficialTeamCodes].sort());
   });
 
   it("reads an NFL article publication date and rejects a historic injury roundup", () => {

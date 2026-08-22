@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { OfficialGameNotes, OfficialGameTicket, OfficialHuddle, OfficialRosterMoveDigest, OfficialStatusRadar } from "./OfficialGameExperience";
 import { OfficialLatestResults, OfficialLeagueDashboard, type LeagueDashboard } from "./OfficialLeagueDashboard";
 import { SpoilerSwitch } from "@/pages/Home";
-import type { FavoriteTeam } from "@/lib/nflTeams";
+import { nflTeams, type FavoriteTeam } from "@/lib/nflTeams";
 
 const favorite: FavoriteTeam = { code: "BUF", name: "Buffalo Bills", conference: "AFC", division: "East", brand: { primary: "#00338D", accent: "#C60C30", onPrimary: "#FFFFFF" } };
 const kickoffAt = new Date("2026-08-23T06:00:00.000Z");
@@ -62,6 +62,47 @@ describe("compact mobile result and schedule UI", () => {
     expect(ticketMarkup).toContain("@ Cleveland Browns");
     expect(ticketMarkup).not.toContain("@ Buffalo Bills");
     expect(resultMarkup).toContain("@ Buffalo Bills");
+  });
+
+  it("never exposes live scores during spoiler protection and always shows an Inactives state on game day", () => {
+    const liveSnapshot = { nextGame: { opponentCode: "CLE", homeAway: "away" as const, seasonPhase: "preseason" as const, weekLabel: "PRESEASON WEEK 2", kickoffAt, venue: null, broadcast: null, sourceUrl: "https://www.nfl.com/games/bills-at-browns", daznUrl: null, gameState: "LIVE", awayScore: 41, homeScore: 38, fetchedAt: kickoffAt }, gameDayStatus: { opponentCode: "CLE", homeAway: "away" as const, weekLabel: "PRESEASON WEEK 2", kickoffAt, sourceUrl: "https://www.nfl.com/games/bills-at-browns", gameState: "LIVE", awayScore: 41, homeScore: 38, fetchedAt: kickoffAt }, roster: [], rosterCounts: [], injuries: [], news: [], sources: { schedule: null, roster: null, injury: null } };
+    const spoilerMarkup = renderToStaticMarkup(createElement(OfficialGameTicket, { favorite, snapshot: liveSnapshot, loading: false, spoilerMode: true }));
+    const revealedMarkup = renderToStaticMarkup(createElement(OfficialGameTicket, { favorite, snapshot: liveSnapshot, loading: false, spoilerMode: false }));
+
+    expect(spoilerMarkup).toContain("ネタバレ防止中 · スコア非表示");
+    expect(spoilerMarkup).not.toContain("41 — 38");
+    expect(revealedMarkup).toContain("OFFICIAL SCORE 41 — 38");
+    expect(spoilerMarkup).toContain("INACTIVES");
+    expect(spoilerMarkup).toContain("NONE REPORTED");
+
+    const reportedMarkup = renderToStaticMarkup(createElement(OfficialGameTicket, { favorite, snapshot: { ...liveSnapshot, inactiveReport: { title: "Official inactive list", sourceUrl: "https://www.nfl.com/inactives/", publishedAt: kickoffAt } }, loading: false, spoilerMode: true }));
+    expect(reportedMarkup).toContain("REPORTED · Official inactive list");
+    expect(reportedMarkup).not.toContain("NONE REPORTED");
+  });
+
+  it("shows an Inactives state for every team during game day", () => {
+    const gameDaySnapshot = { nextGame: { opponentCode: "CLE", homeAway: "away" as const, seasonPhase: "preseason" as const, weekLabel: "PRESEASON WEEK 2", kickoffAt, venue: null, broadcast: null, sourceUrl: "https://www.nfl.com/games/bills-at-browns", daznUrl: null, gameState: "LIVE", awayScore: null, homeScore: null, fetchedAt: kickoffAt }, roster: [], rosterCounts: [], injuries: [], news: [], sources: { schedule: null, roster: null, injury: null } };
+    for (const team of nflTeams) {
+      const markup = renderToStaticMarkup(createElement(OfficialGameTicket, { favorite: team, snapshot: gameDaySnapshot, loading: false, spoilerMode: true }));
+      expect(markup).toContain("INACTIVES");
+      expect(markup).toContain("NONE REPORTED");
+    }
+  });
+
+  it("hides all scores for every team and relevant game state while preserving Inactives report status", () => {
+    const states = ["LIVE", null, "FINAL"] as const;
+    for (const team of nflTeams) {
+      for (const gameState of states) {
+        const kickoff = gameState === null ? new Date(Date.now() + 60 * 60 * 1_000) : kickoffAt;
+        const snapshot = { nextGame: { opponentCode: "CLE", homeAway: "away" as const, seasonPhase: "preseason" as const, weekLabel: "PRESEASON WEEK 2", kickoffAt: kickoff, venue: null, broadcast: null, sourceUrl: "https://www.nfl.com/games/bills-at-browns", daznUrl: null, gameState, awayScore: 41, homeScore: 38, fetchedAt: kickoffAt }, inactiveReport: gameState === "FINAL" ? null : { title: "NFL Official Inactives", summary: "QB Example Player", sourceUrl: "https://www.nfl.com/inactives/", publishedAt: kickoffAt }, roster: [], rosterCounts: [], injuries: [], news: [], sources: { schedule: null, roster: null, injury: null } };
+        const markup = renderToStaticMarkup(createElement(OfficialGameTicket, { favorite: team, snapshot, loading: false, spoilerMode: true }));
+        expect(markup).not.toContain("41 — 38");
+        if (gameState !== "FINAL") {
+          expect(markup).toContain("INACTIVES");
+          expect(markup).toContain("REPORTED · QB Example Player");
+        }
+      }
+    }
   });
 
   it("uses the Japanese spoiler label and omits schedule-card countdown text", () => {

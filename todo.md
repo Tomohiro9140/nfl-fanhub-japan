@@ -16,6 +16,19 @@
 - [x] 公式会場をLATEST RESULTSの結果ペイロードへ伝播し、短縮表示を追加する。
 - [x] 全32チームでLATEST RESULTSが最大1試合となる回帰テストを追加する。
 - [x] 直近変更後のLATEST RESULTSとGAME TICKETをモバイル・PC幅で確認する。
+- [x] ネタバレ防止時にGAME TICKETのStatusを含む全スコアが露出しない経路を確認する。
+- [x] Game Dayで公式Inactive情報またはINACTIVES · NONE REPORTEDを必ず表示する。
+- [x] 全32チーム・試合状態別のスコア遮断とInactive表示を回帰テストで検証する。
+- [x] モバイル・PCでネタバレ防止とGame Day表示を確認する。
+- [x] NFL公式InactiveページからGame Dayのチーム別発表を取得・保存する。
+- [x] 全32チームのLIVE／GAME DAY／FINALでネタバレ防止時にスコアが露出しない回帰テストを追加する。
+- [x] 全32チームの報告済み・未報告Inactiveをスナップショット経由で検証する。
+- [x] getOfficialTeamSnapshotの報告済み・未報告Inactive返却をサーバーテストで検証する。
+- [x] NFL公式Inactive取得から保存、チームスナップショット返却までの全32チーム伝播を検証する。
+- [x] getOfficialTeamSnapshotを直接呼び、報告済み・未報告Inactiveの返却を検証する。
+- [x] 公式Inactive取得、保存処理、全32チームのスナップショット返却を統合回帰テストで検証する。
+- [x] 公式Inactive取得→保存→getOfficialTeamSnapshot返却を同一テストで全32チーム検証する。
+- [x] 公式Inactiveの保存済みレコードを同一DBモックからgetOfficialTeamSnapshotが読む統合テストを追加する。
 
 - [x] 日本語の大見出しを削除し、必要な文脈は英語の短いラベルとデータ表記で伝える。
 - [x] ヒーローチケット、ブリーフィング、ロスター票の文字サイズ・余白・高さを縮小し、情報密度を上げる。

@@ -219,15 +219,17 @@ export async function replaceExternalAvailabilityInsightsForSources(sourceUrls: 
   await upsertExternalAvailabilityInsights(items);
 }
 
-export async function getOfficialTeamSnapshot(teamCode: string, skipGameUrl?: string, forceLastGame = false) {
-  const db = await getDb();
+type OfficialTeamSnapshotDb = NonNullable<Awaited<ReturnType<typeof getDb>>>;
+
+export async function getOfficialTeamSnapshot(teamCode: string, skipGameUrl?: string, forceLastGame = false, dbOverride?: OfficialTeamSnapshotDb) {
+  const db = dbOverride ?? await getDb();
   if (!db) return { nextGame: undefined, roster: [], rosterCounts: [], injuries: [], news: [], sources: { schedule: null, roster: null, injury: null }, lastUpdatedAt: undefined };
   const now = new Date();
   const activeWindowStart = new Date(now.getTime() - 6 * 60 * 60 * 1_000);
   const officialInjuryWindowStart = new Date(now.getTime() - 45 * 24 * 60 * 60 * 1_000);
   const rosterMoveWindowStart = new Date(now.getTime() - 21 * 24 * 60 * 60 * 1_000);
   const externalInsightWindowStart = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1_000);
-  const [activeGameRows, recentlyFinishedGames, scheduledGameRows, completedScoreboardRows, roster, injuries, rosterMoves, news, externalInsights] = await Promise.all([
+  const [activeGameRows, recentlyFinishedGames, scheduledGameRows, completedScoreboardRows, roster, injuries, rosterMoves, news, externalInsights, inactiveAnnouncements] = await Promise.all([
     db.select().from(officialGames).where(and(eq(officialGames.teamCode, teamCode), gte(officialGames.kickoffAt, activeWindowStart), lt(officialGames.kickoffAt, now))).orderBy(desc(officialGames.kickoffAt)).limit(1),
     db.select().from(officialGames).where(and(eq(officialGames.teamCode, teamCode), lt(officialGames.kickoffAt, now))).orderBy(desc(officialGames.kickoffAt)).limit(4),
     db.select().from(officialGames).where(and(eq(officialGames.teamCode, teamCode), gt(officialGames.kickoffAt, now))).orderBy(asc(officialGames.kickoffAt)).limit(1),
@@ -237,6 +239,7 @@ export async function getOfficialTeamSnapshot(teamCode: string, skipGameUrl?: st
     db.select({ id: officialFeedItems.id, title: officialFeedItems.title, sourceName: officialFeedItems.sourceName, sourceUrl: officialFeedItems.sourceUrl, publishedAt: officialFeedItems.publishedAt, category: officialFeedItems.category, fetchedAt: officialFeedItems.fetchedAt }).from(officialFeedItems).where(and(eq(officialFeedItems.teamCode, teamCode), eq(officialFeedItems.category, "transaction"), gte(officialFeedItems.publishedAt, rosterMoveWindowStart))).orderBy(sql`case when ${officialFeedItems.sourceKind} = 'team_official' then 0 else 1 end`, desc(officialFeedItems.publishedAt)).limit(3),
     db.select({ id: officialFeedItems.id, title: officialFeedItems.title, summary: officialFeedItems.summary, sourceName: officialFeedItems.sourceName, sourceUrl: officialFeedItems.sourceUrl, publishedAt: officialFeedItems.publishedAt, fetchedAt: officialFeedItems.fetchedAt }).from(officialFeedItems).where(and(eq(officialFeedItems.teamCode, teamCode), eq(officialFeedItems.category, "news"))).orderBy(sql`case when ${officialFeedItems.sourceKind} = 'team_official' then 0 else 1 end`, desc(officialFeedItems.publishedAt)).limit(2),
     db.select({ id: externalAvailabilityInsights.id, playerName: externalAvailabilityInsights.playerName, statusLabel: externalAvailabilityInsights.statusLabel, headline: externalAvailabilityInsights.headline, sourceName: externalAvailabilityInsights.sourceName, sourceUrl: externalAvailabilityInsights.sourceUrl, publishedAt: externalAvailabilityInsights.publishedAt, fetchedAt: externalAvailabilityInsights.fetchedAt }).from(externalAvailabilityInsights).where(and(eq(externalAvailabilityInsights.teamCode, teamCode), gte(externalAvailabilityInsights.publishedAt, externalInsightWindowStart))).orderBy(desc(externalAvailabilityInsights.publishedAt)).limit(3),
+    db.select({ title: officialFeedItems.title, summary: officialFeedItems.summary, sourceUrl: officialFeedItems.sourceUrl, publishedAt: officialFeedItems.publishedAt }).from(officialFeedItems).where(and(eq(officialFeedItems.teamCode, teamCode), gte(officialFeedItems.publishedAt, new Date(now.getTime() - 2 * 24 * 60 * 60 * 1_000)), sql`lower(${officialFeedItems.title}) like '%inactive%'`)).orderBy(desc(officialFeedItems.publishedAt)).limit(1),
   ]);
   const activeGame = activeGameRows[0];
   const scheduledGame = scheduledGameRows[0];
@@ -299,7 +302,14 @@ export async function getOfficialTeamSnapshot(teamCode: string, skipGameUrl?: st
     sourceUrl: nextGame.sourceUrl,
     fetchedAt: nextGame.fetchedAt,
   } : undefined;
-  return { nextGame, gameDayStatus, canRestoreLastGame, byeWeek, roster, rosterCounts, injuries, rosterMoves, news, externalInsights, sources: { schedule: nextGame?.sourceUrl ?? null, roster: roster[0]?.sourceUrl ?? null, injury: injuries[0]?.sourceUrl ?? null, moves: rosterMoves[0]?.sourceUrl ?? null, gameDay: nextGame?.sourceUrl ?? null }, lastUpdatedAt };
+  const inactiveReport = buildSnapshotInactiveReport(inactiveAnnouncements);
+  return { nextGame, gameDayStatus, canRestoreLastGame, byeWeek, roster, rosterCounts, injuries, rosterMoves, news, externalInsights, inactiveReport, sources: { schedule: nextGame?.sourceUrl ?? null, roster: roster[0]?.sourceUrl ?? null, injury: injuries[0]?.sourceUrl ?? null, moves: rosterMoves[0]?.sourceUrl ?? null, gameDay: nextGame?.sourceUrl ?? null }, lastUpdatedAt };
+}
+
+/** Converts the latest official cached announcement into the Game Day snapshot shape. */
+export function buildSnapshotInactiveReport<T extends { title: string; summary: string | null; sourceUrl: string; publishedAt: Date }>(announcements: T[]) {
+  const announcement = announcements[0];
+  return announcement ? { title: announcement.title, summary: announcement.summary, sourceUrl: announcement.sourceUrl, publishedAt: announcement.publishedAt } : null;
 }
 
 /** Avoids external score polling unless an official game is underway or has just ended. */
