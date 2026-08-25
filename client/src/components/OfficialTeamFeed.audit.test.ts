@@ -78,6 +78,7 @@ describe("official feed mobile content selection", () => {
     expect(markup).toContain("PUBLISHED ·");
     expect(markup).toContain("JST");
     expect(markup).toContain('href="https://www.buffalobills.com/news/1"');
+    expect(markup).toContain('data-feed-article="latest-news"');
     expect(markup).toContain('target="_blank"');
     expect(markup).not.toContain("日本語要約");
     expect(markup).not.toContain("ENGLISH SUMMARY");
@@ -87,6 +88,32 @@ describe("official feed mobile content selection", () => {
     expect(markup).not.toContain("Current injury older");
     expect(markup).not.toContain("Historic injury hidden");
     expect(markup).not.toContain("Bills sign WR Example Player");
+  });
+
+  it("renders a repeated official article only once when legacy cache rows repeat its URL or title", () => {
+    mockedItems.push(
+      { id: 40, sourceKind: "team_official", category: "news", title: "News newest", summary: null, sourceUrl: "https://www.buffalobills.com/news/1?utm_source=rss", sourceName: "BUF Official News", publishedAt: daysAgo(0), fetchedAt: now },
+      { id: 41, sourceKind: "team_official", category: "news", title: "NEWS SECOND", summary: null, sourceUrl: "https://www.buffalobills.com/news/legacy-second", sourceName: "BUF Official News", publishedAt: daysAgo(1), fetchedAt: now },
+    );
+    const markup = renderToStaticMarkup(createElement(OfficialTeamFeed, { favorite }));
+    expect((markup.match(/href="https:\/\/www\.buffalobills\.com\/news\/1"/g) ?? [])).toHaveLength(1);
+    expect((markup.match(/href="https:\/\/www\.buffalobills\.com\/news\/2"/g) ?? [])).toHaveLength(1);
+    expect(markup).not.toContain("https://www.buffalobills.com/news/legacy-second");
+  });
+
+  it("keeps duplicate legacy articles out of the screen output for multiple favorite teams", () => {
+    for (const team of ["BUF", "NYJ", "SEA"] as const) {
+      const teamFavorite = { ...favorite, code: team, name: team === "NYJ" ? "New York Jets" : team === "SEA" ? "Seattle Seahawks" : "Buffalo Bills" };
+      const teamUrl = `https://example.com/${team.toLowerCase()}/official-update`;
+      mockedItems.splice(0, mockedItems.length,
+        { id: 1, sourceKind: "team_official", category: "news", title: `${team} Official update`, summary: null, sourceUrl: teamUrl, sourceName: `${team} Official News`, publishedAt: now, fetchedAt: now },
+        { id: 2, sourceKind: "team_official", category: "news", title: `${team} OFFICIAL UPDATE`, summary: null, sourceUrl: `${teamUrl}?utm_source=rss`, sourceName: `${team} Official News`, publishedAt: now, fetchedAt: now },
+      );
+      const markup = renderToStaticMarkup(createElement(OfficialTeamFeed, { favorite: teamFavorite }));
+      expect((markup.match(new RegExp(`href="${teamUrl.replace(/[/.]/g, "\\$&")}"`, "g")) ?? [])).toHaveLength(1);
+      expect((markup.match(/data-feed-article="latest-news"/g) ?? [])).toHaveLength(1);
+      expect(markup).not.toContain(`${teamUrl}?utm_source=rss`);
+    }
   });
 
   it("keeps every source mark inside a fixed non-wrapping card slot", () => {

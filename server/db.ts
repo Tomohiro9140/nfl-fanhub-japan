@@ -1,7 +1,8 @@
-import { and, asc, desc, eq, gt, gte, inArray, lt, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, gte, inArray, lt, ne, sql } from "drizzle-orm";
 import { attachOfficialScore, findOfficialScoreForGame } from "./gameStatus";
 import { getRegularSeasonByeWeek, isOfficialFinal, isWithinJstReplayWindow, selectGameTicketGame } from "./gameTicketWindow";
 import { selectRelevantCalendarGames } from "./leagueDashboardPayload";
+import { dedupeOfficialFeedItems } from "./officialFeedDeduplication";
 import { isNull } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import { ExternalAvailabilityInsight, InsertExternalAvailabilityInsight, InsertOfficialFeedItem, InsertOfficialGame, InsertOfficialRosterEntry, InsertOfficialScoreboardGame, InsertOfficialStanding, InsertUser, externalAvailabilityInsights, officialFeedItems, officialGames, officialRosterEntries, officialScoreboardGames, officialStandings, users } from "../drizzle/schema";
@@ -128,6 +129,11 @@ export async function upsertOfficialFeedItems(items: InsertOfficialFeedItem[]) {
   const db = await getDb();
   if (!db) throw new Error("Database is not available for official feed cache");
   for (const item of items) {
+    await db.delete(officialFeedItems).where(and(
+      eq(officialFeedItems.teamCode, item.teamCode),
+      eq(officialFeedItems.sourceUrl, item.sourceUrl),
+      ne(officialFeedItems.externalId, item.externalId),
+    ));
     await db.insert(officialFeedItems).values(item).onDuplicateKeyUpdate({
       set: {
         title: item.title,
@@ -261,7 +267,7 @@ export async function getOfficialTeamSnapshot(teamCode: string, skipGameUrl?: st
   const officialInjuryWindowStart = new Date(now.getTime() - 45 * 24 * 60 * 60 * 1_000);
   const rosterMoveWindowStart = new Date(now.getTime() - 21 * 24 * 60 * 60 * 1_000);
   const externalInsightWindowStart = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1_000);
-  const [activeGameRows, recentlyFinishedGames, scheduledGameRows, completedScoreboardRows, roster, injuries, rosterMoves, news, externalInsights, inactiveAnnouncements] = await Promise.all([
+  const [activeGameRows, recentlyFinishedGames, scheduledGameRows, completedScoreboardRows, roster, injuryRows, rosterMoveRows, newsRows, externalInsights, inactiveAnnouncements] = await Promise.all([
     db.select().from(officialGames).where(and(eq(officialGames.teamCode, teamCode), gte(officialGames.kickoffAt, activeWindowStart), lt(officialGames.kickoffAt, now))).orderBy(desc(officialGames.kickoffAt)).limit(1),
     db.select().from(officialGames).where(and(eq(officialGames.teamCode, teamCode), lt(officialGames.kickoffAt, now))).orderBy(desc(officialGames.kickoffAt)).limit(4),
     db.select().from(officialGames).where(and(eq(officialGames.teamCode, teamCode), gt(officialGames.kickoffAt, now))).orderBy(asc(officialGames.kickoffAt)).limit(1),
@@ -269,12 +275,18 @@ export async function getOfficialTeamSnapshot(teamCode: string, skipGameUrl?: st
     includeRoster
       ? db.select({ id: officialRosterEntries.id, playerName: officialRosterEntries.playerName, jerseyNumber: officialRosterEntries.jerseyNumber, position: officialRosterEntries.position, rosterStatus: officialRosterEntries.rosterStatus, sourceUrl: officialRosterEntries.sourceUrl, fetchedAt: officialRosterEntries.fetchedAt }).from(officialRosterEntries).where(eq(officialRosterEntries.teamCode, teamCode)).orderBy(asc(officialRosterEntries.rosterStatus), asc(officialRosterEntries.position), asc(officialRosterEntries.playerName)).limit(160)
       : Promise.resolve([]),
-    db.select({ id: officialFeedItems.id, title: officialFeedItems.title, sourceName: officialFeedItems.sourceName, sourceUrl: officialFeedItems.sourceUrl, publishedAt: officialFeedItems.publishedAt, category: officialFeedItems.category, fetchedAt: officialFeedItems.fetchedAt }).from(officialFeedItems).where(and(eq(officialFeedItems.teamCode, teamCode), eq(officialFeedItems.category, "injury"), gte(officialFeedItems.publishedAt, officialInjuryWindowStart))).orderBy(sql`case when ${officialFeedItems.sourceKind} = 'team_official' then 0 else 1 end`, desc(officialFeedItems.publishedAt)).limit(3),
-    db.select({ id: officialFeedItems.id, title: officialFeedItems.title, sourceName: officialFeedItems.sourceName, sourceUrl: officialFeedItems.sourceUrl, publishedAt: officialFeedItems.publishedAt, category: officialFeedItems.category, fetchedAt: officialFeedItems.fetchedAt }).from(officialFeedItems).where(and(eq(officialFeedItems.teamCode, teamCode), eq(officialFeedItems.category, "transaction"), gte(officialFeedItems.publishedAt, rosterMoveWindowStart))).orderBy(sql`case when ${officialFeedItems.sourceKind} = 'team_official' then 0 else 1 end`, desc(officialFeedItems.publishedAt)).limit(3),
-    db.select({ id: officialFeedItems.id, title: officialFeedItems.title, summary: officialFeedItems.summary, sourceName: officialFeedItems.sourceName, sourceUrl: officialFeedItems.sourceUrl, publishedAt: officialFeedItems.publishedAt, fetchedAt: officialFeedItems.fetchedAt }).from(officialFeedItems).where(and(eq(officialFeedItems.teamCode, teamCode), eq(officialFeedItems.category, "news"))).orderBy(sql`case when ${officialFeedItems.sourceKind} = 'team_official' then 0 else 1 end`, desc(officialFeedItems.publishedAt)).limit(2),
+    db.select({ id: officialFeedItems.id, title: officialFeedItems.title, sourceName: officialFeedItems.sourceName, sourceKind: officialFeedItems.sourceKind, sourceUrl: officialFeedItems.sourceUrl, publishedAt: officialFeedItems.publishedAt, category: officialFeedItems.category, fetchedAt: officialFeedItems.fetchedAt }).from(officialFeedItems).where(and(eq(officialFeedItems.teamCode, teamCode), eq(officialFeedItems.category, "injury"), gte(officialFeedItems.publishedAt, officialInjuryWindowStart))).orderBy(sql`case when ${officialFeedItems.sourceKind} = 'team_official' then 0 else 1 end`, desc(officialFeedItems.publishedAt)).limit(24),
+    db.select({ id: officialFeedItems.id, title: officialFeedItems.title, sourceName: officialFeedItems.sourceName, sourceKind: officialFeedItems.sourceKind, sourceUrl: officialFeedItems.sourceUrl, publishedAt: officialFeedItems.publishedAt, category: officialFeedItems.category, fetchedAt: officialFeedItems.fetchedAt }).from(officialFeedItems).where(and(eq(officialFeedItems.teamCode, teamCode), eq(officialFeedItems.category, "transaction"), gte(officialFeedItems.publishedAt, rosterMoveWindowStart))).orderBy(sql`case when ${officialFeedItems.sourceKind} = 'team_official' then 0 else 1 end`, desc(officialFeedItems.publishedAt)).limit(24),
+    db.select({ id: officialFeedItems.id, title: officialFeedItems.title, summary: officialFeedItems.summary, sourceName: officialFeedItems.sourceName, sourceKind: officialFeedItems.sourceKind, sourceUrl: officialFeedItems.sourceUrl, publishedAt: officialFeedItems.publishedAt, fetchedAt: officialFeedItems.fetchedAt }).from(officialFeedItems).where(and(eq(officialFeedItems.teamCode, teamCode), eq(officialFeedItems.category, "news"))).orderBy(sql`case when ${officialFeedItems.sourceKind} = 'team_official' then 0 else 1 end`, desc(officialFeedItems.publishedAt)).limit(24),
     db.select({ id: externalAvailabilityInsights.id, playerName: externalAvailabilityInsights.playerName, statusLabel: externalAvailabilityInsights.statusLabel, headline: externalAvailabilityInsights.headline, sourceName: externalAvailabilityInsights.sourceName, sourceUrl: externalAvailabilityInsights.sourceUrl, publishedAt: externalAvailabilityInsights.publishedAt, fetchedAt: externalAvailabilityInsights.fetchedAt }).from(externalAvailabilityInsights).where(and(eq(externalAvailabilityInsights.teamCode, teamCode), gte(externalAvailabilityInsights.publishedAt, externalInsightWindowStart))).orderBy(desc(externalAvailabilityInsights.publishedAt)).limit(3),
     db.select({ title: officialFeedItems.title, summary: officialFeedItems.summary, sourceUrl: officialFeedItems.sourceUrl, publishedAt: officialFeedItems.publishedAt }).from(officialFeedItems).where(and(eq(officialFeedItems.teamCode, teamCode), gte(officialFeedItems.publishedAt, new Date(now.getTime() - 2 * 24 * 60 * 60 * 1_000)), sql`lower(${officialFeedItems.title}) like '%inactive%'`)).orderBy(desc(officialFeedItems.publishedAt)).limit(1),
   ]);
+  const injuries = dedupeOfficialFeedItems(injuryRows, 3);
+  const rosterMoves = dedupeOfficialFeedItems(rosterMoveRows, 3);
+  const injuryArticleKeys = new Set(injuries.map((item) => `${item.sourceUrl}|${item.title}`));
+  const news = dedupeOfficialFeedItems(newsRows)
+    .filter((item) => !injuryArticleKeys.has(`${item.sourceUrl}|${item.title}`))
+    .slice(0, 2);
   const activeGame = activeGameRows[0];
   const scheduledGame = scheduledGameRows[0];
   const scoreFor = async (game: typeof officialGames.$inferSelect | undefined) => {

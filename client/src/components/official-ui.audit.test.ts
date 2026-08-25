@@ -196,12 +196,12 @@ describe("compact mobile result and schedule UI", () => {
     expect(spoilerMarkup).toContain("8/22(土)");
     expect(spoilerMarkup).not.toContain("13:57");
     expect(spoilerMarkup).not.toContain("OFFICIAL SCORE 10 — 7");
-    expect(spoilerMarkup).toContain("min-h-[248px]");
-    expect(spoilerMarkup).toContain("flex min-h-[248px] flex-col justify-between");
+    expect(spoilerMarkup).toContain("min-h-[320px]");
+    expect(spoilerMarkup).toContain("flex min-h-[320px] flex-col justify-between");
     expect(spoilerMarkup).toContain("border-t border-white/15 pt-2");
     expect(spoilerMarkup).toContain("REPORTED · QB Example Player");
     expect(normalMarkup).toContain("FINAL SCORE");
-    expect(normalMarkup).toContain("min-h-[248px]");
+    expect(normalMarkup).toContain("min-h-[320px]");
     expect(normalMarkup).toMatch(/>10<\/span><span> — <\/span><span[^>]*>7<\/span>/);
     expect(normalMarkup).toContain("WATCH HIGHLIGHTS");
     expect(normalMarkup).toContain("ON TO THE NEXT GAME");
@@ -260,6 +260,22 @@ describe("compact mobile result and schedule UI", () => {
     expect(resultMarkup).toContain("mt-1.5 flex items-center justify-between");
     expect(resultMarkup).toContain("self-center");
     expect(resultMarkup).not.toContain("lucide-trophy");
+  });
+
+  it("renders repeated injury rows only once in the screen output for multiple teams", () => {
+    for (const team of ["BUF", "NYJ", "SEA"] as const) {
+      const teamFavorite = { ...favorite, code: team, name: team === "NYJ" ? "New York Jets" : team === "SEA" ? "Seattle Seahawks" : "Buffalo Bills" };
+      const sourceUrl = `https://example.com/${team.toLowerCase()}/injury-update`;
+      const snapshot = { nextGame: undefined, roster: [], rosterCounts: [], injuries: [
+        { id: 1, title: `${team} Official injury update`, sourceName: "Team Official", sourceUrl, publishedAt: kickoffAt, category: "injury" as const },
+        { id: 2, title: `${team} OFFICIAL INJURY UPDATE`, sourceName: "Team Official", sourceUrl: `${sourceUrl}?utm_source=rss`, publishedAt: kickoffAt, category: "injury" as const },
+        { id: 3, title: `${team} Separate practice report`, sourceName: "Team Official", sourceUrl: `https://example.com/${team.toLowerCase()}/practice`, publishedAt: kickoffAt, category: "injury" as const },
+      ], news: [], sources: { schedule: null, roster: null, injury: null }, lastUpdatedAt: kickoffAt };
+      const markup = renderToStaticMarkup(createElement(OfficialStatusRadar, { favorite: teamFavorite, snapshot, loading: false }));
+      expect((markup.match(new RegExp(`${team} Official injury update`, "gi")) ?? [])).toHaveLength(1);
+      expect((markup.match(new RegExp(`${team} Separate practice report`, "g")) ?? [])).toHaveLength(1);
+      expect((markup.match(/data-feed-article="injury-related"/g) ?? [])).toHaveLength(2);
+    }
   });
 
   it("keeps exactly one official in-ticket link and labels a schedule URL clearly", () => {

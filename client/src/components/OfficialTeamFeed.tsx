@@ -2,6 +2,7 @@ import React, { useMemo } from "react";
 import { ArrowUpRight, BadgeCheck, CircleAlert, Newspaper, Radio, RefreshCw, Tv } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { hasDistinctNewsSummary } from "@/lib/newsSummary";
+import { dedupeDisplayArticles } from "@/lib/articleDedup";
 import type { FavoriteTeam } from "@/lib/nflTeams";
 import { NEWS_SUMMARIES_ENABLED } from "@shared/newsSummaryFeature";
 
@@ -40,7 +41,7 @@ export function spoilerNewsCutoff(game?: CompletedGame) {
 
 /** Keeps official stories foremost while reserving room for one PFT and one CBS team story when available. */
 export function selectLatestNews(items: FeedItem[], hideFrom?: Date | null) {
-  const sorted = [...items].filter((item) => item.category === "news" && !isRosterMoveNews(item) && (!hideFrom || new Date(item.publishedAt).getTime() < hideFrom.getTime())).sort((left, right) => new Date(right.publishedAt).getTime() - new Date(left.publishedAt).getTime());
+  const sorted = dedupeDisplayArticles([...items].filter((item) => item.category === "news" && !isRosterMoveNews(item) && (!hideFrom || new Date(item.publishedAt).getTime() < hideFrom.getTime())).sort((left, right) => new Date(right.publishedAt).getTime() - new Date(left.publishedAt).getTime()));
   const official = sorted.filter((item) => !externalSourceKinds.has(item.sourceKind));
   const selected = [...official.slice(0, 3)];
   for (const kind of ["pft", "cbs"] as const) {
@@ -76,7 +77,7 @@ export function OfficialTeamFeed({ favorite, spoilerMode = false, completedGame 
       <div className="mt-3">
         <article className="clip-note border border-[#ded8cc] bg-white p-3 shadow-[0_10px_30px_rgba(34,42,53,.05)]">
           <div className="flex items-center justify-between border-b border-[#eeeae1] pb-2"><div className="flex items-center gap-2"><div className="grid h-7 w-7 place-items-center bg-[#10213a] text-white"><Newspaper className="h-3.5 w-3.5" /></div><p className="font-display text-lg font-bold tracking-wide">LATEST NEWS</p></div><button onClick={() => feed.refetch()} disabled={feed.isFetching} className="inline-flex items-center gap-1 font-mono text-[9px] font-bold tracking-[.1em] text-[#526173] hover:text-[#e85d2a] disabled:opacity-50"><RefreshCw className={`h-3.5 w-3.5 ${feed.isFetching ? "animate-spin" : ""}`} /> REFRESH</button></div>
-          {feed.isLoading && !shouldSimulateUnavailable ? <div className="py-5 text-center font-mono text-[10px] text-[#64748b]">LOADING TEAM NEWS…</div> : news.length > 0 ? <div className="divide-y divide-[#eeeae1]">{news.map((item) => <a key={item.id} href={item.sourceUrl} target="_blank" rel="noreferrer" aria-label={`${item.title}を${sourceLabel(item.sourceKind)}で開く`} className="group flex w-full items-start gap-3 py-2.5 text-left transition hover:bg-[#fffaf0] active:bg-[#fff4ef]"><SourceMark kind={item.sourceKind} /><span className="min-w-0 flex-1"><span className="flex items-center justify-between gap-2"><span className="font-display text-base font-bold tracking-wide">{item.title}</span><ArrowUpRight className="h-3.5 w-3.5 shrink-0 text-[#94a3b8] transition group-hover:text-[#e85d2a]" /></span>{hasDistinctNewsSummary(item.title, item.summary) ? <span className="mt-0.5 block text-[11px] leading-4 text-[#687587]">{item.summary}</span> : null}<span className="mt-1 block font-mono text-[8px] font-bold tracking-[.05em] text-[#94a3b8]">PUBLISHED · {displayDate(item.publishedAt)}</span></span></a>)}</div> : <EmptyFeed teamCode={favorite.code} error={displayError} />}
+          {feed.isLoading && !shouldSimulateUnavailable ? <div className="py-5 text-center font-mono text-[10px] text-[#64748b]">LOADING TEAM NEWS…</div> : news.length > 0 ? <div className="divide-y divide-[#eeeae1]">{news.map((item) => <a key={item.id} href={item.sourceUrl} target="_blank" rel="noreferrer" data-feed-article="latest-news" data-article-url={item.sourceUrl} aria-label={`${item.title}を${sourceLabel(item.sourceKind)}で開く`} className="group flex w-full items-start gap-3 py-2.5 text-left transition hover:bg-[#fffaf0] active:bg-[#fff4ef]"><SourceMark kind={item.sourceKind} /><span className="min-w-0 flex-1"><span className="flex items-center justify-between gap-2"><span className="font-display text-base font-bold tracking-wide">{item.title}</span><ArrowUpRight className="h-3.5 w-3.5 shrink-0 text-[#94a3b8] transition group-hover:text-[#e85d2a]" /></span>{hasDistinctNewsSummary(item.title, item.summary) ? <span className="mt-0.5 block text-[11px] leading-4 text-[#687587]">{item.summary}</span> : null}<span className="mt-1 block font-mono text-[8px] font-bold tracking-[.05em] text-[#94a3b8]">PUBLISHED · {displayDate(item.publishedAt)}</span></span></a>)}</div> : <EmptyFeed teamCode={favorite.code} error={displayError} />}
         </article>
       </div>
       {displayError && <div className="mt-2 flex items-center gap-1.5 border border-[#f1c7b5] bg-[#fff4ef] px-3 py-2 font-mono text-[9px] font-bold tracking-[.06em] text-[#a34220]"><CircleAlert className="h-3.5 w-3.5 shrink-0" />LIVE REFRESH UNAVAILABLE — SHOWING LAST SAVED OFFICIAL ITEMS</div>}
