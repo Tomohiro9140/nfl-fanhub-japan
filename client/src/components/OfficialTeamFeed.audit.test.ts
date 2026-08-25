@@ -48,16 +48,25 @@ describe("official feed mobile content selection", () => {
     expect(selected.map((item) => item.id)).not.toContain(13);
   });
 
-  it("removes post-game articles before rendering any external links while spoiler protection is active", () => {
-    const finalConfirmedAt = new Date("2026-08-15T18:00:00.000Z");
-    const cutoff = spoilerNewsCutoff({ gameState: "FINAL", gameDate: "2026-08-15", finishedAt: finalConfirmedAt, kickoffAt: new Date("2026-08-15T18:00:00.000Z") });
-    const safe = { id: 30, sourceKind: "team_official", category: "news", title: "Pregame notebook", summary: null, sourceUrl: "https://www.buffalobills.com/news/pregame", sourceName: "BUF Official News", publishedAt: new Date("2026-08-14T23:59:00.000Z"), fetchedAt: now };
-    const hidden = { id: 31, sourceKind: "team_official", category: "news", title: "Postgame reaction", summary: null, sourceUrl: "https://www.buffalobills.com/news/postgame", sourceName: "BUF Official News", publishedAt: new Date("2026-08-15T05:00:00.000Z"), fetchedAt: now };
-    expect(selectLatestNews([safe, hidden] as never[], cutoff).map((item) => item.id)).toEqual([30]);
-    mockedItems.splice(0, mockedItems.length, safe, hidden);
-    const markup = renderToStaticMarkup(createElement(OfficialTeamFeed, { favorite, spoilerMode: true, completedGame: { gameState: "FINAL", gameDate: "2026-08-15", finishedAt: finalConfirmedAt, kickoffAt: new Date("2026-08-15T18:00:00.000Z") } }));
+  it("keeps articles published immediately before kickoff visible and hides only official post-final coverage", () => {
+    const kickoffAt = new Date("2026-08-15T17:00:00.000Z");
+    const finalConfirmedAt = new Date("2026-08-15T20:12:00.000Z");
+    const cutoff = spoilerNewsCutoff({ gameState: "FINAL", gameDate: "2026-08-15", finishedAt: finalConfirmedAt, kickoffAt });
+    const pregame = { id: 30, sourceKind: "team_official", category: "news", title: "Pregame notebook", summary: null, sourceUrl: "https://www.buffalobills.com/news/pregame", sourceName: "BUF Official News", publishedAt: new Date("2026-08-15T16:59:59.000Z"), fetchedAt: now };
+    const inGame = { id: 31, sourceKind: "team_official", category: "news", title: "In-game community update", summary: null, sourceUrl: "https://www.buffalobills.com/news/in-game", sourceName: "BUF Official News", publishedAt: new Date("2026-08-15T18:30:00.000Z"), fetchedAt: now };
+    const postgame = { id: 32, sourceKind: "team_official", category: "news", title: "Postgame reaction", summary: null, sourceUrl: "https://www.buffalobills.com/news/postgame", sourceName: "BUF Official News", publishedAt: finalConfirmedAt, fetchedAt: now };
+    expect(selectLatestNews([pregame, inGame, postgame] as never[], cutoff).map((item) => item.id)).toEqual([31, 30]);
+    mockedItems.splice(0, mockedItems.length, pregame, inGame, postgame);
+    const markup = renderToStaticMarkup(createElement(OfficialTeamFeed, { favorite, spoilerMode: true, completedGame: { gameState: "FINAL", gameDate: "2026-08-15", finishedAt: finalConfirmedAt, kickoffAt } }));
+    expect(markup).toContain("https://www.buffalobills.com/news/pregame");
+    expect(markup).toContain("https://www.buffalobills.com/news/in-game");
     expect(markup).not.toContain("https://www.buffalobills.com/news/postgame");
-    expect(markup).not.toContain("Postgame reaction");
+  });
+
+  it("does not hide articles before an official final confirmation exists", () => {
+    const kickoffAt = new Date("2026-08-15T17:00:00.000Z");
+    expect(spoilerNewsCutoff({ gameState: "LIVE", gameDate: "2026-08-15", kickoffAt })).toBeNull();
+    expect(spoilerNewsCutoff({ gameState: "FINAL", gameDate: "2026-08-15", kickoffAt, finishedAt: null })).toBeNull();
   });
 
   it("renders the source icons and five mixed news cards while moving injury status out of the news panel", () => {

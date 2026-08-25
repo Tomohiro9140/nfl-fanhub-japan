@@ -31,11 +31,11 @@ function SourceMark({ kind }: { kind: SourceKind }) {
   return <span className={`mt-0.5 inline-flex h-5 w-[58px] shrink-0 items-center justify-center gap-1 overflow-hidden whitespace-nowrap border px-1 font-mono text-[8px] font-bold tracking-[.08em] ${tone}`}><Icon className="h-2.5 w-2.5 shrink-0" />{label}</span>;
 }
 
-/** Uses a conservative official game-day boundary because post-game content itself can reveal the result. */
+/** Hides only coverage published at/after the official final confirmation, never pre-game coverage. */
 export function spoilerNewsCutoff(game?: CompletedGame) {
   if (!game || !/final|completed/i.test(game.gameState ?? "")) return null;
-  // Final schedule cards can drop their kickoff time. On that day, hide all fresh coverage rather than risk a post-game result leaking.
-  if (game.gameDate) return new Date(`${game.gameDate}T00:00:00.000Z`);
+  // All persisted timestamps are UTC instants. finishedAt is firstFinalAt/finalRecordedAt from the official scoreboard.
+  // Do not fall back to the calendar date: UTC midnight can precede the kickoff and would wrongly hide pre-game articles.
   return game.finishedAt ? new Date(game.finishedAt) : null;
 }
 
