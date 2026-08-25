@@ -379,13 +379,27 @@ export async function refreshOfficialTeamFeedShard(shard: number, totalShards = 
     : { teamCode: codes[index], count: 0, ok: false, error: result.reason instanceof Error ? result.reason.message : "Unknown error" });
 }
 
-export async function refreshOfficialTeamFeedGroup(groupIndex: number) {
+type OfficialFeedGroupDependencies = {
+  refreshFeed?: (teamCode: string) => Promise<number>;
+  refreshTeamData?: (teamCode: string) => Promise<{ games: number; roster: number }>;
+};
+
+export async function refreshOfficialTeamFeedGroup(groupIndex: number, dependencies: OfficialFeedGroupDependencies = {}) {
   const codes = scheduledTeamGroups[groupIndex];
   if (!codes) throw new Error(`Unsupported official feed group: ${groupIndex}`);
+  const refreshFeed = dependencies.refreshFeed ?? refreshOfficialTeamFeed;
+  const refreshTeamData = dependencies.refreshTeamData ?? refreshOfficialTeamData;
   const results = await Promise.allSettled(codes.map(async (teamCode) => {
-    const [feed, teamData] = await Promise.allSettled([refreshOfficialTeamFeed(teamCode), refreshOfficialTeamData(teamCode)]);
+    const [feed, teamData] = await Promise.allSettled([refreshFeed(teamCode), refreshTeamData(teamCode)]);
     if (feed.status === "rejected" && teamData.status === "rejected") throw feed.reason;
-    return { teamCode, count: feed.status === "fulfilled" ? feed.value : 0, games: teamData.status === "fulfilled" ? teamData.value.games : 0, roster: teamData.status === "fulfilled" ? teamData.value.roster : 0 };
+    return {
+      teamCode,
+      count: feed.status === "fulfilled" ? feed.value : 0,
+      games: teamData.status === "fulfilled" ? teamData.value.games : 0,
+      roster: teamData.status === "fulfilled" ? teamData.value.roster : 0,
+      feedError: feed.status === "rejected" ? (feed.reason instanceof Error ? feed.reason.message : String(feed.reason)) : undefined,
+      teamDataError: teamData.status === "rejected" ? (teamData.reason instanceof Error ? teamData.reason.message : String(teamData.reason)) : undefined,
+    };
   }));
   return results.map((result, index) => result.status === "fulfilled"
     ? { ...result.value, ok: true }

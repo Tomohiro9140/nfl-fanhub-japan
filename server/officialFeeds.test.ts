@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { classifyOfficialFeedItem, getOfficialSources, isFreshNflInjuryArticle, needsOfficialNewsTopUp, parseNflArticlePublishedAt, parseOfficialNflInactivesPage, parseOfficialNflInjuryPage, parseOfficialTeamRss, refreshOfficialNflInactives, scheduledTeamGroups, shouldSynchronouslyTopUpOfficialNews, supportedOfficialTeamCodes } from "./officialFeeds";
+import { classifyOfficialFeedItem, getOfficialSources, isFreshNflInjuryArticle, needsOfficialNewsTopUp, parseNflArticlePublishedAt, parseOfficialNflInactivesPage, parseOfficialNflInjuryPage, parseOfficialTeamRss, refreshOfficialNflInactives, refreshOfficialTeamFeedGroup, scheduledTeamGroups, shouldSynchronouslyTopUpOfficialNews, supportedOfficialTeamCodes } from "./officialFeeds";
 import { TEAM_NAMES } from "./officialTeamData";
 
 const sampleRss = `<?xml version="1.0"?><rss><channel><item><title><![CDATA[Practice report: player listed as questionable]]></title><link>https://www.packers.com/news/practice-report</link><description><![CDATA[Official practice report with injury updates.]]></description><pubDate>Fri, 14 Aug 2026 21:12:14 GMT</pubDate></item><item><title>Team announces community event</title><link>https://www.packers.com/news/community-event</link><description>Official team news.</description><pubDate>Thu, 13 Aug 2026 21:12:14 GMT</pubDate></item></channel></rss>`;
@@ -77,6 +77,18 @@ describe("official team feed parsing", () => {
   it("uses team-specific official RSS domains for each team source", () => {
     expect(getOfficialSources("BUF")[0]?.url).toBe("https://www.buffalobills.com/rss/news");
     expect(getOfficialSources("SF")[0]?.url).toBe("https://www.49ers.com/rss/news");
+  });
+
+  it("keeps an RSS failure visible when schedule data succeeds for a group member", async () => {
+    const results = await refreshOfficialTeamFeedGroup(3, {
+      refreshFeed: async (teamCode) => {
+        if (teamCode === "PIT") throw new Error("Official RSS request failed: 503");
+        return 3;
+      },
+      refreshTeamData: async () => ({ games: 16, roster: 53 }),
+    });
+    const pit = results.find((result) => result.teamCode === "PIT");
+    expect(pit).toMatchObject({ teamCode: "PIT", count: 0, games: 16, roster: 53, feedError: "Official RSS request failed: 503" });
   });
 
   it("keeps only the target team's official NFL injury roundup links", () => {
