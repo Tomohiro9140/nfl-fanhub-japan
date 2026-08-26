@@ -31,18 +31,20 @@ function SourceMark({ kind }: { kind: SourceKind }) {
   return <span className={`mt-0.5 inline-flex h-5 w-[58px] shrink-0 items-center justify-center gap-1 overflow-hidden whitespace-nowrap border px-1 font-mono text-[8px] font-bold tracking-[.08em] ${tone}`}><Icon className="h-2.5 w-2.5 shrink-0" />{label}</span>;
 }
 
-/** Hides all coverage published from the official kickoff onward while spoiler protection is enabled. */
+/** Hides all coverage from the official kickoff, or from gameDate UTC midnight only when kickoff is unavailable. */
 export function spoilerNewsCutoff(game?: CompletedGame) {
   if (!game) return null;
-  // All persisted timestamps are UTC instants. Do not use gameDate because its UTC midnight can precede kickoff.
-  // Hiding begins at the precise kickoff and continues through the official FINAL confirmation and later coverage.
+  // All persisted timestamps are UTC instants. Prefer the precise official kickoff in every normal case.
   const kickoffAt = new Date(game.kickoffAt);
-  return Number.isNaN(kickoffAt.getTime()) ? null : kickoffAt;
+  if (!game.kickoffAtEstimated && !Number.isNaN(kickoffAt.getTime())) return kickoffAt;
+  // A live scoreboard can lack an official kickoff. Only in that fallback case, retain the requested gameDate UTC boundary.
+  const gameDateCutoff = game.gameDate ? new Date(`${game.gameDate}T00:00:00.000Z`) : null;
+  return gameDateCutoff && !Number.isNaN(gameDateCutoff.getTime()) ? gameDateCutoff : null;
 }
 
-/** A live game with only a score-fetch timestamp has no trustworthy kickoff boundary, so hide safely until the official time arrives. */
+/** A live game with neither official kickoff nor gameDate has no trustworthy boundary, so hide safely until official data arrives. */
 export function shouldHideAllSpoilerNews(game?: CompletedGame) {
-  return Boolean(game?.kickoffAtEstimated && /live|ingame|in_progress|halftime/i.test(game.gameState ?? ""));
+  return Boolean(game?.kickoffAtEstimated && !game.gameDate && /live|ingame|in_progress|halftime/i.test(game.gameState ?? ""));
 }
 
 /** Keeps official stories foremost while reserving room for one PFT and one CBS team story when available. */

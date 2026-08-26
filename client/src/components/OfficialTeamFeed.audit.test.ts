@@ -70,12 +70,22 @@ describe("official feed mobile content selection", () => {
     expect(spoilerNewsCutoff({ gameState: "FINAL", gameDate: "2026-08-15", kickoffAt, finishedAt: null })).toEqual(kickoffAt);
   });
 
-  it("temporarily hides all latest news when a LIVE game has only an estimated kickoff", () => {
+  it("uses gameDate UTC midnight only when a LIVE game has an estimated kickoff", () => {
     const estimatedKickoff = new Date("2026-08-15T18:30:00.000Z");
-    const liveGame = { gameState: "LIVE", kickoffAt: estimatedKickoff, kickoffAtEstimated: true };
-    const earlyArticle = { id: 33, sourceKind: "team_official", category: "news", title: "Pregame post", summary: null, sourceUrl: "https://www.buffalobills.com/news/early", sourceName: "BUF Official News", publishedAt: new Date("2026-08-15T16:00:00.000Z"), fetchedAt: now };
+    const liveGame = { gameState: "LIVE", kickoffAt: estimatedKickoff, kickoffAtEstimated: true, gameDate: "2026-08-15" };
+    const previousDayArticle = { id: 33, sourceKind: "team_official", category: "news", title: "Previous day post", summary: null, sourceUrl: "https://www.buffalobills.com/news/previous-day", sourceName: "BUF Official News", publishedAt: new Date("2026-08-14T23:59:59.000Z"), fetchedAt: now };
+    const gameDayArticle = { id: 34, sourceKind: "team_official", category: "news", title: "Game day post", summary: null, sourceUrl: "https://www.buffalobills.com/news/game-day", sourceName: "BUF Official News", publishedAt: new Date("2026-08-15T00:00:00.000Z"), fetchedAt: now };
+    expect(spoilerNewsCutoff(liveGame)).toEqual(new Date("2026-08-15T00:00:00.000Z"));
+    expect(shouldHideAllSpoilerNews(liveGame)).toBe(false);
+    expect(selectLatestNews([previousDayArticle, gameDayArticle] as never[], spoilerNewsCutoff(liveGame)).map((item) => item.id)).toEqual([33]);
+  });
+
+  it("hides all latest news only when a LIVE game has neither official kickoff nor gameDate", () => {
+    const liveGame = { gameState: "LIVE", kickoffAt: new Date("2026-08-15T18:30:00.000Z"), kickoffAtEstimated: true };
+    const article = { id: 35, sourceKind: "team_official", category: "news", title: "Unknown-boundary post", summary: null, sourceUrl: "https://www.buffalobills.com/news/unknown-boundary", sourceName: "BUF Official News", publishedAt: new Date("2026-08-15T16:00:00.000Z"), fetchedAt: now };
+    expect(spoilerNewsCutoff(liveGame)).toBeNull();
     expect(shouldHideAllSpoilerNews(liveGame)).toBe(true);
-    expect(selectLatestNews([earlyArticle] as never[], spoilerNewsCutoff(liveGame), true)).toEqual([]);
+    expect(selectLatestNews([article] as never[], spoilerNewsCutoff(liveGame), true)).toEqual([]);
   });
 
   it("renders the source icons and five mixed news cards while moving injury status out of the news panel", () => {
