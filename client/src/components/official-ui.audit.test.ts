@@ -196,12 +196,13 @@ describe("compact mobile result and schedule UI", () => {
     expect(spoilerMarkup).toContain("8/22(土)");
     expect(spoilerMarkup).not.toContain("13:57");
     expect(spoilerMarkup).not.toContain("OFFICIAL SCORE 10 — 7");
-    expect(spoilerMarkup).toContain("min-h-[320px]");
-    expect(spoilerMarkup).toContain("flex min-h-[320px] flex-col justify-between");
+    expect(spoilerMarkup).toContain('data-game-ticket-state="FINAL"');
+    expect(spoilerMarkup).toContain("min-h-[280px]");
+    expect(spoilerMarkup).toContain("relative flex flex-col p-4");
     expect(spoilerMarkup).toContain("border-t border-white/15 pt-2");
     expect(spoilerMarkup).toContain("REPORTED · QB Example Player");
     expect(normalMarkup).toContain("FINAL SCORE");
-    expect(normalMarkup).toContain("min-h-[320px]");
+    expect(normalMarkup).toContain("min-h-[280px]");
     expect(normalMarkup).toMatch(/>10<\/span><span> — <\/span><span[^>]*>7<\/span>/);
     expect(normalMarkup).toContain("WATCH HIGHLIGHTS");
     expect(normalMarkup).toContain("ON TO THE NEXT GAME");

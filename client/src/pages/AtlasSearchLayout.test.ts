@@ -17,10 +17,16 @@ describe("ATLAS検索トップのレイアウト", () => {
     expect(atlasStyles).toContain(".atlas-soft-grid:has(input:not(:placeholder-shown)) > .atlas-shell { justify-content: flex-start; padding-top: 7rem; }");
   });
 
+  it("チーム検索の初期画面では、フォームを中央に保ったままタイトルを上側の空き領域へ移す", () => {
+    expect(atlasStyles).toContain(".atlas-team-search-stage > .atlas-shell > header { top: 13svh; }");
+    expect(atlasSource).toContain('const isTeamSearchLanding = mode === "filter" && !team;');
+    expect(atlasSource).toContain('isLanding || isTeamSearchLanding ? "h-[100svh] min-h-[100svh] overflow-hidden" : "min-h-screen pb-10"');
+  });
+
   it("共通ナビゲーションを表示し、空の名前検索トップだけをビューポート固定にする", () => {
     expect(atlasSource).toContain('import { EmbeddedAppNav } from "@/components/EmbeddedAppNav";');
     expect((atlasSource.match(/<EmbeddedAppNav current="ATLAS"/g) ?? [])).toHaveLength(2);
     expect(atlasSource).toContain('const isLanding = mode === "name" && !typedQuery;');
-    expect(atlasSource).toContain('isLanding ? "h-[100svh] min-h-[100svh] overflow-hidden" : "min-h-screen pb-10"');
+    expect(atlasSource).toContain('isLanding || isTeamSearchLanding ? "h-[100svh] min-h-[100svh] overflow-hidden" : "min-h-screen pb-10"');
   });
 });
