@@ -9,7 +9,7 @@ import { generateOfficialNewsEnglishSummary, generateOfficialNewsJapaneseSummary
 import { NEWS_SUMMARIES_ENABLED } from "@shared/newsSummaryFeature";
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import { atlasAwards, atlasBrowse, atlasCareer, atlasContracts, atlasFilters, atlasProfile, atlasSearch, atlasStats } from "./atlasData";
+import { atlasAwards, atlasBrowse, atlasCareer, atlasContracts, atlasFilters, atlasProfile, atlasResolveGameBookPlayers, atlasSearch, atlasStats } from "./atlasData";
 import { compareFieldlineSelections, FIELDLINE_TEAM_CODES, FIELDLINE_TEAM_NAMES, getFieldlineFreshness, getFieldlineRefreshSchedules, getFieldlineSeasons, getFieldlineWeeks, importFieldlineSeasonFromNflverse } from "./fieldlineData";
 import { getOfficialGameStats } from "./officialGameStats";
 
@@ -94,6 +94,7 @@ export const appRouter = router({
   atlas: router({
     filters: publicProcedure.input(z.object({ team: z.string().min(2).optional() }).optional()).query(({ input }) => atlasFilters(input?.team)),
     search: publicProcedure.input(z.object({ query: z.string().trim().max(80) })).query(({ input }) => atlasSearch(input.query)),
+    resolveGameBookPlayers: publicProcedure.input(z.object({ entries: z.array(z.object({ team: z.string().min(2).max(4), name: z.string().trim().min(1).max(80) })).max(240) })).query(({ input }) => atlasResolveGameBookPlayers(input.entries)),
     browse: publicProcedure.input(z.object({ team: z.string().min(2), position: z.string().min(1).optional(), jersey: z.string().trim().max(3).optional() })).query(({ input }) => atlasBrowse(input)),
     profile: publicProcedure.input(z.object({ playerId: z.string().min(1) })).query(({ input }) => atlasProfile(input.playerId)),
     career: publicProcedure.input(z.object({ playerId: z.string().min(1) })).query(({ input }) => atlasCareer(input.playerId)),

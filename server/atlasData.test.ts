@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { atlasPositionGroup, normalizeAtlasText, parseAtlasCsv, summarizeAtlasStats } from "./atlasData";
+import { atlasPositionGroup, normalizeAtlasText, parseAtlasCsv, resolveAtlasGameBookPlayerId, summarizeAtlasStats } from "./atlasData";
 
 describe("ATLAS data helpers", () => {
   it("parses quoted NFLverse CSV records", () => {
@@ -13,6 +13,12 @@ describe("ATLAS data helpers", () => {
     expect(atlasPositionGroup("OT")).toBe("OL");
     expect(atlasPositionGroup("CB")).toBe("DB");
     expect(atlasPositionGroup("QB")).toBe("QB");
+  });
+
+  it("resolves an official Game Book abbreviation only when its team candidates have one full-name match", () => {
+    expect(resolveAtlasGameBookPlayerId("D. LOCK", [{ id: "00-0035157", name: "Drew Lock", team: "SEA" }])).toBe("00-0035157");
+    expect(resolveAtlasGameBookPlayerId("J. SMITH", [{ id: "one", name: "John Smith", team: "SEA" }, { id: "two", name: "James Smith", team: "SEA" }])).toBeNull();
+    expect(resolveAtlasGameBookPlayerId("J. SMITH", [{ id: "one", name: "John Smith", team: "NYG" }])).toBe("one");
   });
 
   it("summarizes weekly player rows into a season line", () => {

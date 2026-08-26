@@ -333,6 +333,44 @@ export async function atlasSearch(query: string) {
   return { players, updatedAt: new Date().toISOString() };
 }
 
+export type AtlasGameBookPlayerCandidate = { id: string; name: string; team: string };
+
+function gameBookNameParts(name: string) {
+  const parts = name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase().replace(/[^a-z0-9]+/g, " ").trim().split(/\s+/).filter(Boolean);
+  const compact = parts.join("");
+  return { compact, initial: parts[0]?.[0] ?? "", surname: parts.at(-1) ?? "" };
+}
+
+/** Resolves an official Game Book abbreviation (for example, "D. LOCK") only when one Atlas player matches its team, surname, and first initial. */
+export function resolveAtlasGameBookPlayerId(abbreviatedName: string, candidates: AtlasGameBookPlayerCandidate[]) {
+  const target = gameBookNameParts(abbreviatedName);
+  const matches = candidates.filter((candidate) => {
+    const candidateParts = gameBookNameParts(candidate.name);
+    return candidateParts.initial === target.initial && candidateParts.surname === target.surname;
+  });
+  return matches.length === 1 ? matches[0]!.id : null;
+}
+
+export async function atlasResolveGameBookPlayers(entries: Array<{ team: string; name: string }>) {
+  const { active, current, masterById } = await searchUniverse();
+  const byTeam = new Map<string, AtlasGameBookPlayerCandidate[]>();
+  active.forEach((player) => {
+    const candidates = byTeam.get(player.team.abbreviation) ?? [];
+    candidates.push({ id: player.id, name: player.name, team: player.team.abbreviation });
+    byTeam.set(player.team.abbreviation, candidates);
+  });
+  const allPlayers = Array.from(masterById.values()).flatMap((player) => {
+    const id = player.gsis_id;
+    if (!id) return [];
+    return [{ id, name: playerName(player), team: current.get(id)?.team || player.latest_team || "" }];
+  });
+  return Object.fromEntries(entries.map((entry) => {
+    const teamMatch = resolveAtlasGameBookPlayerId(entry.name, byTeam.get(entry.team) ?? []);
+    const uniqueMasterMatch = resolveAtlasGameBookPlayerId(entry.name, allPlayers);
+    return [`${entry.team}:${entry.name}`, teamMatch ?? uniqueMasterMatch];
+  }));
+}
+
 export async function atlasBrowse(input: { team: string; position?: string; jersey?: string }) {
   const { active } = await searchUniverse();
   const jersey = input.jersey?.trim();
