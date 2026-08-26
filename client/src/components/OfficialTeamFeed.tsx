@@ -8,7 +8,7 @@ import { NEWS_SUMMARIES_ENABLED } from "@shared/newsSummaryFeature";
 
 type SourceKind = "team_official" | "nfl_official" | "pft" | "cbs";
 type FeedItem = { id: number; title: string; summary: string | null; japaneseSummary: string | null; englishSummary: string | null; sourceUrl: string; sourceName: string; sourceKind: SourceKind; category: "news" | "injury" | "transaction"; publishedAt: Date; fetchedAt: Date };
-type CompletedGame = { gameState: string | null; gameDate?: string | null; finishedAt?: Date | null; kickoffAt: Date };
+type CompletedGame = { gameState: string | null; gameDate?: string | null; finishedAt?: Date | null; kickoffAt: Date; kickoffAtEstimated?: boolean };
 const externalSourceKinds = new Set<SourceKind>(["pft", "cbs"]);
 
 function isRosterMoveNews(item: FeedItem) {
@@ -31,17 +31,23 @@ function SourceMark({ kind }: { kind: SourceKind }) {
   return <span className={`mt-0.5 inline-flex h-5 w-[58px] shrink-0 items-center justify-center gap-1 overflow-hidden whitespace-nowrap border px-1 font-mono text-[8px] font-bold tracking-[.08em] ${tone}`}><Icon className="h-2.5 w-2.5 shrink-0" />{label}</span>;
 }
 
-/** Hides only coverage published at/after the official final confirmation, never pre-game coverage. */
+/** Hides all coverage published from the official kickoff onward while spoiler protection is enabled. */
 export function spoilerNewsCutoff(game?: CompletedGame) {
-  if (!game || !/final|completed/i.test(game.gameState ?? "")) return null;
-  // All persisted timestamps are UTC instants. finishedAt is firstFinalAt/finalRecordedAt from the official scoreboard.
-  // Do not fall back to the calendar date: UTC midnight can precede the kickoff and would wrongly hide pre-game articles.
-  return game.finishedAt ? new Date(game.finishedAt) : null;
+  if (!game) return null;
+  // All persisted timestamps are UTC instants. Do not use gameDate because its UTC midnight can precede kickoff.
+  // Hiding begins at the precise kickoff and continues through the official FINAL confirmation and later coverage.
+  const kickoffAt = new Date(game.kickoffAt);
+  return Number.isNaN(kickoffAt.getTime()) ? null : kickoffAt;
+}
+
+/** A live game with only a score-fetch timestamp has no trustworthy kickoff boundary, so hide safely until the official time arrives. */
+export function shouldHideAllSpoilerNews(game?: CompletedGame) {
+  return Boolean(game?.kickoffAtEstimated && /live|ingame|in_progress|halftime/i.test(game.gameState ?? ""));
 }
 
 /** Keeps official stories foremost while reserving room for one PFT and one CBS team story when available. */
-export function selectLatestNews(items: FeedItem[], hideFrom?: Date | null) {
-  const sorted = dedupeDisplayArticles([...items].filter((item) => item.category === "news" && !isRosterMoveNews(item) && (!hideFrom || new Date(item.publishedAt).getTime() < hideFrom.getTime())).sort((left, right) => new Date(right.publishedAt).getTime() - new Date(left.publishedAt).getTime()));
+export function selectLatestNews(items: FeedItem[], hideFrom?: Date | null, hideAll = false) {
+  const sorted = dedupeDisplayArticles([...items].filter((item) => !hideAll && item.category === "news" && !isRosterMoveNews(item) && (!hideFrom || new Date(item.publishedAt).getTime() < hideFrom.getTime())).sort((left, right) => new Date(right.publishedAt).getTime() - new Date(left.publishedAt).getTime()));
   const official = sorted.filter((item) => !externalSourceKinds.has(item.sourceKind));
   const selected = [...official.slice(0, 3)];
   for (const kind of ["pft", "cbs"] as const) {
@@ -70,7 +76,8 @@ export function OfficialTeamFeed({ favorite, spoilerMode = false, completedGame 
   const displayError = feed.isError || shouldSimulateUnavailable;
   const items = (shouldSimulateUnavailable ? [] : feed.data?.items ?? []) as FeedItem[];
   const hideFrom = spoilerMode ? spoilerNewsCutoff(completedGame) : null;
-  const news = useMemo(() => selectLatestNews(items, hideFrom), [items, hideFrom]);
+  const hideAll = spoilerMode && shouldHideAllSpoilerNews(completedGame);
+  const news = useMemo(() => selectLatestNews(items, hideFrom, hideAll), [items, hideFrom, hideAll]);
   return (
     <section id="updates" className="scroll-mt-24">
       <div className="flex items-center gap-2 font-mono text-[10px] font-semibold tracking-[0.2em] text-[#64748b]"><span className="text-[#10213a]">02</span><span>{favorite.code} NEWS DESK</span><span className="h-px flex-1 bg-[#d9d5cc]" /></div>

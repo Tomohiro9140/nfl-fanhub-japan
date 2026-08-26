@@ -13,7 +13,7 @@ export type TeamSnapshot = {
   nextGame?: { opponentCode: string; homeAway: "home" | "away"; seasonPhase: "preseason" | "regular" | "postseason"; weekLabel: string | null; kickoffAt: Date; kickoffAtEstimated?: boolean; gameDate?: string | null; finishedAt?: Date | null; venue: string | null; broadcast: string | null; sourceUrl: string; daznUrl: string | null; nflHighlightUrl?: string | null; gameState: string | null; awayScore: number | null; homeScore: number | null; fetchedAt: Date };
   canRestoreLastGame?: boolean;
   byeWeek?: { weekLabel: string; nextGameWeekLabel: string | null };
-  gameDayStatus?: { opponentCode: string; homeAway: "home" | "away"; weekLabel: string | null; kickoffAt: Date; gameDate?: string | null; finishedAt?: Date | null; gameState: string | null; awayScore: number | null; homeScore: number | null; sourceUrl: string; fetchedAt: Date };
+  gameDayStatus?: { opponentCode: string; homeAway: "home" | "away"; weekLabel: string | null; kickoffAt: Date; kickoffAtEstimated?: boolean; gameDate?: string | null; finishedAt?: Date | null; gameState: string | null; awayScore: number | null; homeScore: number | null; sourceUrl: string; fetchedAt: Date };
   roster: Array<{ id: number; playerName: string; jerseyNumber: string | null; position: string; rosterStatus: string; sourceUrl: string; fetchedAt: Date }>;
   rosterCounts: Array<{ status: string; count: number }>;
   injuries: Array<{ id: number; title: string; sourceName: string; sourceUrl: string; publishedAt: Date; category?: "injury" | "transaction" }>;

@@ -17,7 +17,7 @@ vi.mock("@/lib/trpc", () => ({
   },
 }));
 
-import { OfficialTeamFeed, selectLatestNews, spoilerNewsCutoff } from "./OfficialTeamFeed";
+import { OfficialTeamFeed, selectLatestNews, shouldHideAllSpoilerNews, spoilerNewsCutoff } from "./OfficialTeamFeed";
 
 const favorite: FavoriteTeam = { code: "BUF", name: "Buffalo Bills", conference: "AFC", division: "East", tone: "blue" };
 const now = new Date();
@@ -48,25 +48,34 @@ describe("official feed mobile content selection", () => {
     expect(selected.map((item) => item.id)).not.toContain(13);
   });
 
-  it("keeps articles published immediately before kickoff visible and hides only official post-final coverage", () => {
+  it("keeps pre-kickoff articles visible and hides in-game and post-final coverage", () => {
     const kickoffAt = new Date("2026-08-15T17:00:00.000Z");
     const finalConfirmedAt = new Date("2026-08-15T20:12:00.000Z");
     const cutoff = spoilerNewsCutoff({ gameState: "FINAL", gameDate: "2026-08-15", finishedAt: finalConfirmedAt, kickoffAt });
     const pregame = { id: 30, sourceKind: "team_official", category: "news", title: "Pregame notebook", summary: null, sourceUrl: "https://www.buffalobills.com/news/pregame", sourceName: "BUF Official News", publishedAt: new Date("2026-08-15T16:59:59.000Z"), fetchedAt: now };
     const inGame = { id: 31, sourceKind: "team_official", category: "news", title: "In-game community update", summary: null, sourceUrl: "https://www.buffalobills.com/news/in-game", sourceName: "BUF Official News", publishedAt: new Date("2026-08-15T18:30:00.000Z"), fetchedAt: now };
     const postgame = { id: 32, sourceKind: "team_official", category: "news", title: "Postgame reaction", summary: null, sourceUrl: "https://www.buffalobills.com/news/postgame", sourceName: "BUF Official News", publishedAt: finalConfirmedAt, fetchedAt: now };
-    expect(selectLatestNews([pregame, inGame, postgame] as never[], cutoff).map((item) => item.id)).toEqual([31, 30]);
+    expect(selectLatestNews([pregame, inGame, postgame] as never[], cutoff).map((item) => item.id)).toEqual([30]);
     mockedItems.splice(0, mockedItems.length, pregame, inGame, postgame);
     const markup = renderToStaticMarkup(createElement(OfficialTeamFeed, { favorite, spoilerMode: true, completedGame: { gameState: "FINAL", gameDate: "2026-08-15", finishedAt: finalConfirmedAt, kickoffAt } }));
     expect(markup).toContain("https://www.buffalobills.com/news/pregame");
-    expect(markup).toContain("https://www.buffalobills.com/news/in-game");
+    expect(markup).not.toContain("https://www.buffalobills.com/news/in-game");
     expect(markup).not.toContain("https://www.buffalobills.com/news/postgame");
   });
 
-  it("does not hide articles before an official final confirmation exists", () => {
+  it("uses the official kickoff even while a game is LIVE or its FINAL timestamp is unavailable", () => {
     const kickoffAt = new Date("2026-08-15T17:00:00.000Z");
-    expect(spoilerNewsCutoff({ gameState: "LIVE", gameDate: "2026-08-15", kickoffAt })).toBeNull();
-    expect(spoilerNewsCutoff({ gameState: "FINAL", gameDate: "2026-08-15", kickoffAt, finishedAt: null })).toBeNull();
+    expect(spoilerNewsCutoff({ gameState: "UPCOMING", gameDate: "2026-08-15", kickoffAt })).toEqual(kickoffAt);
+    expect(spoilerNewsCutoff({ gameState: "LIVE", gameDate: "2026-08-15", kickoffAt })).toEqual(kickoffAt);
+    expect(spoilerNewsCutoff({ gameState: "FINAL", gameDate: "2026-08-15", kickoffAt, finishedAt: null })).toEqual(kickoffAt);
+  });
+
+  it("temporarily hides all latest news when a LIVE game has only an estimated kickoff", () => {
+    const estimatedKickoff = new Date("2026-08-15T18:30:00.000Z");
+    const liveGame = { gameState: "LIVE", kickoffAt: estimatedKickoff, kickoffAtEstimated: true };
+    const earlyArticle = { id: 33, sourceKind: "team_official", category: "news", title: "Pregame post", summary: null, sourceUrl: "https://www.buffalobills.com/news/early", sourceName: "BUF Official News", publishedAt: new Date("2026-08-15T16:00:00.000Z"), fetchedAt: now };
+    expect(shouldHideAllSpoilerNews(liveGame)).toBe(true);
+    expect(selectLatestNews([earlyArticle] as never[], spoilerNewsCutoff(liveGame), true)).toEqual([]);
   });
 
   it("renders the source icons and five mixed news cards while moving injury status out of the news panel", () => {

@@ -367,6 +367,7 @@ export async function getOfficialTeamSnapshot(teamCode: string, skipGameUrl?: st
     homeAway: nextGame.homeAway,
     weekLabel: nextGame.weekLabel,
     kickoffAt: nextGame.kickoffAt,
+    kickoffAtEstimated: "kickoffAtEstimated" in nextGame ? nextGame.kickoffAtEstimated ?? false : false,
     gameState: nextGame.gameState,
     awayScore: nextGame.awayScore,
     homeScore: nextGame.homeScore,
