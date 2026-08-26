@@ -39,6 +39,20 @@ describe("compact mobile result and schedule UI", () => {
     expect(revealedMarkup).not.toContain("memo-slip");
   });
 
+  it("shows Game Stats only after a FINAL when spoiler protection is off", () => {
+    const openStats = () => undefined;
+    const revealedResults = renderToStaticMarkup(createElement(OfficialLatestResults, { favorite, dashboard, loading: false, spoilerMode: false, onOpenGameStats: openStats }));
+    const hiddenResults = renderToStaticMarkup(createElement(OfficialLatestResults, { favorite, dashboard, loading: false, spoilerMode: true, onOpenGameStats: openStats }));
+    const finalSnapshot = { nextGame: { opponentCode: "CAR", homeAway: "home" as const, seasonPhase: "preseason" as const, weekLabel: "PRESEASON WEEK 1", kickoffAt, venue: null, broadcast: null, sourceUrl: "https://www.nfl.com/games/panthers-at-bills-2026-pre-1", daznUrl: null, gameState: "FINAL", awayScore: 14, homeScore: 29, fetchedAt: kickoffAt }, roster: [], rosterCounts: [], injuries: [], news: [], sources: { schedule: null, roster: null, injury: null } };
+    const revealedTicket = renderToStaticMarkup(createElement(OfficialGameTicket, { favorite, snapshot: finalSnapshot, loading: false, spoilerMode: false, onOpenGameStats: openStats }));
+    const hiddenTicket = renderToStaticMarkup(createElement(OfficialGameTicket, { favorite, snapshot: finalSnapshot, loading: false, spoilerMode: true, onOpenGameStats: openStats }));
+
+    expect(revealedResults).toContain("GAME STATS");
+    expect(hiddenResults).not.toContain("GAME STATS");
+    expect(revealedTicket).toContain("GAME STATS");
+    expect(hiddenTicket).not.toContain("GAME STATS");
+  });
+
   it("removes the requested Game Ticket chrome while retaining the watch action", () => {
     const markup = renderToStaticMarkup(createElement(OfficialGameTicket, {
       favorite,

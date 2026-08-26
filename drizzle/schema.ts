@@ -175,6 +175,24 @@ export const officialScoreboardGames = mysqlTable("official_scoreboard_games", {
 export type OfficialScoreboardGame = typeof officialScoreboardGames.$inferSelect;
 export type InsertOfficialScoreboardGame = typeof officialScoreboardGames.$inferInsert;
 
+/** Compact, structured facts extracted from an official NFL Game Center/Game Book. Full Game Book contents are never stored. */
+export const officialGameStats = mysqlTable("official_game_stats", {
+  id: int("id").autoincrement().primaryKey(),
+  gameExternalId: varchar("game_external_id", { length: 191 }).notNull(),
+  gameUrl: varchar("game_url", { length: 1024 }).notNull(),
+  sourceUrl: varchar("source_url", { length: 1024 }).notNull(),
+  awayTeamCode: varchar("away_team_code", { length: 3 }).notNull(),
+  homeTeamCode: varchar("home_team_code", { length: 3 }).notNull(),
+  /** Requested team-comparison and player fact rows only; no source document text is persisted. */
+  payload: text("payload").notNull(),
+  fetchedAt: timestamp("fetched_at").defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("official_game_stats_external_uq").on(table.gameExternalId),
+]);
+
+export type OfficialGameStats = typeof officialGameStats.$inferSelect;
+export type InsertOfficialGameStats = typeof officialGameStats.$inferInsert;
+
 /** FIELDLINE season-level import state for the nflverse play-by-play source. */
 export const seasonImports = mysqlTable("season_imports", {
   id: int("id").autoincrement().primaryKey(),

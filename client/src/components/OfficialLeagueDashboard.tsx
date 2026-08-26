@@ -1,4 +1,4 @@
-import { CalendarDays, ChevronRight, CircleAlert, ListOrdered, Trophy } from "lucide-react";
+import { BarChart3, CalendarDays, ChevronRight, CircleAlert, ListOrdered, Trophy } from "lucide-react";
 import React, { useMemo, useState } from "react";
 import { nflTeams, officialTeamScheduleUrl, type FavoriteTeam } from "@/lib/nflTeams";
 import { abbreviatedMatchup, getFavoriteLatestResults, getFavoriteSchedule, getNextSevenDayGames, seasonWeekLabel, type LeagueCalendarGame } from "@/lib/leagueCalendar";
@@ -35,7 +35,7 @@ export function jstResultDate(value: Date | null, officialDate?: string | null) 
   return new Intl.DateTimeFormat("ja-JP", { month: "numeric", day: "numeric", weekday: "short", timeZone: "Asia/Tokyo" }).format(new Date(date));
 }
 
-export function OfficialLatestResults({ favorite, dashboard, loading, spoilerMode }: { favorite: FavoriteTeam; dashboard?: LeagueDashboard; loading: boolean; spoilerMode: boolean }) {
+export function OfficialLatestResults({ favorite, dashboard, loading, spoilerMode, onOpenGameStats }: { favorite: FavoriteTeam; dashboard?: LeagueDashboard; loading: boolean; spoilerMode: boolean; onOpenGameStats?: (gameUrl: string) => void }) {
   const resultGames = useMemo(() => {
     return getFavoriteLatestResults(dashboard?.results ?? [], favorite.code);
   }, [dashboard, favorite]);
@@ -82,6 +82,7 @@ export function OfficialLatestResults({ favorite, dashboard, loading, spoilerMod
                       {venue ? <p className="truncate font-mono text-[8px] font-bold leading-[10px] tracking-[.08em] text-[#7a6557]" title={game.venue ?? undefined}>VENUE · {venue}</p> : null}
                     </div>
                     <p className="font-mono text-[26px] font-black leading-[.85] tracking-[-.06em]">{spoilerMode ? "—" : <><span className={awayWon ? "text-[#a84420]" : undefined}>{game.awayScore ?? "—"}</span><span> - </span><span className={homeWon ? "text-[#a84420]" : undefined}>{game.homeScore ?? "—"}</span></>}</p>
+                    {!spoilerMode && game.gameState === "FINAL" && onOpenGameStats ? <button type="button" onClick={() => onOpenGameStats(game.gameUrl)} className="mt-2 inline-flex items-center gap-1 font-mono text-[8px] font-black tracking-[.06em] text-[#a84420] underline decoration-[#e85d2a] decoration-2 underline-offset-2"><BarChart3 className="h-3 w-3" /> GAME STATS</button> : null}
                   </div>
                 </div>
               );

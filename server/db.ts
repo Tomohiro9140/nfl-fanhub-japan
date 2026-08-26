@@ -5,7 +5,7 @@ import { selectRelevantCalendarGames } from "./leagueDashboardPayload";
 import { dedupeOfficialFeedItems } from "./officialFeedDeduplication";
 import { isNull } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { ExternalAvailabilityInsight, InsertExternalAvailabilityInsight, InsertOfficialFeedItem, InsertOfficialGame, InsertOfficialRosterEntry, InsertOfficialScoreboardGame, InsertOfficialStanding, InsertUser, externalAvailabilityInsights, officialFeedItems, officialGames, officialRosterEntries, officialScoreboardGames, officialStandings, users } from "../drizzle/schema";
+import { ExternalAvailabilityInsight, InsertExternalAvailabilityInsight, InsertOfficialFeedItem, InsertOfficialGame, InsertOfficialGameStats, InsertOfficialRosterEntry, InsertOfficialScoreboardGame, InsertOfficialStanding, InsertUser, externalAvailabilityInsights, officialFeedItems, officialGameStats, officialGames, officialRosterEntries, officialScoreboardGames, officialStandings, users } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -445,6 +445,26 @@ export async function upsertOfficialScoreboardHighlights(links: Array<{ external
   if (!db) throw new Error("Database is not available for NFL official highlight cache");
   const matchedAt = new Date();
   for (const link of links) await db.update(officialScoreboardGames).set({ nflHighlightUrl: link.nflHighlightUrl, nflHighlightSourceUrl: link.sourceUrl, nflHighlightMatchedAt: matchedAt }).where(eq(officialScoreboardGames.externalId, link.externalId));
+}
+
+export async function getOfficialGameStatsCache(gameExternalId: string) {
+  const db = await getDb();
+  if (!db) return undefined;
+  return (await db.select().from(officialGameStats).where(eq(officialGameStats.gameExternalId, gameExternalId)).limit(1))[0];
+}
+
+export async function saveOfficialGameStats(item: InsertOfficialGameStats) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is not available for official game stats cache");
+  await db.insert(officialGameStats).values(item).onDuplicateKeyUpdate({
+    set: { gameUrl: item.gameUrl, sourceUrl: item.sourceUrl, awayTeamCode: item.awayTeamCode, homeTeamCode: item.homeTeamCode, payload: item.payload, fetchedAt: item.fetchedAt },
+  });
+}
+
+export async function getOfficialScoreboardGameByUrl(gameUrl: string) {
+  const db = await getDb();
+  if (!db) return undefined;
+  return (await db.select().from(officialScoreboardGames).where(eq(officialScoreboardGames.gameUrl, gameUrl)).limit(1))[0];
 }
 
 export async function getOfficialLeagueDashboardSummary() {

@@ -11,6 +11,7 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { atlasAwards, atlasBrowse, atlasCareer, atlasContracts, atlasFilters, atlasProfile, atlasSearch, atlasStats } from "./atlasData";
 import { compareFieldlineSelections, FIELDLINE_TEAM_CODES, FIELDLINE_TEAM_NAMES, getFieldlineFreshness, getFieldlineRefreshSchedules, getFieldlineSeasons, getFieldlineWeeks, importFieldlineSeasonFromNflverse } from "./fieldlineData";
+import { getOfficialGameStats } from "./officialGameStats";
 
 const fieldlineVenueSchema = z.enum(["all", "home", "away"]);
 const fieldlineSelectionSchema = z.object({
@@ -86,6 +87,9 @@ export const appRouter = router({
   leagueDashboard: router({
     summary: publicProcedure.query(() => getCachedOfficialLeagueDashboardSummary()),
     calendar: publicProcedure.input(z.object({ teamCode: z.string().length(2).or(z.string().length(3)) })).query(({ input }) => getCachedOfficialLeagueCalendar(input.teamCode)),
+  }),
+  gameStats: router({
+    byGameUrl: publicProcedure.input(z.object({ gameUrl: z.string().url().refine((value) => /^https:\/\/www\.nfl\.com\/games\//.test(value), "NFL公式Game Center URLが必要です。") })).query(({ input }) => getOfficialGameStats(input.gameUrl)),
   }),
   atlas: router({
     filters: publicProcedure.input(z.object({ team: z.string().min(2).optional() }).optional()).query(({ input }) => atlasFilters(input?.team)),
