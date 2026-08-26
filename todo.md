@@ -644,6 +644,10 @@
 - [x] Game Statsヘッダーの「FINAL GAME · OFFICIAL BOX SCORE」と結果直下の「FINAL · OFFICIAL RESULTS」を削除する。
 - [x] 個人成績表を、プレイヤー名左寄せ・数値と列見出しの中央整列へ修正する。
 - [x] 個人成績のチーム名をINDIVIDUAL STATSと各カテゴリ見出しの間へ共通配置し、各表内の重複見出しを削除する。
+- [x] Game StatsのMORE展開・折りたたみ時に、操作したカテゴリの表示位置を維持する。
+- [x] Game Statsの選手名から、該当選手を指定したATLASプロフィールへ遷移できるようにする。
+- [x] DIVISION STANDINGSとGame Statsの数字用書体を、中央点のあるゼロを使わない読みやすいフォントへ変更する。
+- [x] MORE操作・ATLAS遷移・数字フォントをモバイル・PCと回帰テストで検証する。
 - [x] 現在UTCの対象8チームと公式RSSの取得可否を確認する。
 - [x] 対象チームの公式RSSとNFL公式負傷者ページを検証し、実在項目だけを選別する。
 - [x] 検証済み公式項目をofficial_feed_itemsへUPSERTし、チーム別保存件数を照合する。

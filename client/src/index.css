@@ -3,7 +3,7 @@
  * Style reminder — editorial data journalism, warm bone paper, ink navy structure,
  * endzone-orange decision accents; do not dilute with generic dashboard styling.
  */
-@import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=DM+Serif+Display:ital@0;1&family=IBM+Plex+Mono:wght@400;500;600&family=Manrope:wght@400;500;600;700;800&family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=DM+Serif+Display:ital@0;1&family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@500;600;700;800&family=Manrope:wght@400;500;600;700;800&family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
 @import "tailwindcss";
 @import "tw-animate-css";
 
@@ -65,6 +65,8 @@
   .atlas-soft-grid:has(input:not(:placeholder-shown)) > .atlas-shell > footer { position: static; margin-top: 1.5rem; }
   .atlas-view p:empty { display: none; }
   .fieldline-hub-surface { background-color: #f7f5f0; background-image: radial-gradient(circle at 8% -10%, rgba(232, 93, 42, .10), transparent 26rem), radial-gradient(circle at 95% 14%, rgba(16, 33, 58, .06), transparent 28rem); }
+  .game-stats-dialog .font-mono,
+  #league > article.clip-note .font-mono { font-family: "Inter", "Noto Sans JP", sans-serif !important; font-variant-numeric: tabular-nums; }
 }
 
 @media (max-width: 639px) {
