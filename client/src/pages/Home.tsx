@@ -75,6 +75,7 @@ export function SpoilerSwitch({ spoilerMode, onToggle }: { spoilerMode: boolean;
 }
 
 export default function Home() {
+  const homeUtils = trpc.useUtils();
   const [spoilerMode, setSpoilerMode] = useState(true);
   const [navOpen, setNavOpen] = useState(false);
   const [teamDialogOpen, setTeamDialogOpen] = useState(false);
@@ -99,11 +100,16 @@ export default function Home() {
   const shouldWarmLeagueSummary = useIdlePreload();
   const shouldLoadLeagueCalendar = useNearViewport(leagueSection, "900px");
   const shouldLoadLeagueSummary = shouldWarmLeagueSummary || shouldLoadLeagueCalendar;
+  const shouldWarmGameStatsData = useIdlePreload(1_250);
   const snapshotQuery = trpc.teamSnapshot.byTeam.useQuery(snapshotInput, { refetchInterval: 60 * 1000, staleTime: 45 * 1000, refetchOnWindowFocus: true, refetchOnReconnect: true, retry: 1 });
   const rosterSnapshotQuery = trpc.teamSnapshot.byTeam.useQuery(rosterSnapshotInput, { enabled: shouldLoadStatus, refetchInterval: 5 * 60 * 1000, staleTime: 5 * 60 * 1000, refetchOnWindowFocus: false, refetchOnReconnect: false, retry: 1 });
   const latestResultQuery = trpc.leagueDashboard.latestResult.useQuery(latestResultInput, { refetchInterval: 60 * 1000, staleTime: 45 * 1000, refetchOnWindowFocus: true, refetchOnReconnect: true, retry: 1 });
   const leagueQuery = trpc.leagueDashboard.summary.useQuery(undefined, { enabled: shouldLoadLeagueSummary, refetchInterval: 60 * 1000, staleTime: 45 * 1000, refetchOnWindowFocus: true, refetchOnReconnect: true, retry: 1 });
   const leagueCalendarQuery = trpc.leagueDashboard.calendar.useQuery(leagueCalendarInput, { enabled: shouldLoadLeagueCalendar, refetchInterval: 15 * 60 * 1000, staleTime: 15 * 60 * 1000, refetchOnWindowFocus: false, refetchOnReconnect: false, retry: 1 });
+  const gameStatsWarmUrl = useMemo(() => {
+    if (spoilerMode) return null;
+    return latestResultQuery.data?.results.find((game) => game.gameState === "FINAL" && game.gameUrl.includes("/games/"))?.gameUrl ?? null;
+  }, [latestResultQuery.data, spoilerMode]);
   const snapshot = (rosterSnapshotQuery.data ?? snapshotQuery.data) as TeamSnapshot | undefined;
   const leagueDashboard = useMemo(() => leagueQuery.data ? { ...leagueQuery.data, calendar: leagueCalendarQuery.data?.calendar ?? [] } as LeagueDashboard : undefined, [leagueQuery.data, leagueCalendarQuery.data]);
   const forceScheduleEmpty = typeof window !== "undefined" && import.meta.env.DEV && new URLSearchParams(window.location.search).get("scheduleFallbackTest") === "empty";
@@ -119,6 +125,11 @@ export default function Home() {
   useEffect(() => {
     if (forceLastGame && snapshot && !snapshot.canRestoreLastGame) setForceLastGame(false);
   }, [forceLastGame, snapshot]);
+  useEffect(() => {
+    if (!shouldWarmGameStatsData || !gameStatsWarmUrl) return;
+    const timer = window.setTimeout(() => { void homeUtils.gameStats.byGameUrl.prefetch({ gameUrl: gameStatsWarmUrl }); }, 160);
+    return () => window.clearTimeout(timer);
+  }, [gameStatsWarmUrl, homeUtils, shouldWarmGameStatsData]);
   const toggleSpoiler = () => {
     setSpoilerMode((current) => {
       const next = !current;
@@ -133,6 +144,7 @@ export default function Home() {
   };
   const warmAtlasRoute = () => { void preloadAtlasRoute(); };
   const warmFieldlineRoute = () => { void preloadFieldlineRoute(); };
+  const warmGameStats = (gameSourceUrl: string) => { void homeUtils.gameStats.byGameUrl.prefetch({ gameUrl: gameSourceUrl }); };
   const markTicketWatched = (gameSourceUrl: string) => {
     window.localStorage.setItem(`${watchedTicketStorageKey}:${favorite.code}`, gameSourceUrl);
     setWatchedTicketUrl(gameSourceUrl);
@@ -148,6 +160,6 @@ export default function Home() {
 
     <Dialog open={teamDialogOpen} onOpenChange={setTeamDialogOpen}><DialogContent className="border-[#d7d1c4] bg-[#f5f2ea] p-5 sm:max-w-md" showCloseButton><DialogHeader className="text-left"><p className="font-mono text-[10px] font-bold tracking-[.16em] text-[#64748b]">YOUR HUDDLE</p><DialogTitle className="font-display text-2xl font-extrabold tracking-[.08em]">FAVORITE TEAM</DialogTitle><DialogDescription className="text-[12px]">AFC／NFCと地区から推しチームを選択します。選択状態はこの端末に保存されます。</DialogDescription></DialogHeader><div className="flex gap-2 border-b border-[#d7d1c4] pb-3"><button onClick={() => setPickerConference("AFC")} className={`px-3 py-1.5 font-mono text-xs font-bold tracking-[.12em] ${pickerConference === "AFC" ? "bg-[#10213a] text-white" : "border border-[#d7d1c4] bg-white text-[#526173]"}`}>AFC</button><button onClick={() => setPickerConference("NFC")} className={`px-3 py-1.5 font-mono text-xs font-bold tracking-[.12em] ${pickerConference === "NFC" ? "bg-[#10213a] text-white" : "border border-[#d7d1c4] bg-white text-[#526173]"}`}>NFC</button></div><div className="max-h-[52vh] space-y-4 overflow-y-auto pr-1">{divisionGroups.map(({ division, teams }) => <section key={division}><p className="mb-2 font-mono text-[10px] font-bold tracking-[.16em] text-[#64748b]">{pickerConference} {division.toUpperCase()}</p><div className="grid grid-cols-2 gap-2">{teams.map((team) => <button key={team.code} onClick={() => chooseFavorite(team)} className={`flex items-center gap-2 border p-2.5 text-left transition hover:border-[#e85d2a] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#10213a] ${favorite.code === team.code ? "border-[#e85d2a] bg-[#fffaf0]" : "border-[#d7d1c4] bg-white"}`}><TeamMark team={team.name} short={team.code} brand={team.brand} /><span className="min-w-0 flex-1"><span className="block font-display text-base font-bold tracking-wide">{team.code}</span><span className="block truncate text-[10px] text-[#64748b]">{team.name}</span></span>{favorite.code === team.code && <ShieldCheck className="h-3.5 w-3.5 text-[#e85d2a]" />}</button>)}</div></section>)}</div></DialogContent></Dialog>
 
-    <main className="relative z-10 mx-auto w-full min-w-0 max-w-6xl overflow-x-clip px-4 pb-24 pt-4 sm:px-6 sm:pt-6">{snapshotQuery.isError && <div className="mb-3 flex items-center gap-2 border border-[#f1c7b5] bg-[#fff4ef] px-3 py-2 text-[11px] text-[#a34220]"><CircleAlert className="h-4 w-4" />公式データを一時的に取得できません。保存済みの情報を再試行します。</div>}<div className="min-w-0 space-y-3"><OfficialGameTicket favorite={favorite} snapshot={displaySnapshot} loading={snapshotQuery.isLoading} spoilerMode={spoilerMode} hasWatchedTicket={Boolean(watchedTicketUrl)} canRestoreLastGame={Boolean(displaySnapshot?.canRestoreLastGame)} onMarkWatched={markTicketWatched} onRestoreLastGame={restoreLastGame} onOpenGameStats={setGameStatsUrl} /><SpoilerSwitch spoilerMode={spoilerMode} onToggle={toggleSpoiler} /><OfficialLatestResults favorite={favorite} dashboard={latestResultQuery.data} loading={latestResultQuery.isLoading} spoilerMode={spoilerMode} onOpenGameStats={setGameStatsUrl} /><div data-layout-scope="official-feed" className="min-w-0"><OfficialTeamFeed favorite={favorite} spoilerMode={spoilerMode} completedGame={displaySnapshot?.gameDayStatus} /></div><div ref={statusSectionRef}><OfficialStatusRadar favorite={favorite} snapshot={displaySnapshot} loading={snapshotQuery.isLoading || (shouldLoadStatus && rosterSnapshotQuery.isLoading)} /><OfficialRosterMoveDigest snapshot={displaySnapshot} loading={snapshotQuery.isLoading} /></div></div><div ref={leagueSectionRef} className="mt-3"><OfficialLeagueDashboard favorite={favorite} dashboard={leagueDashboard} loading={!shouldLoadLeagueSummary || leagueQuery.isLoading} calendarLoading={!shouldLoadLeagueCalendar || leagueCalendarQuery.isLoading} /></div></main>{gameStatsUrl ? <React.Suspense fallback={null}><GameStatsDialog gameUrl={gameStatsUrl} onOpenChange={(open) => { if (!open) setGameStatsUrl(null); }} /></React.Suspense> : null}
+    <main className="relative z-10 mx-auto w-full min-w-0 max-w-6xl overflow-x-clip px-4 pb-24 pt-4 sm:px-6 sm:pt-6">{snapshotQuery.isError && <div className="mb-3 flex items-center gap-2 border border-[#f1c7b5] bg-[#fff4ef] px-3 py-2 text-[11px] text-[#a34220]"><CircleAlert className="h-4 w-4" />公式データを一時的に取得できません。保存済みの情報を再試行します。</div>}<div className="min-w-0 space-y-3"><OfficialGameTicket favorite={favorite} snapshot={displaySnapshot} loading={snapshotQuery.isLoading} spoilerMode={spoilerMode} hasWatchedTicket={Boolean(watchedTicketUrl)} canRestoreLastGame={Boolean(displaySnapshot?.canRestoreLastGame)} onMarkWatched={markTicketWatched} onRestoreLastGame={restoreLastGame} onOpenGameStats={setGameStatsUrl} /><SpoilerSwitch spoilerMode={spoilerMode} onToggle={toggleSpoiler} /><OfficialLatestResults favorite={favorite} dashboard={latestResultQuery.data} loading={latestResultQuery.isLoading} spoilerMode={spoilerMode} onOpenGameStats={setGameStatsUrl} onWarmGameStats={warmGameStats} /><div data-layout-scope="official-feed" className="min-w-0"><OfficialTeamFeed favorite={favorite} spoilerMode={spoilerMode} completedGame={displaySnapshot?.gameDayStatus} /></div><div ref={statusSectionRef}><OfficialStatusRadar favorite={favorite} snapshot={displaySnapshot} loading={snapshotQuery.isLoading || (shouldLoadStatus && rosterSnapshotQuery.isLoading)} /><OfficialRosterMoveDigest snapshot={displaySnapshot} loading={snapshotQuery.isLoading} /></div></div><div ref={leagueSectionRef} className="mt-3"><OfficialLeagueDashboard favorite={favorite} dashboard={leagueDashboard} loading={!shouldLoadLeagueSummary || leagueQuery.isLoading} calendarLoading={!shouldLoadLeagueCalendar || leagueCalendarQuery.isLoading} /></div></main>{gameStatsUrl ? <React.Suspense fallback={null}><GameStatsDialog gameUrl={gameStatsUrl} onOpenChange={(open) => { if (!open) setGameStatsUrl(null); }} /></React.Suspense> : null}
   </div>;
 }

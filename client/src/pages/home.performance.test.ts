@@ -30,6 +30,8 @@ describe("favorite team home performance path", () => {
     expect(homeSource).toContain('import("@/components/GameStatsDialog")');
     expect(homeSource).toContain('if (!next) void import("@/components/GameStatsDialog")');
     expect(homeSource).toContain("<React.Suspense fallback={null}>");
+    expect(homeSource).toContain("const shouldWarmGameStatsData = useIdlePreload(1_250)");
+    expect(homeSource).toContain("homeUtils.gameStats.byGameUrl.prefetch");
   });
 
   it("keeps the full league dashboard below the fold while retaining the visible latest-result card", () => {
