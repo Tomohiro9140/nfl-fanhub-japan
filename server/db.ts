@@ -234,6 +234,19 @@ export async function getOfficialRosterEntriesForPftMatching() {
   return db.select({ teamCode: officialRosterEntries.teamCode, playerName: officialRosterEntries.playerName }).from(officialRosterEntries).limit(4_000);
 }
 
+/** Lightweight, club-published current-roster snapshots for ATLAS reconciliation. */
+export async function getOfficialRosterEntriesForAtlas() {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select({
+    teamCode: officialRosterEntries.teamCode,
+    playerName: officialRosterEntries.playerName,
+    jerseyNumber: officialRosterEntries.jerseyNumber,
+    position: officialRosterEntries.position,
+    fetchedAt: officialRosterEntries.fetchedAt,
+  }).from(officialRosterEntries).limit(4_000);
+}
+
 export async function getPftAvailabilityInsightsForValidation() {
   const db = await getDb();
   if (!db) return [];

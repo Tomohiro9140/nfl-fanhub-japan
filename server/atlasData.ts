@@ -1,5 +1,6 @@
 type CsvRow = Record<string, string>;
 
+import { getOfficialRosterEntriesForAtlas } from "./db";
 import { storageGetSignedUrl } from "./storage";
 
 type CacheEntry<T> = {
@@ -42,6 +43,8 @@ const CACHE_TTL = {
   stats: 12 * 60 * 60 * 1000,
   contracts: 24 * 60 * 60 * 1000,
 } as const;
+
+const OFFICIAL_ROSTER_MAX_AGE_MS = 30 * 60 * 60 * 1000;
 
 const teamAliases: Record<string, string> = {
   ARZ: "ARI",
@@ -281,6 +284,89 @@ function latestRosterByPlayer(rows: CsvRow[]): Map<string, CsvRow> {
   return latest;
 }
 
+export type AtlasOfficialRosterAssignment = {
+  teamCode: string;
+  playerName: string;
+  jerseyNumber: string | null;
+  position: string;
+  fetchedAt: Date;
+};
+
+type AtlasRosterReconciliation = {
+  current: Map<string, CsvRow>;
+  officiallyAbsentIds: Set<string>;
+};
+
+/**
+ * Keeps NFLverse IDs and historical attributes, but lets a fresh club roster define a player's
+ * current team, jersey, and position. A missing player is treated as released only when every
+ * club snapshot is fresh, preventing an unavailable official source from creating a false move.
+ */
+export function reconcileAtlasCurrentRoster({
+  rosterRows,
+  masterById,
+  officialRoster,
+  expectedTeamCodes = Object.keys(fallbackTeamNames),
+  now = new Date(),
+}: {
+  rosterRows: CsvRow[];
+  masterById: Map<string, CsvRow>;
+  officialRoster: AtlasOfficialRosterAssignment[];
+  expectedTeamCodes?: string[];
+  now?: Date;
+}): AtlasRosterReconciliation {
+  const current = latestRosterByPlayer(rosterRows);
+  const idsByNormalizedName = new Map<string, Set<string>>();
+  Array.from(masterById.values()).concat(Array.from(current.values())).forEach((row) => {
+    const playerId = row.gsis_id;
+    const name = normalizeAtlasText(playerName(row));
+    if (!playerId || !name) return;
+    const ids = idsByNormalizedName.get(name) ?? new Set<string>();
+    ids.add(playerId);
+    idsByNormalizedName.set(name, ids);
+  });
+
+  const freshOfficialByName = new Map<string, AtlasOfficialRosterAssignment>();
+  const freshTeamSnapshots = new Map<string, Date>();
+  officialRoster.forEach((entry) => {
+    const fetchedAt = entry.fetchedAt instanceof Date ? entry.fetchedAt : new Date(entry.fetchedAt);
+    const age = now.getTime() - fetchedAt.getTime();
+    if (Number.isNaN(fetchedAt.getTime()) || age > OFFICIAL_ROSTER_MAX_AGE_MS || age < -5 * 60 * 1000) return;
+    const teamCode = teamAliases[entry.teamCode] ?? entry.teamCode;
+    const previousTeamSnapshot = freshTeamSnapshots.get(teamCode);
+    if (!previousTeamSnapshot || fetchedAt > previousTeamSnapshot) freshTeamSnapshots.set(teamCode, fetchedAt);
+    const name = normalizeAtlasText(entry.playerName);
+    const previous = freshOfficialByName.get(name);
+    if (name && (!previous || fetchedAt > previous.fetchedAt)) freshOfficialByName.set(name, { ...entry, teamCode, fetchedAt });
+  });
+
+  freshOfficialByName.forEach((entry, name) => {
+    const matches = Array.from(idsByNormalizedName.get(name) ?? []);
+    if (matches.length !== 1) return;
+    const playerId = matches[0]!;
+    const existing = current.get(playerId) ?? masterById.get(playerId);
+    if (!existing) return;
+    current.set(playerId, {
+      ...existing,
+      team: entry.teamCode,
+      position: entry.position || existing.position,
+      jersey_number: entry.jerseyNumber || existing.jersey_number,
+    });
+  });
+
+  const fullFreshCoverage = expectedTeamCodes.every((teamCode) => freshTeamSnapshots.has(teamCode));
+  if (!fullFreshCoverage) return { current, officiallyAbsentIds: new Set() };
+
+  const officialNames = new Set(freshOfficialByName.keys());
+  const officiallyAbsentIds = new Set<string>();
+  current.forEach((row, playerId) => {
+    if (officialNames.has(normalizeAtlasText(playerName(masterById.get(playerId) ?? row)))) return;
+    current.delete(playerId);
+    officiallyAbsentIds.add(playerId);
+  });
+  return { current, officiallyAbsentIds };
+}
+
 function searchResult(master: CsvRow, roster: CsvRow | undefined, directory: Map<string, AtlasTeam>): AtlasPlayerResult {
   const isCurrent = Boolean(roster);
   return {
@@ -297,14 +383,14 @@ function searchResult(master: CsvRow, roster: CsvRow | undefined, directory: Map
 
 async function searchUniverse() {
   return cached("atlas:search-universe", CACHE_TTL.roster, async () => {
-    const [masters, rosterRows, directory] = await Promise.all([masterPlayers(), currentRoster(), teamDirectory()]);
-    const current = latestRosterByPlayer(rosterRows);
+    const [masters, rosterRows, directory, officialRoster] = await Promise.all([masterPlayers(), currentRoster(), teamDirectory(), getOfficialRosterEntriesForAtlas()]);
     const masterById = new Map(masters.filter((row) => row.gsis_id).map((row) => [row.gsis_id, row]));
+    const { current, officiallyAbsentIds } = reconcileAtlasCurrentRoster({ rosterRows, masterById, officialRoster });
     const active = Array.from(current.values())
       .map((roster) => searchResult(masterById.get(roster.gsis_id) ?? roster, roster, directory))
       .filter((player) => player.id && player.name !== "Unknown player")
       .sort((left, right) => left.name.localeCompare(right.name));
-    return { active, current, masterById, directory };
+    return { active, current, masterById, directory, officiallyAbsentIds };
   });
 }
 
@@ -414,7 +500,7 @@ export async function atlasProfile(playerId: string) {
 }
 
 async function atlasProfileUncached(playerId: string) {
-  const { current, masterById, directory } = await searchUniverse();
+  const { current, masterById, directory, officiallyAbsentIds } = await searchUniverse();
   const roster = current.get(playerId);
   const master = masterById.get(playerId) ?? roster;
   if (!master) throw new Error("Player not found in ATLAS data");
@@ -434,7 +520,7 @@ async function atlasProfileUncached(playerId: string) {
       college: roster?.college || master.college_name || "—",
       draft: draftLabel({ ...master, ...roster }),
       headshot: roster?.headshot_url || master.headshot || "",
-      team: teamFor(roster?.team || master.latest_team, directory),
+      team: teamFor(roster?.team || (officiallyAbsentIds.has(playerId) ? "FA" : master.latest_team), directory),
       rosterStatus: isCurrent ? "current" as const : "past" as const,
       lastSeason: isCurrent ? currentSeason : (number(master.last_season) || null),
     },

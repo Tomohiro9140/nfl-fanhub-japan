@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { atlasPositionGroup, normalizeAtlasText, parseAtlasCsv, resolveAtlasGameBookPlayerId, summarizeAtlasStats } from "./atlasData";
+import { atlasPositionGroup, normalizeAtlasText, parseAtlasCsv, reconcileAtlasCurrentRoster, resolveAtlasGameBookPlayerId, summarizeAtlasStats } from "./atlasData";
 
 describe("ATLAS data helpers", () => {
   it("parses quoted NFLverse CSV records", () => {
@@ -19,6 +19,41 @@ describe("ATLAS data helpers", () => {
     expect(resolveAtlasGameBookPlayerId("D. LOCK", [{ id: "00-0035157", name: "Drew Lock", team: "SEA" }])).toBe("00-0035157");
     expect(resolveAtlasGameBookPlayerId("J. SMITH", [{ id: "one", name: "John Smith", team: "SEA" }, { id: "two", name: "James Smith", team: "SEA" }])).toBeNull();
     expect(resolveAtlasGameBookPlayerId("J. SMITH", [{ id: "one", name: "John Smith", team: "NYG" }])).toBe("one");
+  });
+
+  it("uses a fresh official roster for a trade and removes a stale player only after complete coverage", () => {
+    const masters = new Map([
+      ["00-boutte", { gsis_id: "00-boutte", display_name: "Kayshon Boutte", latest_team: "NE", position: "WR", jersey_number: "9" }],
+      ["00-released", { gsis_id: "00-released", display_name: "Released Player", latest_team: "NE", position: "WR", jersey_number: "1" }],
+    ]);
+    const rosterRows = [
+      { gsis_id: "00-boutte", display_name: "Kayshon Boutte", team: "NE", position: "WR", jersey_number: "9", week: "1" },
+      { gsis_id: "00-released", display_name: "Released Player", team: "NE", position: "WR", jersey_number: "1", week: "1" },
+    ];
+    const now = new Date("2026-08-27T14:00:00Z");
+    const officialRoster = [
+      { teamCode: "HOU", playerName: "Kayshon Boutte", jerseyNumber: "88", position: "WR", fetchedAt: now },
+      { teamCode: "NE", playerName: "Another Patriot", jerseyNumber: "2", position: "QB", fetchedAt: now },
+    ];
+    const reconciled = reconcileAtlasCurrentRoster({ rosterRows, masterById: masters, officialRoster, expectedTeamCodes: ["HOU", "NE"], now });
+    expect(reconciled.current.get("00-boutte")).toMatchObject({ team: "HOU", jersey_number: "88" });
+    expect(reconciled.current.has("00-released")).toBe(false);
+    expect(reconciled.officiallyAbsentIds.has("00-released")).toBe(true);
+  });
+
+  it("does not infer a release when one required official team snapshot is missing", () => {
+    const masters = new Map([["00-player", { gsis_id: "00-player", display_name: "Still Current", latest_team: "NE", position: "WR", jersey_number: "1" }]]);
+    const rosterRows = [{ gsis_id: "00-player", display_name: "Still Current", team: "NE", position: "WR", jersey_number: "1", week: "1" }];
+    const now = new Date("2026-08-27T14:00:00Z");
+    const reconciled = reconcileAtlasCurrentRoster({
+      rosterRows,
+      masterById: masters,
+      officialRoster: [{ teamCode: "HOU", playerName: "Another Texan", jerseyNumber: "3", position: "QB", fetchedAt: now }],
+      expectedTeamCodes: ["HOU", "NE"],
+      now,
+    });
+    expect(reconciled.current.has("00-player")).toBe(true);
+    expect(reconciled.officiallyAbsentIds.size).toBe(0);
   });
 
   it("summarizes weekly player rows into a season line", () => {
