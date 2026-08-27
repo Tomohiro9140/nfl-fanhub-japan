@@ -2,12 +2,10 @@ import { ArrowUpRight, BarChart3, CircleAlert, Clock3, FileText, Tv, UsersRound 
 import React from "react";
 import { getTeamByCode, type FavoriteTeam } from "@/lib/nflTeams";
 import { compactVenue } from "@/lib/gameVenue";
-import { daznNflGamePassUrl, daznWatchTarget } from "@/lib/daznWatch";
+import { daznJapanHomeUrl, daznWatchHref, daznWatchTarget } from "@/lib/daznWatch";
 import { GameCountdown } from "@/components/GameCountdown";
 import { filterRosterByStatus } from "@/lib/rosterFilter";
 import { dedupeDisplayArticles } from "@/lib/articleDedup";
-
-const daznGamePassUrl = daznNflGamePassUrl;
 
 export type TeamSnapshot = {
   nextGame?: { opponentCode: string; homeAway: "home" | "away"; seasonPhase: "preseason" | "regular" | "postseason"; weekLabel: string | null; kickoffAt: Date; kickoffAtEstimated?: boolean; gameDate?: string | null; finishedAt?: Date | null; venue: string | null; broadcast: string | null; sourceUrl: string; daznUrl: string | null; nflHighlightUrl?: string | null; gameState: string | null; awayScore: number | null; homeScore: number | null; fetchedAt: Date };
@@ -55,7 +53,7 @@ export function OfficialGameTicket({ favorite, snapshot, loading, spoilerMode = 
   const venue = compactVenue(game?.venue);
   const isGameDay = gameStatus.label === "GAME DAY" || gameStatus.label === "LIVE";
   const watchTarget = typeof navigator === "undefined" ? "_blank" : daznWatchTarget(navigator.userAgent);
-  const watchUrl = daznGamePassUrl;
+  const watchUrl = typeof navigator === "undefined" ? daznJapanHomeUrl : daznWatchHref(navigator.userAgent);
   const favoriteLabel = game?.homeAway === "home" ? `@ ${favorite.name}` : favorite.name;
   const opponentLabel = game?.homeAway === "away" && opponent ? `@ ${opponent.name}` : opponent?.name;
   const isRevealedFinal = gameStatus.label === "FINAL" && !spoilerMode && Boolean(gameStatus.score);

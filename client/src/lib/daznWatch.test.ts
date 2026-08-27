@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { daznNflGamePassUrl, daznWatchTarget, resultWatchHref } from "./daznWatch";
+import { daznJapanHomeUrl, daznNflGamePassUrl, daznWatchHref, daznWatchTarget, resultWatchHref } from "./daznWatch";
 
 describe("DAZN watch navigation", () => {
   it("uses the official NFL Game Pass web URL", () => {
@@ -10,6 +10,11 @@ describe("DAZN watch navigation", () => {
     expect(daznWatchTarget("Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)")).toBe("_self");
     expect(daznWatchTarget("Mozilla/5.0 (Linux; Android 15; Pixel 9)")).toBe("_self");
     expect(daznWatchTarget("Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0)")).toBe("_blank");
+  });
+
+  it("keeps the official Game Pass Universal/App Link on mobile and uses the DAZN Japan home page on desktop", () => {
+    expect(daznWatchHref("Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)")).toBe(daznNflGamePassUrl);
+    expect(daznWatchHref("Mozilla/5.0 (Windows NT 10.0; Win64; x64)")).toBe(daznJapanHomeUrl);
   });
 
   it("uses a verified DAZN game URL for results and falls back to the official NFL game page", () => {

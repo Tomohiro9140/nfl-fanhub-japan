@@ -11,6 +11,9 @@ vi.mock("@/lib/trpc", () => ({
       byTeam: {
         useQuery: () => ({ data: { items: mockedItems, sources: [] }, isError: false, isLoading: false, isFetching: false, refetch: () => undefined }),
       },
+      refresh: {
+        useMutation: () => ({ mutate: () => undefined, isPending: false }),
+      },
       get japaneseSummary() { throw new Error("Japanese summary must remain frozen from the LATEST NEWS card"); },
       get englishSummary() { throw new Error("English summary must remain frozen from the LATEST NEWS card"); },
     },
@@ -105,6 +108,8 @@ describe("official feed mobile content selection", () => {
     expect(markup).toContain("CBS");
     expect(markup).toContain("PUBLISHED ·");
     expect(markup).toContain("JST");
+    expect(markup).toContain("REFRESH");
+    expect(markup).toContain("チーム公式RSSとNFL公式負傷情報を同期して最新ニュースを更新");
     expect(markup).toContain('href="https://www.buffalobills.com/news/1"');
     expect(markup).toContain('data-feed-article="latest-news"');
     expect(markup).toContain('target="_blank"');

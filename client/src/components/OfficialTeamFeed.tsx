@@ -75,6 +75,11 @@ export function OfficialTeamFeed({ favorite, spoilerMode = false, completedGame 
   const shouldSimulateUnavailable = typeof window !== "undefined" && import.meta.env.DEV && new URLSearchParams(window.location.search).has("feedError");
   const feedInput = useMemo(() => ({ teamCode: shouldSimulateUnavailable ? "XXX" : favorite.code }), [shouldSimulateUnavailable, favorite.code]);
   const feed = trpc.officialFeed.byTeam.useQuery(feedInput, { refetchInterval: 15 * 60 * 1000, staleTime: 15 * 60 * 1000, refetchOnWindowFocus: false, refetchOnReconnect: false, retry: 1 });
+  const refresh = trpc.officialFeed.refresh.useMutation({
+    onSuccess: () => {
+      void feed.refetch();
+    },
+  });
   const displayError = feed.isError || shouldSimulateUnavailable;
   const items = (shouldSimulateUnavailable ? [] : feed.data?.items ?? []) as FeedItem[];
   const hideFrom = spoilerMode ? spoilerNewsCutoff(completedGame) : null;
@@ -85,7 +90,7 @@ export function OfficialTeamFeed({ favorite, spoilerMode = false, completedGame 
       <div className="flex items-center gap-2 font-mono text-[10px] font-semibold tracking-[0.2em] text-[#64748b]"><span className="text-[#10213a]">02</span><span>{favorite.code} NEWS DESK</span><span className="h-px flex-1 bg-[#d9d5cc]" /></div>
       <div className="mt-3">
         <article className="clip-note border border-[#ded8cc] bg-white p-3 shadow-[0_10px_30px_rgba(34,42,53,.05)]">
-          <div className="flex items-center justify-between border-b border-[#eeeae1] pb-2"><div className="flex items-center gap-2"><div className="grid h-7 w-7 place-items-center bg-[#10213a] text-white"><Newspaper className="h-3.5 w-3.5" /></div><p className="font-display text-lg font-bold tracking-wide">LATEST NEWS</p></div><button onClick={() => feed.refetch()} disabled={feed.isFetching} className="inline-flex items-center gap-1 font-mono text-[9px] font-bold tracking-[.1em] text-[#526173] hover:text-[#e85d2a] disabled:opacity-50"><RefreshCw className={`h-3.5 w-3.5 ${feed.isFetching ? "animate-spin" : ""}`} /> REFRESH</button></div>
+          <div className="flex items-center justify-between border-b border-[#eeeae1] pb-2"><div className="flex items-center gap-2"><div className="grid h-7 w-7 place-items-center bg-[#10213a] text-white"><Newspaper className="h-3.5 w-3.5" /></div><p className="font-display text-lg font-bold tracking-wide">LATEST NEWS</p></div><button onClick={() => refresh.mutate(feedInput)} disabled={feed.isFetching || refresh.isPending || shouldSimulateUnavailable} className="inline-flex items-center gap-1 font-mono text-[9px] font-bold tracking-[.1em] text-[#526173] hover:text-[#e85d2a] disabled:opacity-50" aria-label="チーム公式RSSとNFL公式負傷情報を同期して最新ニュースを更新"><RefreshCw className={`h-3.5 w-3.5 ${feed.isFetching || refresh.isPending ? "animate-spin" : ""}`} /> {refresh.isPending ? "UPDATING" : "REFRESH"}</button></div>
           {feed.isLoading && !shouldSimulateUnavailable ? <div className="py-5 text-center font-mono text-[10px] text-[#64748b]">LOADING TEAM NEWS…</div> : news.length > 0 ? <div className="divide-y divide-[#eeeae1]">{news.map((item) => <a key={item.id} href={item.sourceUrl} target="_blank" rel="noreferrer" data-feed-article="latest-news" data-article-url={item.sourceUrl} aria-label={`${item.title}を${sourceLabel(item.sourceKind)}で開く`} className="group flex w-full items-start gap-3 py-2.5 text-left transition hover:bg-[#fffaf0] active:bg-[#fff4ef]"><SourceMark kind={item.sourceKind} /><span className="min-w-0 flex-1"><span className="flex items-center justify-between gap-2"><span className="font-display text-base font-bold tracking-wide">{item.title}</span><ArrowUpRight className="h-3.5 w-3.5 shrink-0 text-[#94a3b8] transition group-hover:text-[#e85d2a]" /></span>{hasDistinctNewsSummary(item.title, item.summary) ? <span className="mt-0.5 block text-[11px] leading-4 text-[#687587]">{item.summary}</span> : null}<span className="mt-1 block font-mono text-[8px] font-bold tracking-[.05em] text-[#94a3b8]">PUBLISHED · {displayDate(item.publishedAt)}</span></span></a>)}</div> : <EmptyFeed teamCode={favorite.code} error={displayError} />}
         </article>
       </div>
