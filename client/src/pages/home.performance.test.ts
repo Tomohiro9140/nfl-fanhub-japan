@@ -17,20 +17,23 @@ describe("favorite team home performance path", () => {
     expect(snapshotCacheSource).toContain('includeRoster ? "roster" : "light"');
   });
 
-  it("loads only the favorite team's latest result above the fold and defers the full league summary", () => {
+  it("loads only the favorite team's latest result above the fold and warms the league summary after the first idle opportunity", () => {
     expect(homeSource).toContain("trpc.leagueDashboard.latestResult.useQuery");
-    expect(homeSource).toContain("enabled: shouldLoadLeagueCalendar");
+    expect(homeSource).toContain("const shouldWarmLeagueSummary = useIdlePreload()");
+    expect(homeSource).toContain("const shouldLoadLeagueSummary = shouldWarmLeagueSummary || shouldLoadLeagueCalendar");
+    expect(homeSource).toContain("enabled: shouldLoadLeagueSummary");
     expect(homeSource).toContain("dashboard={latestResultQuery.data}");
   });
 
-  it("loads the Game Stats dialog only after a user requests it", () => {
+  it("keeps Game Stats out of the initial bundle and warms it once spoiler protection is disabled", () => {
     expect(homeSource).toContain('React.lazy(async () =>');
     expect(homeSource).toContain('import("@/components/GameStatsDialog")');
+    expect(homeSource).toContain('if (!next) void import("@/components/GameStatsDialog")');
     expect(homeSource).toContain("<React.Suspense fallback={null}>");
   });
 
   it("keeps the full league dashboard below the fold while retaining the visible latest-result card", () => {
     expect(homeSource).toContain("dashboard={leagueDashboard}");
-    expect(homeSource).toContain("loading={!shouldLoadLeagueCalendar || leagueQuery.isLoading}");
+    expect(homeSource).toContain("loading={!shouldLoadLeagueSummary || leagueQuery.isLoading}");
   });
 });

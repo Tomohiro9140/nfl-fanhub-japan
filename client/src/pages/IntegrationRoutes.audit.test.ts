@@ -15,11 +15,15 @@ describe("ATLAS and FIELDLINE integration routes", () => {
   it("registers native ATLAS and FIELDLINE routes without restoring either external redirect flow", () => {
     expect(appSource).toContain('path="/atlas"');
     expect(appSource).toContain('path="/fieldline"');
-    expect(appSource).toContain('lazy(() => import("./pages/Atlas"))');
-    expect(appSource).toContain('lazy(() => import("./pages/Fieldline"))');
+    expect(appSource).toContain('const Atlas = lazy(preloadAtlasRoute)');
+    expect(appSource).toContain('const Fieldline = lazy(preloadFieldlineRoute)');
     expect(appSource).toContain("<Suspense fallback={<RouteLoading />}>");
     expect(homeSource).toContain('ATLAS');
     expect(homeSource).toContain('FIELDLINE');
+    expect(homeSource).toContain('onPointerEnter={warmAtlasRoute}');
+    expect(homeSource).toContain('onPointerEnter={warmFieldlineRoute}');
+    expect(homeSource).toContain('onPointerDown={warmAtlasRoute}');
+    expect(homeSource).toContain('onPointerDown={warmFieldlineRoute}');
     expect(atlasSource).toContain('atlas-shell');
     expect(atlasSource).toContain('atlas-display');
     expect(fieldlineSource).toContain('EmbeddedAppNav current="FIELDLINE"');

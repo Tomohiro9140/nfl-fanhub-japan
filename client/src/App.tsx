@@ -6,10 +6,11 @@ import { lazy, Suspense } from "react";
 import { Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
+import { preloadAtlasRoute, preloadFieldlineRoute } from "./lib/routePreload";
 import Home from "./pages/Home";
 
-const Atlas = lazy(() => import("./pages/Atlas"));
-const Fieldline = lazy(() => import("./pages/Fieldline"));
+const Atlas = lazy(preloadAtlasRoute);
+const Fieldline = lazy(preloadFieldlineRoute);
 const FieldlineAdmin = lazy(() => import("./pages/FieldlineAdmin"));
 
 function RouteLoading() {

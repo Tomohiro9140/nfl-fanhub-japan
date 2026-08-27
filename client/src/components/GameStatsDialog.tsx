@@ -60,7 +60,7 @@ function StatValue({ value, other, better }: { value: string; other: string; bet
   const own = compareValue(value, better);
   const peer = compareValue(other, better);
   const leading = own !== peer && (better === "lower" ? own < peer : own > peer);
-  return <span className={`font-mono text-[12px] font-black tabular-nums ${leading ? "rounded bg-[#e85d2a] px-1.5 py-0.5 text-white" : "text-[#10213a]"}`}>{value}</span>;
+  return <span className={`justify-self-start font-mono text-[12px] font-black tabular-nums ${leading ? "rounded bg-[#e85d2a] px-1.5 py-0.5 text-white" : "text-[#10213a]"}`}>{value}</span>;
 }
 
 function TeamPlayerTable({ players, teamCode, category, expanded, atlasPlayerIds }: { players: Player[]; teamCode: string; category: PlayerCategoryDefinition; expanded: boolean; atlasPlayerIds: Record<string, string | null | undefined> }) {

@@ -6,6 +6,9 @@ import { OfficialLatestResults, OfficialLeagueDashboard, type LeagueDashboard } 
 import { SpoilerSwitch } from "@/pages/Home";
 import { nflTeams, type FavoriteTeam } from "@/lib/nflTeams";
 import { getNextSevenDayGames } from "@/lib/leagueCalendar";
+import { readFileSync } from "node:fs";
+
+const gameStatsDialogSource = readFileSync(new URL("./GameStatsDialog.tsx", import.meta.url), "utf8");
 
 const favorite: FavoriteTeam = { code: "BUF", name: "Buffalo Bills", conference: "AFC", division: "East", brand: { primary: "#00338D", accent: "#C60C30", onPrimary: "#FFFFFF" } };
 const kickoffAt = new Date("2026-08-23T06:00:00.000Z");
@@ -17,6 +20,9 @@ const dashboard: LeagueDashboard = {
 };
 
 describe("compact mobile result and schedule UI", () => {
+  it("keeps the left team-comparison highlight fitted to its numeric value", () => {
+    expect(gameStatsDialogSource).toContain("justify-self-start font-mono text-[12px]");
+  });
   it("renders only the individual highlight action when a video is registered", () => {
     const markup = renderToStaticMarkup(createElement(OfficialLatestResults, { favorite, dashboard, loading: false, spoilerMode: true }));
     expect(markup).toContain("WATCH HIGHLIGHTS");
