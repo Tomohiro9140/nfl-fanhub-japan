@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { atlasPositionGroup, normalizeAtlasText, parseAtlasCsv, reconcileAtlasCurrentRoster, resolveAtlasGameBookPlayerId, summarizeAtlasStats } from "./atlasData";
+import { atlasPositionGroup, normalizeAtlasText, parseAtlasCsv, reconcileAtlasCareerCurrentTeam, reconcileAtlasCurrentRoster, resolveAtlasGameBookPlayerId, summarizeAtlasStats } from "./atlasData";
 
 describe("ATLAS data helpers", () => {
   it("parses quoted NFLverse CSV records", () => {
@@ -54,6 +54,17 @@ describe("ATLAS data helpers", () => {
     });
     expect(reconciled.current.has("00-player")).toBe(true);
     expect(reconciled.officiallyAbsentIds.size).toBe(0);
+  });
+
+  it("replaces only the current career season with the fresh official team", () => {
+    const timeline = reconcileAtlasCareerCurrentTeam([
+      { season: 2026, teams: ["NE"] },
+      { season: 2025, teams: ["NE"] },
+    ], "HOU");
+    expect(timeline).toEqual([
+      { season: 2026, teams: ["HOU"] },
+      { season: 2025, teams: ["NE"] },
+    ]);
   });
 
   it("summarizes weekly player rows into a season line", () => {

@@ -37,6 +37,7 @@ const POSITION_ORDER = ["QB", "RB", "WR", "TE", "OL", "DL", "LB", "DB", "K", "P"
 
 const CACHE_TTL = {
   roster: 20 * 60 * 1000,
+  career: 20 * 60 * 1000,
   players: 12 * 60 * 60 * 1000,
   teams: 6 * 60 * 60 * 1000,
   history: 7 * 24 * 60 * 60 * 1000,
@@ -367,6 +368,15 @@ export function reconcileAtlasCurrentRoster({
   return { current, officiallyAbsentIds };
 }
 
+export type AtlasCareerSeason = { season: number; teams: string[] };
+
+/** The latest career year reflects the current official club roster, not a stale season roster file. */
+export function reconcileAtlasCareerCurrentTeam(timeline: AtlasCareerSeason[], currentTeam?: string): AtlasCareerSeason[] {
+  if (!currentTeam) return timeline;
+  const team = teamAliases[currentTeam] ?? currentTeam;
+  return [{ season: currentSeason, teams: [team] }, ...timeline.filter((entry) => entry.season !== currentSeason)];
+}
+
 function searchResult(master: CsvRow, roster: CsvRow | undefined, directory: Map<string, AtlasTeam>): AtlasPlayerResult {
   const isCurrent = Boolean(roster);
   return {
@@ -556,7 +566,7 @@ async function mapInBatches<T, Result>(items: T[], size: number, mapper: (item: 
 
 /** Builds team spans from annual NFLverse roster rows without blocking the base profile. */
 export async function atlasCareer(playerId: string) {
-  return cached(`atlas:career:${playerId}`, CACHE_TTL.history, () => atlasCareerUncached(playerId));
+  return cached(`atlas:career:${playerId}`, CACHE_TTL.career, () => atlasCareerUncached(playerId));
 }
 
 async function atlasCareerUncached(playerId: string) {
@@ -579,7 +589,10 @@ async function atlasCareerUncached(playerId: string) {
   });
   const bySeason = new Map<number, string[]>();
   [...historicSeasons, ...recentSeasons].forEach((entry) => { if (entry.teams.length) bySeason.set(entry.season, Array.from(new Set(entry.teams))); });
-  const timeline = Array.from(bySeason.entries()).map(([season, teams]) => ({ season, teams })).sort((left, right) => right.season - left.season);
+  const timeline = reconcileAtlasCareerCurrentTeam(
+    Array.from(bySeason.entries()).map(([season, teams]) => ({ season, teams })).sort((left, right) => right.season - left.season),
+    roster?.team,
+  );
   const spans: Array<{ startSeason: number; endSeason: number; teams: AtlasTeam[] }> = [];
   timeline.forEach((entry) => {
     const previous = spans.at(-1);
@@ -593,7 +606,7 @@ async function atlasCareerUncached(playerId: string) {
   return {
     spans,
     hallOfFameYear: await hallOfFameYear(playerName(master)),
-    source: { provider: "NFLverse roster data", updatedAt: new Date().toISOString(), teamHistoryCoverage: { availableFrom: historic?.coverage.startSeason ?? start, unavailableBefore: historic && start < historic.coverage.startSeason ? { startSeason: start, endSeason: historic.coverage.startSeason - 1 } : null } },
+    source: { provider: roster ? "NFLverse roster data + official club roster" : "NFLverse roster data", updatedAt: new Date().toISOString(), teamHistoryCoverage: { availableFrom: historic?.coverage.startSeason ?? start, unavailableBefore: historic && start < historic.coverage.startSeason ? { startSeason: start, endSeason: historic.coverage.startSeason - 1 } : null } },
   };
 }
 
