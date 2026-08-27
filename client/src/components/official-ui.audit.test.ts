@@ -170,6 +170,18 @@ describe("compact mobile result and schedule UI", () => {
     expect(homeLeagueMarkup).toContain("border-left-color:#C60C30");
   });
 
+  it("keeps the highlighted division club in the same team-name and record columns for all teams", () => {
+    const standings = nflTeams.map((team, index) => ({ teamCode: team.code, wins: 17 - (index % 5), losses: index % 5, ties: 0, pct: ".500", pointsFor: null, pointsAgainst: null, sourceUrl: "https://www.nfl.com/standings", fetchedAt: kickoffAt }));
+    const standingDashboard: LeagueDashboard = { ...dashboard, standings };
+
+    for (const team of nflTeams) {
+      const markup = renderToStaticMarkup(createElement(OfficialLeagueDashboard, { favorite: team, dashboard: standingDashboard, loading: false }));
+      expect(markup, team.code).toContain("grid grid-cols-[18px_1fr_auto] items-center gap-2 py-2.5 bg-[#fff8ed]");
+      expect(markup, team.code).not.toContain("-mx-1");
+      expect(markup, team.code).not.toContain("px-1.5");
+    }
+  });
+
   it("keeps every live Week 2 matchup in rendered Schedule Desk markup at compact and wide breakpoints", () => {
     const liveCalendar: LeagueDashboard = {
       ...dashboard,
