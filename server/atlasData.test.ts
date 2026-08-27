@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { atlasPositionGroup, normalizeAtlasText, parseAtlasCsv, reconcileAtlasCareerCurrentTeam, reconcileAtlasCurrentRoster, resolveAtlasGameBookPlayerId, summarizeAtlasStats } from "./atlasData";
+import { atlasPositionGroup, isAtlasActiveFreeAgentCandidate, normalizeAtlasText, parseAtlasCsv, reconcileAtlasCareerCurrentTeam, reconcileAtlasCurrentRoster, resolveAtlasGameBookPlayerId, summarizeAtlasStats } from "./atlasData";
 
 describe("ATLAS data helpers", () => {
   it("parses quoted NFLverse CSV records", () => {
@@ -54,6 +54,25 @@ describe("ATLAS data helpers", () => {
     });
     expect(reconciled.current.has("00-player")).toBe(true);
     expect(reconciled.officiallyAbsentIds.size).toBe(0);
+  });
+
+  it("labels a missing active player as a free agent only after official-roster reconciliation", () => {
+    const player = { display_name: "Bobby Wagner", status: "ACT", ngs_status: "ACT", ngs_status_short_description: "Active", pff_status: "A" };
+    expect(isAtlasActiveFreeAgentCandidate(player, true)).toBe(true);
+    expect(isAtlasActiveFreeAgentCandidate(player, false)).toBe(false);
+    expect(isAtlasActiveFreeAgentCandidate({ ...player, status: "RET", ngs_status: "RET", ngs_status_short_description: "Retired", pff_status: "R" }, true)).toBe(false);
+  });
+
+  it("includes a recent active master player in the free-agent candidates when no fresh official roster lists them", () => {
+    const masters = new Map([["00-free-agent", { gsis_id: "00-free-agent", display_name: "Free Agent", latest_team: "WAS", status: "ACT", last_season: "2025" }]]);
+    const reconciled = reconcileAtlasCurrentRoster({
+      rosterRows: [],
+      masterById: masters,
+      officialRoster: [{ teamCode: "WAS", playerName: "Current Commander", jerseyNumber: "1", position: "QB", fetchedAt: new Date("2026-08-27T14:00:00Z") }],
+      expectedTeamCodes: ["WAS"],
+      now: new Date("2026-08-27T14:00:00Z"),
+    });
+    expect(reconciled.officiallyAbsentIds.has("00-free-agent")).toBe(true);
   });
 
   it("replaces only the current career season with the fresh official team", () => {
