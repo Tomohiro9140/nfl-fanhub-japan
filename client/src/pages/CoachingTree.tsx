@@ -46,6 +46,7 @@ import "@/components/mobileLineageMap.css";
 import "@/components/mobileStaffArchive.css";
 import "@/components/directoryStatusAndPathRecords.css";
 import "@/components/crossTreePathfinder.css";
+import "@/components/coachingTreeRepair.css";
 
 type View = "tree" | "directory" | "staff";
 type MapPoint = { id: string; x: number; y: number; level: number; labelAlign: "left" | "right" };
@@ -104,7 +105,7 @@ function matchingStaffAlmanacRecord(coachName: string, appointment: Appointment)
 function ProfileAppointment({ coachName, appointment, onOpenAlmanac }: { coachName: string; appointment: Appointment; onOpenAlmanac: (appointment: Appointment) => void }) {
   const almanacRecord = matchingStaffAlmanacRecord(coachName, appointment);
   const displayTitle = appointment.title ?? (appointment.role === "STC" ? "Special Teams Coordinator" : appointment.role);
-  return <div className="appointment" key={`${appointment.years}-${appointment.team}-${appointment.role}-${appointment.title ?? ""}`}><time>{appointment.years}</time><span>{appointment.team}</span><div className="appointment-duty"><b className={profileRoleClass(appointment.role)}>{isProfileGlyphRole(appointment.role) && <i aria-hidden="true">{roleGlyph(appointment.role)} </i>}{displayTitle}</b>{almanacRecord && <button type="button" className="appointment-almanac-link" onClick={() => onOpenAlmanac(appointment)} aria-label={`${appointment.team} ${almanacRecord.season}のスタッフ年鑑を開く`}>年鑑 <ArrowUpRight size={12} /></button>}</div></div>;
+  return <div className="appointment" key={`${appointment.years}-${appointment.team}-${appointment.role}-${appointment.title ?? ""}`}><time>{appointment.years}</time><span>{appointment.team}</span><div className="appointment-duty"><b className={profileRoleClass(appointment.role)}>{isProfileGlyphRole(appointment.role) && <i className={`profile-role-glyph ${roleClass(appointment.role)}`} aria-hidden="true">{roleGlyph(appointment.role)}</i>}{displayTitle}</b>{almanacRecord && <button type="button" className="appointment-almanac-link" onClick={() => onOpenAlmanac(appointment)} aria-label={`${appointment.team} ${almanacRecord.season}のスタッフ年鑑を開く`}>年鑑 <ArrowUpRight size={12} /></button>}</div></div>;
 }
 
 function TeamStaffSeasonCard({ record, roleChanges, onOpenMember }: { record: SeasonStaffRecord; roleChanges: StaffRole[]; onOpenMember: (member: SeasonStaffMember) => void }) {
@@ -407,6 +408,17 @@ export default function Home() {
     if (mapScale === "large") return { width: 1520, height: 1080 };
     return { width: 1720, height: 1260 };
   };
+  const getFittedMapZoom = () => {
+    const viewport = mapViewportRef.current;
+    if (!viewport) return 1;
+    const { height } = getMapCanvasSize();
+    return Math.min(MAP_MAX_ZOOM, Math.max(MAP_MIN_ZOOM, Number((viewport.clientHeight / height).toFixed(2))));
+  };
+  const fitMapToViewport = (immediate = false) => {
+    const zoom = getFittedMapZoom();
+    applyMapZoom(zoom, immediate);
+    applyMapPan({ x: 0, y: 0 }, immediate);
+  };
   const getRootCenteredPan = (zoom = mapZoom) => {
     const viewport = mapViewportRef.current;
     const root = mapPoints.find((point) => point.id === activeTree.rootId);
@@ -423,8 +435,8 @@ export default function Home() {
     const viewport = mapViewportRef.current;
     if (!viewport || currentZoom <= 0) return mapPanRef.current;
     const { width, height } = getMapCanvasSize();
-    const originX = width / 2;
-    const originY = height / 2;
+    const originX = 0;
+    const originY = 0;
     const focusX = (viewport.clientWidth / 2) - mapPanRef.current.x - originX;
     const focusY = (viewport.clientHeight / 2) - mapPanRef.current.y - originY;
     return {
@@ -451,8 +463,7 @@ export default function Home() {
         viewport.scrollLeft = 0;
         viewport.scrollTop = 0;
       }
-      applyMapZoom(1, true);
-      applyMapPan(getRootCenteredPan(1), true);
+      fitMapToViewport(true);
     });
     return () => window.cancelAnimationFrame(frame);
   }, [activeTree.id, isMobile]);
@@ -610,10 +621,6 @@ export default function Home() {
     const nextId = atlasMatch?.id ?? id;
     const selectedCoach = centralAtlasCoaches.find((coach) => coach.id === nextId) ?? atlasCatalogCoaches.find((coach) => coach.id === id);
     const matchingAlmanacCoach = allHcAlmanacCoaches.find((coach) => coach.name === selectedCoach?.name);
-    if (matchingAlmanacCoach) {
-      setStaffCoachId(matchingAlmanacCoach.id);
-      setStaffRecordId(matchingAlmanacCoach.records[0]?.id ?? "");
-    }
     // Archive Atlas selection rule: an explicit coach selection owns the next almanac view;
     // stale map-edge state must never replace that coach with a prior relation's head coach.
     selectedRelationKeyRef.current = "";
@@ -626,8 +633,12 @@ export default function Home() {
       return;
     }
     const containingTree = centralAtlasTrees.filter((tree) => tree.nodeIds.includes(nextId)).sort((a, b) => a.nodeIds.length - b.nodeIds.length)[0];
-    if (!stayInCurrentTree && containingTree && containingTree.id !== activeTree.id) selectTree(containingTree.id);
+    if (!stayInCurrentTree && containingTree && containingTree.id !== activeTree.id) selectTree(containingTree.id, nextId);
     setSelectedId(nextId);
+    if (matchingAlmanacCoach) {
+      setStaffCoachId(matchingAlmanacCoach.id);
+      setStaffRecordId(matchingAlmanacCoach.records[0]?.id ?? "");
+    }
     setHighlightRootId(nextId);
     setDismissedRootOfferId("");
     if (view === "directory") setView("tree");
@@ -635,8 +646,7 @@ export default function Home() {
 
   function openSelectedRootLineage() {
     if (!selectedRootLineage) return;
-    setActiveTreeId(selectedRootLineage.id);
-    setSelectedId(selectedId);
+    selectTree(selectedRootLineage.id, selectedId);
     setHighlightRootId(selectedId);
     setHoveredCoachId("");
     clearSelectedRelation();
@@ -646,8 +656,7 @@ export default function Home() {
   }
 
   function openProfileLineage(location: typeof profileLineageLocations[number]) {
-    selectTree(location.tree.id);
-    setSelectedId(selectedId);
+    selectTree(location.tree.id, selectedId);
     setHighlightRootId(selectedId);
     setHoveredCoachId("");
     if (location.edge) {
@@ -661,26 +670,25 @@ export default function Home() {
     window.requestAnimationFrame(() => window.requestAnimationFrame(() => mapStageRef.current?.scrollIntoView({ behavior: "smooth", block: "center" })));
   }
 
-  function selectTree(treeId: string) {
+  function selectTree(treeId: string, selectedCoachId?: string) {
     const tree = centralAtlasTrees.find((item) => item.id === treeId) ?? centralAtlasTrees[0];
     const firstEdge = centralAtlasEdges.find((edge) => edge.from === tree.rootId && tree.nodeIds.includes(edge.to)) ?? centralAtlasEdges.find((edge) => tree.nodeIds.includes(edge.from) && tree.nodeIds.includes(edge.to));
     const firstChild = firstEdge?.to ?? tree.nodeIds.find((id) => id !== tree.rootId) ?? tree.rootId;
     setActiveTreeId(tree.id);
-    const rootCoach = centralAtlasCoaches.find((coach) => coach.id === tree.rootId);
-    const rootAlmanac = allHcAlmanacCoaches.find((coach) => coach.name === rootCoach?.name);
-    if (rootAlmanac) {
-      setStaffCoachId(rootAlmanac.id);
-      setStaffRecordId(rootAlmanac.records[0]?.id ?? "");
+    const preferredCoachId = selectedCoachId && tree.nodeIds.includes(selectedCoachId) ? selectedCoachId : tree.rootId;
+    const preferredCoach = centralAtlasCoaches.find((coach) => coach.id === preferredCoachId);
+    const preferredAlmanac = allHcAlmanacCoaches.find((coach) => coach.name === preferredCoach?.name);
+    if (preferredAlmanac) {
+      setStaffCoachId(preferredAlmanac.id);
+      setStaffRecordId(preferredAlmanac.records[0]?.id ?? "");
     }
-    setSelectedId(tree.rootId);
+    setSelectedId(preferredCoachId);
     setPathStartId("");
     setPathEndId("");
     setSelectedRelationKey(firstEdge?.id ?? "");
     setMapRelationKey("");
     setHighlightRootId("");
     setHoveredCoachId("");
-    applyMapZoom(1, true);
-    applyMapPan({ x: 0, y: 0 }, true);
   }
 
   function selectStaffRecord(record?: SeasonStaffRecord) {
@@ -782,8 +790,7 @@ export default function Home() {
   }
 
   function resetMapView() {
-    applyMapZoom(1, true);
-    applyMapPan(getRootCenteredPan(1), true);
+    fitMapToViewport(true);
     setHighlightRootId("");
     setHoveredCoachId("");
     setSelectedRelationKey("");
@@ -885,8 +892,8 @@ export default function Home() {
     event.preventDefault();
     const nextZoom = Math.min(MAP_MAX_ZOOM, Math.max(MAP_MIN_ZOOM, Number((pinchStart.zoom * (distance / pinchStart.distance)).toFixed(2))));
     const { width, height } = getMapCanvasSize();
-    const originX = width / 2;
-    const originY = height / 2;
+    const originX = 0;
+    const originY = 0;
     const localFocal = { x: (pinchStart.focal.x - pinchStart.pan.x - originX) / pinchStart.zoom, y: (pinchStart.focal.y - pinchStart.pan.y - originY) / pinchStart.zoom };
     applyMapPan({ x: Math.round(focal.x - originX - (localFocal.x * nextZoom)), y: Math.round(focal.y - originY - (localFocal.y * nextZoom)) });
     applyMapZoom(nextZoom);
@@ -1028,7 +1035,7 @@ export default function Home() {
           </section>
 
           <aside className="annotation-panel" aria-label="選択中コーチと関係詳細">
-            <div className="annotation-head"><p className="overline">03 / PROFILE</p><span className={`profile-insignia ${roleClass(selected.roles.includes("HC") ? "HC" : selected.roles[0])}`}><i>{roleGlyph(selected.roles.includes("HC") ? "HC" : selected.roles[0])}</i>{roleText(selected.roles)}</span></div>
+            <div className="annotation-head"><p className="overline">03 / PROFILE</p><span className={`profile-insignia ${roleClass(selected.roles.includes("HC") ? "HC" : selected.roles[0])}`}><i className={`profile-role-glyph ${roleClass(selected.roles.includes("HC") ? "HC" : selected.roles[0])}`}>{roleGlyph(selected.roles.includes("HC") ? "HC" : selected.roles[0])}</i>{roleText(selected.roles)}</span></div>
             <div className="profile-title"><h2>{selected.name}</h2><div className="profile-role-line">{selected.roles.map((role) => <span key={role} className={roleClass(role)}>{roleGlyph(role)} {role}</span>)}</div>{selectedStatus && <div className={`profile-status is-${selectedStatus.state}`}><i aria-hidden="true" /><span><b>{selectedStatus.label}</b><small>{selectedStatus.detail}</small></span></div>}{profileLineageLocations.length > 1 && <section className="profile-lineage-locations" aria-label={`${selected.name}の系譜地図での位置`}><div className="profile-lineage-locations__head"><b>系譜地図での位置</b><span>{profileLineageLocations.length}系列に表示</span></div><div className="profile-lineage-locations__list">{profileLineageLocations.map((location) => <button key={location.tree.id} type="button" onClick={() => openProfileLineage(location)}><strong>{location.rootName}系</strong><small>{location.edge ? `${location.edge.team} · ${location.edge.years}` : "系列起点"}</small><ArrowUpRight size={13} aria-hidden="true" /></button>)}</div></section>}</div>
             <div className="appointment-list"><div className="section-label"><span>NFL COACHING HISTORY</span><small>HC · OC · DC · STC</small></div>{selected.appointments.map((appointment: Appointment) => <ProfileAppointment key={`${appointment.years}-${appointment.team}-${appointment.role}-${appointment.title ?? ""}`} coachName={selected.name} appointment={appointment} onOpenAlmanac={openAppointmentInAlmanac} />)}</div>
           </aside>

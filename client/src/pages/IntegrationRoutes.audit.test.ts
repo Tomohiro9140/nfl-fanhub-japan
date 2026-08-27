@@ -7,6 +7,7 @@ const homeSource = readFileSync(resolve(process.cwd(), "client/src/pages/Home.ts
 const atlasSource = readFileSync(resolve(process.cwd(), "client/src/pages/Atlas.tsx"), "utf8");
 const coachingTreeSource = readFileSync(resolve(process.cwd(), "client/src/pages/CoachingTree.tsx"), "utf8");
 const coachingTreeDataSource = readFileSync(resolve(process.cwd(), "client/src/data/centralAtlas.ts"), "utf8");
+const coachingTreeRepairSource = readFileSync(resolve(process.cwd(), "client/src/components/coachingTreeRepair.css"), "utf8");
 const fieldlineSource = readFileSync(resolve(process.cwd(), "client/src/pages/Fieldline.tsx"), "utf8");
 const fieldlineAdminSource = readFileSync(resolve(process.cwd(), "client/src/pages/FieldlineAdmin.tsx"), "utf8");
 const fieldlineDataSource = readFileSync(resolve(process.cwd(), "server/fieldlineData.ts"), "utf8");
@@ -67,6 +68,15 @@ describe("embedded FAN/HUB application routes", () => {
     expect(coachingTreeSource).toContain('CROSS-TREE PATHFINDER');
     expect(coachingTreeSource).toContain('HC在任期間のスタッフ年鑑');
     expect(coachingTreeSource).toContain('RelationEvidence');
+    expect(coachingTreeSource).toContain('const matchingAlmanacCoach');
+    expect(coachingTreeSource).toContain('setStaffCoachId(matchingAlmanacCoach.id)');
+    expect(coachingTreeSource).toContain('selectTree(containingTree.id, nextId)');
+    expect(coachingTreeSource).toContain('function selectTree(treeId: string, selectedCoachId?: string)');
+    expect(coachingTreeSource).toContain('getFittedMapZoom');
+    expect(coachingTreeSource).toContain('profile-role-glyph');
+    expect(coachingTreeRepairSource).toContain('.atlas-app .atlas-shell');
+    expect(coachingTreeRepairSource).toContain('transform-origin: left top');
+    expect(coachingTreeRepairSource).toContain('height: min(68vh, 700px)');
     expect(coachingTreeDataSource).toContain('centralAtlasTrees');
     expect(atlasSource).not.toContain('<iframe');
     expect(fieldlineSource).not.toContain('<iframe');
