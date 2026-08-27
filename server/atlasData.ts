@@ -1,6 +1,5 @@
 type CsvRow = Record<string, string>;
 
-import { getOfficialRosterEntriesForAtlas } from "./db";
 import { storageGetSignedUrl } from "./storage";
 
 type CacheEntry<T> = {
@@ -21,7 +20,7 @@ export type AtlasPlayerResult = {
   position: string;
   number: string;
   headshot: string;
-  rosterStatus: "current" | "free-agent" | "past";
+  rosterStatus: "current" | "past";
   lastSeason: number | null;
   team: AtlasTeam;
 };
@@ -37,15 +36,12 @@ const POSITION_ORDER = ["QB", "RB", "WR", "TE", "OL", "DL", "LB", "DB", "K", "P"
 
 const CACHE_TTL = {
   roster: 20 * 60 * 1000,
-  career: 20 * 60 * 1000,
   players: 12 * 60 * 60 * 1000,
   teams: 6 * 60 * 60 * 1000,
   history: 7 * 24 * 60 * 60 * 1000,
   stats: 12 * 60 * 60 * 1000,
   contracts: 24 * 60 * 60 * 1000,
 } as const;
-
-const OFFICIAL_ROSTER_MAX_AGE_MS = 30 * 60 * 60 * 1000;
 
 const teamAliases: Record<string, string> = {
   ARZ: "ARI",
@@ -208,7 +204,7 @@ function teamFor(code: string | undefined, directory: Map<string, AtlasTeam>): A
   const normalizedCode = teamAliases[code ?? ""] ?? code ?? "FA";
   return directory.get(normalizedCode) ?? {
     abbreviation: normalizedCode,
-    name: normalizedCode === "FA" ? "フリーエージェント" : (fallbackTeamNames[normalizedCode] ?? normalizedCode),
+    name: normalizedCode === "FA" ? "Free Agent" : (fallbackTeamNames[normalizedCode] ?? normalizedCode),
     color: "#142033",
   };
 }
@@ -285,130 +281,30 @@ function latestRosterByPlayer(rows: CsvRow[]): Map<string, CsvRow> {
   return latest;
 }
 
-export type AtlasOfficialRosterAssignment = {
-  teamCode: string;
-  playerName: string;
-  jerseyNumber: string | null;
-  position: string;
-  fetchedAt: Date;
-};
-
-type AtlasRosterReconciliation = {
-  current: Map<string, CsvRow>;
-  officiallyAbsentIds: Set<string>;
-};
-
-/**
- * Keeps NFLverse IDs and historical attributes, but lets a fresh club roster define a player's
- * current team, jersey, and position. A missing player is treated as released only when every
- * club snapshot is fresh, preventing an unavailable official source from creating a false move.
- */
-export function reconcileAtlasCurrentRoster({
-  rosterRows,
-  masterById,
-  officialRoster,
-  expectedTeamCodes = Object.keys(fallbackTeamNames),
-  now = new Date(),
-}: {
-  rosterRows: CsvRow[];
-  masterById: Map<string, CsvRow>;
-  officialRoster: AtlasOfficialRosterAssignment[];
-  expectedTeamCodes?: string[];
-  now?: Date;
-}): AtlasRosterReconciliation {
-  const current = latestRosterByPlayer(rosterRows);
-  const idsByNormalizedName = new Map<string, Set<string>>();
-  Array.from(masterById.values()).concat(Array.from(current.values())).forEach((row) => {
-    const playerId = row.gsis_id;
-    const name = normalizeAtlasText(playerName(row));
-    if (!playerId || !name) return;
-    const ids = idsByNormalizedName.get(name) ?? new Set<string>();
-    ids.add(playerId);
-    idsByNormalizedName.set(name, ids);
-  });
-
-  const freshOfficialByName = new Map<string, AtlasOfficialRosterAssignment>();
-  const freshTeamSnapshots = new Map<string, Date>();
-  officialRoster.forEach((entry) => {
-    const fetchedAt = entry.fetchedAt instanceof Date ? entry.fetchedAt : new Date(entry.fetchedAt);
-    const age = now.getTime() - fetchedAt.getTime();
-    if (Number.isNaN(fetchedAt.getTime()) || age > OFFICIAL_ROSTER_MAX_AGE_MS || age < -5 * 60 * 1000) return;
-    const teamCode = teamAliases[entry.teamCode] ?? entry.teamCode;
-    const previousTeamSnapshot = freshTeamSnapshots.get(teamCode);
-    if (!previousTeamSnapshot || fetchedAt > previousTeamSnapshot) freshTeamSnapshots.set(teamCode, fetchedAt);
-    const name = normalizeAtlasText(entry.playerName);
-    const previous = freshOfficialByName.get(name);
-    if (name && (!previous || fetchedAt > previous.fetchedAt)) freshOfficialByName.set(name, { ...entry, teamCode, fetchedAt });
-  });
-
-  freshOfficialByName.forEach((entry, name) => {
-    const matches = Array.from(idsByNormalizedName.get(name) ?? []);
-    if (matches.length !== 1) return;
-    const playerId = matches[0]!;
-    const existing = current.get(playerId) ?? masterById.get(playerId);
-    if (!existing) return;
-    current.set(playerId, {
-      ...existing,
-      team: entry.teamCode,
-      position: entry.position || existing.position,
-      jersey_number: entry.jerseyNumber || existing.jersey_number,
-    });
-  });
-
-  const fullFreshCoverage = expectedTeamCodes.every((teamCode) => freshTeamSnapshots.has(teamCode));
-  if (!fullFreshCoverage) return { current, officiallyAbsentIds: new Set() };
-
-  const officialNames = new Set(freshOfficialByName.keys());
-  const officiallyAbsentIds = new Set<string>();
-  const currentOrRecentActivePlayers = new Map(current);
-  masterById.forEach((player, playerId) => {
-    if (currentOrRecentActivePlayers.has(playerId)) return;
-    if (number(player.last_season) < currentSeason - 1 || !isAtlasActiveFreeAgentCandidate(player, true)) return;
-    currentOrRecentActivePlayers.set(playerId, player);
-  });
-  currentOrRecentActivePlayers.forEach((row, playerId) => {
-    const player = masterById.get(playerId) ?? row;
-    if (officialNames.has(normalizeAtlasText(playerName(player)))) return;
-    current.delete(playerId);
-    officiallyAbsentIds.add(playerId);
-  });
-  return { current, officiallyAbsentIds };
-}
-
-export type AtlasCareerSeason = { season: number; teams: string[] };
-
-/** The latest career year reflects the current official club roster, not a stale season roster file. */
-export function reconcileAtlasCareerCurrentTeam(timeline: AtlasCareerSeason[], currentTeam?: string): AtlasCareerSeason[] {
-  if (!currentTeam) return timeline;
-  const team = teamAliases[currentTeam] ?? currentTeam;
-  return [{ season: currentSeason, teams: [team] }, ...timeline.filter((entry) => entry.season !== currentSeason)];
-}
-
-function searchResult(master: CsvRow, roster: CsvRow | undefined, directory: Map<string, AtlasTeam>, officiallyAbsent = false): AtlasPlayerResult {
+function searchResult(master: CsvRow, roster: CsvRow | undefined, directory: Map<string, AtlasTeam>): AtlasPlayerResult {
   const isCurrent = Boolean(roster);
-  const isFreeAgent = !isCurrent && isAtlasActiveFreeAgentCandidate(master, officiallyAbsent);
   return {
     id: master.gsis_id || roster?.gsis_id || "",
     name: playerName(master),
     position: roster?.position || master.position || "—",
-    number: isFreeAgent ? "—" : (roster?.jersey_number || master.jersey_number || "—"),
+    number: roster?.jersey_number || master.jersey_number || "—",
     headshot: roster?.headshot_url || master.headshot || "",
-    rosterStatus: isCurrent ? "current" : isFreeAgent ? "free-agent" : "past",
-    lastSeason: isCurrent || isFreeAgent ? null : (number(master.last_season) || null),
-    team: teamFor(roster?.team || (isFreeAgent ? "FA" : master.latest_team), directory),
+    rosterStatus: isCurrent ? "current" : "past",
+    lastSeason: isCurrent ? currentSeason : (number(master.last_season) || null),
+    team: teamFor(roster?.team || master.latest_team, directory),
   };
 }
 
 async function searchUniverse() {
   return cached("atlas:search-universe", CACHE_TTL.roster, async () => {
-    const [masters, rosterRows, directory, officialRoster] = await Promise.all([masterPlayers(), currentRoster(), teamDirectory(), getOfficialRosterEntriesForAtlas()]);
+    const [masters, rosterRows, directory] = await Promise.all([masterPlayers(), currentRoster(), teamDirectory()]);
+    const current = latestRosterByPlayer(rosterRows);
     const masterById = new Map(masters.filter((row) => row.gsis_id).map((row) => [row.gsis_id, row]));
-    const { current, officiallyAbsentIds } = reconcileAtlasCurrentRoster({ rosterRows, masterById, officialRoster });
     const active = Array.from(current.values())
       .map((roster) => searchResult(masterById.get(roster.gsis_id) ?? roster, roster, directory))
       .filter((player) => player.id && player.name !== "Unknown player")
       .sort((left, right) => left.name.localeCompare(right.name));
-    return { active, current, masterById, directory, officiallyAbsentIds };
+    return { active, current, masterById, directory };
   });
 }
 
@@ -423,12 +319,12 @@ export async function atlasFilters(team?: string) {
 export async function atlasSearch(query: string) {
   const term = normalizeAtlasText(query);
   if (term.length < 2) return { players: [] as AtlasPlayerResult[], updatedAt: new Date().toISOString() };
-  const { active, current, masterById, directory, officiallyAbsentIds } = await searchUniverse();
+  const { active, current, masterById, directory } = await searchUniverse();
   const currentMatches = active.filter((player) => normalizeAtlasText(player.name).includes(term));
   const historicMatches = Array.from(masterById.values())
     .filter((player) => !current.has(player.gsis_id) && Boolean(player.last_season))
     .filter((player) => normalizeAtlasText(playerName(player)).includes(term))
-    .map((player) => searchResult(player, undefined, directory, officiallyAbsentIds.has(player.gsis_id)));
+    .map((player) => searchResult(player, undefined, directory));
   const players = [...currentMatches, ...historicMatches].sort((left, right) => {
     const statusOrder = left.rosterStatus === right.rosterStatus ? 0 : left.rosterStatus === "current" ? -1 : 1;
     const startingOrder = Number(!normalizeAtlasText(left.name).startsWith(term)) - Number(!normalizeAtlasText(right.name).startsWith(term));
@@ -513,22 +409,16 @@ function draftLabel(player: CsvRow): string {
   return `${year}年 · Round ${player.draft_round} · Pick ${player.draft_pick}${team ? ` · ${team}` : ""}`;
 }
 
-export function isAtlasActiveFreeAgentCandidate(player: CsvRow, officiallyAbsent: boolean) {
-  if (!officiallyAbsent) return false;
-  return player.status === "ACT" || player.ngs_status === "ACT" || player.ngs_status_short_description === "Active" || player.pff_status === "A";
-}
-
 export async function atlasProfile(playerId: string) {
   return cached(`atlas:profile:${playerId}`, CACHE_TTL.roster, () => atlasProfileUncached(playerId));
 }
 
 async function atlasProfileUncached(playerId: string) {
-  const { current, masterById, directory, officiallyAbsentIds } = await searchUniverse();
+  const { current, masterById, directory } = await searchUniverse();
   const roster = current.get(playerId);
   const master = masterById.get(playerId) ?? roster;
   if (!master) throw new Error("Player not found in ATLAS data");
   const isCurrent = Boolean(roster);
-  const isFreeAgent = !isCurrent && isAtlasActiveFreeAgentCandidate(master, officiallyAbsentIds.has(playerId));
   const birthDate = roster?.birth_date || master.birth_date;
   const weight = roster?.weight || master.weight;
   return {
@@ -536,7 +426,7 @@ async function atlasProfileUncached(playerId: string) {
       id: playerId,
       name: playerName(master),
       position: roster?.position || master.position || "—",
-      number: isFreeAgent ? "—" : (roster?.jersey_number || master.jersey_number || "—"),
+      number: roster?.jersey_number || master.jersey_number || "—",
       age: ageFrom(birthDate),
       birthDate: formattedBirthDate(birthDate),
       displayHeight: formattedHeight(roster?.height || master.height),
@@ -544,9 +434,9 @@ async function atlasProfileUncached(playerId: string) {
       college: roster?.college || master.college_name || "—",
       draft: draftLabel({ ...master, ...roster }),
       headshot: roster?.headshot_url || master.headshot || "",
-      team: teamFor(roster?.team || (isFreeAgent ? "FA" : master.latest_team), directory),
-      rosterStatus: isCurrent ? "current" as const : isFreeAgent ? "free-agent" as const : "past" as const,
-      lastSeason: isCurrent || isFreeAgent ? null : (number(master.last_season) || null),
+      team: teamFor(roster?.team || master.latest_team, directory),
+      rosterStatus: isCurrent ? "current" as const : "past" as const,
+      lastSeason: isCurrent ? currentSeason : (number(master.last_season) || null),
     },
     source: { provider: "NFLverse", season: currentSeason, updatedAt: new Date().toISOString() },
   };
@@ -580,7 +470,7 @@ async function mapInBatches<T, Result>(items: T[], size: number, mapper: (item: 
 
 /** Builds team spans from annual NFLverse roster rows without blocking the base profile. */
 export async function atlasCareer(playerId: string) {
-  return cached(`atlas:career:${playerId}`, CACHE_TTL.career, () => atlasCareerUncached(playerId));
+  return cached(`atlas:career:${playerId}`, CACHE_TTL.history, () => atlasCareerUncached(playerId));
 }
 
 async function atlasCareerUncached(playerId: string) {
@@ -603,10 +493,7 @@ async function atlasCareerUncached(playerId: string) {
   });
   const bySeason = new Map<number, string[]>();
   [...historicSeasons, ...recentSeasons].forEach((entry) => { if (entry.teams.length) bySeason.set(entry.season, Array.from(new Set(entry.teams))); });
-  const timeline = reconcileAtlasCareerCurrentTeam(
-    Array.from(bySeason.entries()).map(([season, teams]) => ({ season, teams })).sort((left, right) => right.season - left.season),
-    roster?.team,
-  );
+  const timeline = Array.from(bySeason.entries()).map(([season, teams]) => ({ season, teams })).sort((left, right) => right.season - left.season);
   const spans: Array<{ startSeason: number; endSeason: number; teams: AtlasTeam[] }> = [];
   timeline.forEach((entry) => {
     const previous = spans.at(-1);
@@ -620,7 +507,7 @@ async function atlasCareerUncached(playerId: string) {
   return {
     spans,
     hallOfFameYear: await hallOfFameYear(playerName(master)),
-    source: { provider: roster ? "NFLverse roster data + official club roster" : "NFLverse roster data", updatedAt: new Date().toISOString(), teamHistoryCoverage: { availableFrom: historic?.coverage.startSeason ?? start, unavailableBefore: historic && start < historic.coverage.startSeason ? { startSeason: start, endSeason: historic.coverage.startSeason - 1 } : null } },
+    source: { provider: "NFLverse roster data", updatedAt: new Date().toISOString(), teamHistoryCoverage: { availableFrom: historic?.coverage.startSeason ?? start, unavailableBefore: historic && start < historic.coverage.startSeason ? { startSeason: start, endSeason: historic.coverage.startSeason - 1 } : null } },
   };
 }
 
