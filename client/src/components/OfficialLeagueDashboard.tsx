@@ -70,10 +70,10 @@ export function OfficialLatestResults({ favorite, dashboard, loading, spoilerMod
               const venue = compactVenue(game.venue);
               const resultMeta = [game.weekLabel ?? "OFFICIAL", !spoilerMode && game.gameState !== "FINAL" ? game.gameState : null].filter(Boolean).join(" · ");
               return (
-                <div key={game.id} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 py-7 pb-2.5">
-                  <a href={game.gameUrl} target="_blank" rel="noreferrer" className="min-w-0 self-center text-[13px] leading-[1.25]">
-                    <p className={`truncate ${awayWon ? "font-extrabold text-[#a84420]" : "font-bold"}`}>{away?.name ?? game.awayTeamCode}</p>
-                    <p className={`mt-1 truncate ${homeWon ? "font-extrabold text-[#a84420]" : "font-bold"}`}>@ {home?.name ?? game.homeTeamCode}</p>
+                <div key={game.id} className="grid min-h-[84px] grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 py-7 pb-2.5">
+                  <a href={game.gameUrl} target="_blank" rel="noreferrer" className="min-w-0 self-center overflow-visible text-[13px] leading-[1.45]">
+                    <p className={`truncate pb-px leading-[1.45] ${awayWon ? "font-extrabold text-[#a84420]" : "font-bold"}`}>{away?.name ?? game.awayTeamCode}</p>
+                    <p className={`mt-1 truncate pb-px leading-[1.45] ${homeWon ? "font-extrabold text-[#a84420]" : "font-bold"}`}>@ {home?.name ?? game.homeTeamCode}</p>
                   </a>
                   <div className="relative min-w-[106px] self-center text-right">
                     <div className="absolute bottom-full right-0 mb-1.5 w-[164px] text-right">

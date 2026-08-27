@@ -40,8 +40,10 @@ describe("compact mobile result and schedule UI", () => {
     expect(revealedMarkup).toContain("font-extrabold text-[#a84420]");
     expect(markup).not.toContain("font-extrabold text-[#a84420]");
     expect(revealedMarkup).toMatch(/>14<\/span><span> - <\/span><span[^>]*text-\[#a84420\][^>]*>29<\/span>/);
+    expect(revealedMarkup).toContain("min-h-[84px]");
     expect(revealedMarkup).toContain("py-7 pb-2.5");
-    expect(revealedMarkup).toContain("leading-[1.25]");
+    expect(revealedMarkup).toContain("leading-[1.45]");
+    expect(revealedMarkup).toContain("truncate pb-px leading-[1.45]");
     expect(revealedMarkup).not.toContain("memo-slip");
   });
 
