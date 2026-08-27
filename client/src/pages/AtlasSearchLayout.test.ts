@@ -30,4 +30,9 @@ describe("ATLAS検索トップのレイアウト", () => {
     expect(atlasSource).toContain('const isLanding = mode === "name" && !typedQuery;');
     expect(atlasSource).toContain('isLanding ? "h-[100svh] min-h-[100svh] overflow-hidden" : "min-h-screen pb-10"');
   });
+
+  it("フリーエージェントを名前検索の一覧描画から除外しない", () => {
+    expect(atlasSource).toContain('const pastResults = nameResults.filter((entry) => entry.rosterStatus !== "current");');
+    expect(atlasSource).toContain('isFreeAgent ? "フリーエージェント"');
+  });
 });
