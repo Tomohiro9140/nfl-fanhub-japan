@@ -7,7 +7,7 @@ import type { FavoriteTeam } from "@/lib/nflTeams";
 import { NEWS_SUMMARIES_ENABLED } from "@shared/newsSummaryFeature";
 
 type SourceKind = "team_official" | "nfl_official" | "pft" | "cbs";
-type FeedItem = { id: number; title: string; summary: string | null; japaneseSummary: string | null; englishSummary: string | null; sourceUrl: string; sourceName: string; sourceKind: SourceKind; category: "news" | "injury" | "transaction"; publishedAt: Date; fetchedAt: Date };
+type FeedItem = { id: number; title: string; summary: string | null; sourceUrl: string; sourceName: string; sourceKind: SourceKind; category: "news" | "injury" | "transaction"; publishedAt: Date; fetchedAt: Date };
 type CompletedGame = { gameState: string | null; gameDate?: string | null; finishedAt?: Date | null; kickoffAt: Date; kickoffAtEstimated?: boolean };
 const externalSourceKinds = new Set<SourceKind>(["pft", "cbs"]);
 

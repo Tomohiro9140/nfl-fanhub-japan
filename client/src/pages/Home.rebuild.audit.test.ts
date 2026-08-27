@@ -17,6 +17,7 @@ vi.mock("@/lib/trpc", () => ({
     teamSnapshot: { byTeam: { useQuery: () => ({ data: snapshot, isError: false, isLoading: false }) } },
     leagueDashboard: {
       summary: { useQuery: () => ({ data: league, isError: false, isLoading: false }) },
+      latestResult: { useQuery: () => ({ data: { results: [] }, isError: false, isLoading: false }) },
       calendar: { useQuery: () => ({ data: { calendar: [] }, isError: false, isLoading: false }) },
     },
     officialFeed: {

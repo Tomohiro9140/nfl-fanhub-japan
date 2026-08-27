@@ -4,7 +4,7 @@ import { systemRouter } from "./_core/systemRouter";
 import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
 import { getFreshOfficialTeamFeed, refreshOfficialTeamFeed } from "./officialFeeds";
 import { getOfficialFeedItemById, saveOfficialFeedEnglishSummary, saveOfficialFeedJapaneseSummary } from "./db";
-import { getCachedOfficialLeagueCalendar, getCachedOfficialLeagueDashboardSummary, getCachedOfficialTeamSnapshot } from "./officialDashboardCache";
+import { getCachedOfficialLatestResult, getCachedOfficialLeagueCalendar, getCachedOfficialLeagueDashboardSummary, getCachedOfficialTeamSnapshot } from "./officialDashboardCache";
 import { generateOfficialNewsEnglishSummary, generateOfficialNewsJapaneseSummary } from "./newsJapaneseSummary";
 import { NEWS_SUMMARIES_ENABLED } from "@shared/newsSummaryFeature";
 import { z } from "zod";
@@ -86,6 +86,7 @@ export const appRouter = router({
   }),
   leagueDashboard: router({
     summary: publicProcedure.query(() => getCachedOfficialLeagueDashboardSummary()),
+    latestResult: publicProcedure.input(z.object({ teamCode: z.string().length(2).or(z.string().length(3)) })).query(({ input }) => getCachedOfficialLatestResult(input.teamCode)),
     calendar: publicProcedure.input(z.object({ teamCode: z.string().length(2).or(z.string().length(3)) })).query(({ input }) => getCachedOfficialLeagueCalendar(input.teamCode)),
   }),
   gameStats: router({

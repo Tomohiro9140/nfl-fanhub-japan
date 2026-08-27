@@ -1,4 +1,4 @@
-import { getOfficialLeagueCalendar, getOfficialLeagueDashboardSummary, getOfficialTeamSnapshot } from "./db";
+import { getOfficialLatestResult, getOfficialLeagueCalendar, getOfficialLeagueDashboardSummary, getOfficialTeamSnapshot } from "./db";
 
 type CacheEntry<T> = { expiresAt: number; value?: T; pending?: Promise<T> };
 
@@ -33,6 +33,7 @@ const loadTeamSnapshot = createTimedLoader(12_000, async (key) => {
   return getOfficialTeamSnapshot(teamCode!, skipGameUrl || undefined, forceLastGame === "last", undefined, rosterMode === "roster");
 });
 const loadLeagueSummary = createTimedLoader(12_000, async () => getOfficialLeagueDashboardSummary());
+const loadLatestResult = createTimedLoader(12_000, async (teamCode) => getOfficialLatestResult(teamCode));
 const loadLeagueCalendar = createTimedLoader(45_000, async (teamCode) => getOfficialLeagueCalendar(teamCode));
 
 export function getCachedOfficialTeamSnapshot(teamCode: string, skipGameUrl?: string, forceLastGame = false, includeRoster = true) {
@@ -41,6 +42,10 @@ export function getCachedOfficialTeamSnapshot(teamCode: string, skipGameUrl?: st
 
 export function getCachedOfficialLeagueDashboardSummary() {
   return loadLeagueSummary("summary");
+}
+
+export function getCachedOfficialLatestResult(teamCode: string) {
+  return loadLatestResult(teamCode.toUpperCase());
 }
 
 export function getCachedOfficialLeagueCalendar(teamCode: string) {

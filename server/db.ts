@@ -3,7 +3,7 @@ import { attachOfficialScore, findOfficialScoreForGame } from "./gameStatus";
 import { getRegularSeasonByeWeek, isOfficialFinal, isWithinJstReplayWindow, selectGameTicketGame } from "./gameTicketWindow";
 import { selectRelevantCalendarGames } from "./leagueDashboardPayload";
 import { dedupeOfficialFeedItems } from "./officialFeedDeduplication";
-import { isNull } from "drizzle-orm";
+import { isNull, or } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import { ExternalAvailabilityInsight, InsertExternalAvailabilityInsight, InsertOfficialFeedItem, InsertOfficialGame, InsertOfficialGameStats, InsertOfficialRosterEntry, InsertOfficialScoreboardGame, InsertOfficialStanding, InsertUser, externalAvailabilityInsights, officialFeedItems, officialGameStats, officialGames, officialRosterEntries, officialScoreboardGames, officialStandings, users } from "../drizzle/schema";
 import { ENV } from './_core/env';
@@ -97,7 +97,17 @@ export async function getUserByOpenId(openId: string) {
 export async function getOfficialFeedItems(teamCode: string) {
   const db = await getDb();
   if (!db) return [];
-  return db.select().from(officialFeedItems)
+  return db.select({
+    id: officialFeedItems.id,
+    title: officialFeedItems.title,
+    summary: officialFeedItems.summary,
+    sourceUrl: officialFeedItems.sourceUrl,
+    sourceName: officialFeedItems.sourceName,
+    sourceKind: officialFeedItems.sourceKind,
+    category: officialFeedItems.category,
+    publishedAt: officialFeedItems.publishedAt,
+    fetchedAt: officialFeedItems.fetchedAt,
+  }).from(officialFeedItems)
     .where(eq(officialFeedItems.teamCode, teamCode))
     .orderBy(
       desc(officialFeedItems.publishedAt),
@@ -482,6 +492,24 @@ export async function getOfficialLeagueDashboardSummary() {
   });
   const lastUpdatedAt = [standings[0]?.fetchedAt, results[0]?.fetchedAt].filter((value): value is Date => Boolean(value)).sort((a, b) => b.getTime() - a.getTime())[0];
   return { standings, results, lastUpdatedAt };
+}
+
+/** Returns only the selected club's newest official result for the above-fold LATEST RESULTS card. */
+export async function getOfficialLatestResult(teamCode: string) {
+  const db = await getDb();
+  if (!db) return { results: [], lastUpdatedAt: undefined };
+  const normalizedTeamCode = teamCode.toUpperCase();
+  const [rawResults, games] = await Promise.all([
+    db.select({ id: officialScoreboardGames.id, weekLabel: officialScoreboardGames.weekLabel, awayTeamCode: officialScoreboardGames.awayTeamCode, homeTeamCode: officialScoreboardGames.homeTeamCode, awayScore: officialScoreboardGames.awayScore, homeScore: officialScoreboardGames.homeScore, gameState: officialScoreboardGames.gameState, gameDate: officialScoreboardGames.gameDate, kickoffAt: officialScoreboardGames.kickoffAt, gameUrl: officialScoreboardGames.gameUrl, nflHighlightUrl: officialScoreboardGames.nflHighlightUrl, sourceUrl: officialScoreboardGames.sourceUrl, fetchedAt: officialScoreboardGames.fetchedAt }).from(officialScoreboardGames).where(or(eq(officialScoreboardGames.awayTeamCode, normalizedTeamCode), eq(officialScoreboardGames.homeTeamCode, normalizedTeamCode))).orderBy(desc(officialScoreboardGames.gameDate), desc(officialScoreboardGames.fetchedAt)).limit(1),
+    db.select({ teamCode: officialGames.teamCode, opponentCode: officialGames.opponentCode, weekLabel: officialGames.weekLabel, kickoffAt: officialGames.kickoffAt, venue: officialGames.venue, daznUrl: officialGames.daznUrl }).from(officialGames).where(eq(officialGames.teamCode, normalizedTeamCode)),
+  ]);
+  const relatedGame = (awayTeamCode: string, homeTeamCode: string, weekLabel: string | null) => games.find((game) => findOfficialScoreForGame([{ awayTeamCode, homeTeamCode, weekLabel, gameState: "", awayScore: null, homeScore: null }], game));
+  const results = rawResults.map((result) => {
+    const scheduleGame = relatedGame(result.awayTeamCode, result.homeTeamCode, result.weekLabel);
+    return { ...result, kickoffAt: result.kickoffAt ?? scheduleGame?.kickoffAt ?? null, venue: scheduleGame?.venue ?? null, daznUrl: scheduleGame?.daznUrl ?? null };
+  });
+  const lastUpdatedAt = results.map((result) => result.fetchedAt).sort((left, right) => right.getTime() - left.getTime())[0];
+  return { results, lastUpdatedAt };
 }
 
 export async function getOfficialLeagueCalendar(teamCode: string) {

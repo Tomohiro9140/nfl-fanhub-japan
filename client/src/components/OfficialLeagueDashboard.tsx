@@ -35,7 +35,7 @@ export function jstResultDate(value: Date | null, officialDate?: string | null) 
   return new Intl.DateTimeFormat("ja-JP", { month: "numeric", day: "numeric", weekday: "short", timeZone: "Asia/Tokyo" }).format(new Date(date));
 }
 
-export function OfficialLatestResults({ favorite, dashboard, loading, spoilerMode, onOpenGameStats }: { favorite: FavoriteTeam; dashboard?: LeagueDashboard; loading: boolean; spoilerMode: boolean; onOpenGameStats?: (gameUrl: string) => void }) {
+export function OfficialLatestResults({ favorite, dashboard, loading, spoilerMode, onOpenGameStats }: { favorite: FavoriteTeam; dashboard?: Pick<LeagueDashboard, "results" | "lastUpdatedAt">; loading: boolean; spoilerMode: boolean; onOpenGameStats?: (gameUrl: string) => void }) {
   const resultGames = useMemo(() => {
     return getFavoriteLatestResults(dashboard?.results ?? [], favorite.code);
   }, [dashboard, favorite]);

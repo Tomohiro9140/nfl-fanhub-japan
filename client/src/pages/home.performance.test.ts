@@ -16,4 +16,21 @@ describe("favorite team home performance path", () => {
     expect(snapshotCacheSource).toContain('rosterMode === "roster"');
     expect(snapshotCacheSource).toContain('includeRoster ? "roster" : "light"');
   });
+
+  it("loads only the favorite team's latest result above the fold and defers the full league summary", () => {
+    expect(homeSource).toContain("trpc.leagueDashboard.latestResult.useQuery");
+    expect(homeSource).toContain("enabled: shouldLoadLeagueCalendar");
+    expect(homeSource).toContain("dashboard={latestResultQuery.data}");
+  });
+
+  it("loads the Game Stats dialog only after a user requests it", () => {
+    expect(homeSource).toContain('React.lazy(async () =>');
+    expect(homeSource).toContain('import("@/components/GameStatsDialog")');
+    expect(homeSource).toContain("<React.Suspense fallback={null}>");
+  });
+
+  it("keeps the full league dashboard below the fold while retaining the visible latest-result card", () => {
+    expect(homeSource).toContain("dashboard={leagueDashboard}");
+    expect(homeSource).toContain("loading={!shouldLoadLeagueCalendar || leagueQuery.isLoading}");
+  });
 });
