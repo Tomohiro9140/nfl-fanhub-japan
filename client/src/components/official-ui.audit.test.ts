@@ -53,6 +53,16 @@ describe("compact mobile result and schedule UI", () => {
     expect(hiddenTicket).not.toContain("GAME STATS");
   });
 
+  it("reserves the revealed Game Stats action height while spoiler protection hides the action", () => {
+    const openStats = () => undefined;
+    const revealedMarkup = renderToStaticMarkup(createElement(OfficialLatestResults, { favorite, dashboard, loading: false, spoilerMode: false, onOpenGameStats: openStats }));
+    const hiddenMarkup = renderToStaticMarkup(createElement(OfficialLatestResults, { favorite, dashboard, loading: false, spoilerMode: true, onOpenGameStats: openStats }));
+
+    expect(revealedMarkup).toContain("mt-2 inline-flex h-3");
+    expect(hiddenMarkup).toContain('aria-hidden="true" class="mt-2 block h-3"');
+    expect(hiddenMarkup).not.toContain("GAME STATS");
+  });
+
   it("removes the requested Game Ticket chrome while retaining the watch action", () => {
     const markup = renderToStaticMarkup(createElement(OfficialGameTicket, {
       favorite,
