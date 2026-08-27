@@ -6,10 +6,11 @@ import { lazy, Suspense } from "react";
 import { Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
-import { preloadAtlasRoute, preloadFieldlineRoute } from "./lib/routePreload";
+import { preloadAtlasRoute, preloadCoachingTreeRoute, preloadFieldlineRoute } from "./lib/routePreload";
 import Home from "./pages/Home";
 
 const Atlas = lazy(preloadAtlasRoute);
+const CoachingTree = lazy(preloadCoachingTreeRoute);
 const Fieldline = lazy(preloadFieldlineRoute);
 const FieldlineAdmin = lazy(() => import("./pages/FieldlineAdmin"));
 
@@ -19,7 +20,7 @@ function RouteLoading() {
 
 function Router() {
   // make sure to consider if you need authentication for certain routes
-  return <Suspense fallback={<RouteLoading />}><Switch><Route path="/" component={Home} /><Route path="/atlas" component={Atlas} /><Route path="/atlas/" component={Atlas} /><Route path="/fieldline/admin" component={FieldlineAdmin} /><Route path="/fieldline/admin/" component={FieldlineAdmin} /><Route path="/fieldline" component={Fieldline} /><Route path="/fieldline/" component={Fieldline} /><Route path="/404" component={NotFound} /><Route component={NotFound} /></Switch></Suspense>;
+  return <Suspense fallback={<RouteLoading />}><Switch><Route path="/" component={Home} /><Route path="/atlas" component={Atlas} /><Route path="/atlas/" component={Atlas} /><Route path="/coaching-tree" component={CoachingTree} /><Route path="/coaching-tree/" component={CoachingTree} /><Route path="/fieldline/admin" component={FieldlineAdmin} /><Route path="/fieldline/admin/" component={FieldlineAdmin} /><Route path="/fieldline" component={Fieldline} /><Route path="/fieldline/" component={Fieldline} /><Route path="/404" component={NotFound} /><Route component={NotFound} /></Switch></Suspense>;
 }
 
 export default function App() {

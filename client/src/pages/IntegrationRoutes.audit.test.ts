@@ -5,22 +5,27 @@ import { resolve } from "node:path";
 const appSource = readFileSync(resolve(process.cwd(), "client/src/App.tsx"), "utf8");
 const homeSource = readFileSync(resolve(process.cwd(), "client/src/pages/Home.tsx"), "utf8");
 const atlasSource = readFileSync(resolve(process.cwd(), "client/src/pages/Atlas.tsx"), "utf8");
+const coachingTreeSource = readFileSync(resolve(process.cwd(), "client/src/pages/CoachingTree.tsx"), "utf8");
+const coachingTreeDataSource = readFileSync(resolve(process.cwd(), "client/src/data/centralAtlas.ts"), "utf8");
 const fieldlineSource = readFileSync(resolve(process.cwd(), "client/src/pages/Fieldline.tsx"), "utf8");
 const fieldlineAdminSource = readFileSync(resolve(process.cwd(), "client/src/pages/FieldlineAdmin.tsx"), "utf8");
 const fieldlineDataSource = readFileSync(resolve(process.cwd(), "server/fieldlineData.ts"), "utf8");
 const embeddedNavSource = readFileSync(resolve(process.cwd(), "client/src/components/EmbeddedAppNav.tsx"), "utf8");
 const indexHtml = readFileSync(resolve(process.cwd(), "client/index.html"), "utf8");
 
-describe("ATLAS and FIELDLINE integration routes", () => {
-  it("registers native ATLAS and FIELDLINE routes without restoring either external redirect flow", () => {
+describe("embedded FAN/HUB application routes", () => {
+  it("registers native ATLAS, COACHING TREE, and FIELDLINE routes without restoring external redirect flows", () => {
     expect(appSource).toContain('path="/atlas"');
     expect(appSource).toContain('path="/fieldline"');
     expect(appSource).toContain('const Atlas = lazy(preloadAtlasRoute)');
+    expect(appSource).toContain('const CoachingTree = lazy(preloadCoachingTreeRoute)');
     expect(appSource).toContain('const Fieldline = lazy(preloadFieldlineRoute)');
     expect(appSource).toContain("<Suspense fallback={<RouteLoading />}>");
     expect(homeSource).toContain('ATLAS');
     expect(homeSource).toContain('FIELDLINE');
+    expect(homeSource).toContain('COACHING TREE');
     expect(homeSource).toContain('onPointerEnter={warmAtlasRoute}');
+    expect(homeSource).toContain('onPointerEnter={warmCoachingTreeRoute}');
     expect(homeSource).toContain('onPointerEnter={warmFieldlineRoute}');
     expect(homeSource).toContain('onPointerDown={warmAtlasRoute}');
     expect(homeSource).toContain('onPointerDown={warmFieldlineRoute}');
@@ -57,6 +62,12 @@ describe("ATLAS and FIELDLINE integration routes", () => {
     expect(fieldlineDataSource).toContain('fieldlinePbpSource');
     expect(fieldlineAdminSource).toContain('trpc.fieldlineAdmin.importSeason');
     expect(appSource).toContain('path="/fieldline/admin"');
+    expect(appSource).toContain('path="/coaching-tree"');
+    expect(coachingTreeSource).toContain('EmbeddedAppNav current="COACHING TREE"');
+    expect(coachingTreeSource).toContain('CROSS-TREE PATHFINDER');
+    expect(coachingTreeSource).toContain('HC在任期間のスタッフ年鑑');
+    expect(coachingTreeSource).toContain('RelationEvidence');
+    expect(coachingTreeDataSource).toContain('centralAtlasTrees');
     expect(atlasSource).not.toContain('<iframe');
     expect(fieldlineSource).not.toContain('<iframe');
     expect(indexHtml).not.toContain('nflplayeratl-tus9mrqw.manus.space');
@@ -67,6 +78,7 @@ describe("ATLAS and FIELDLINE integration routes", () => {
     expect(embeddedNavSource).toContain('Menu');
     expect(embeddedNavSource).toContain('HOME');
     expect(embeddedNavSource).toContain('ATLAS');
+    expect(embeddedNavSource).toContain('COACHING TREE');
     expect(embeddedNavSource).toContain('FIELDLINE');
     expect(atlasSource).toContain('atlasUtils.atlas.contracts.prefetch');
     expect(atlasSource).toContain('atlasUtils.atlas.stats.prefetch');

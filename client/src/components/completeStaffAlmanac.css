@@ -1,0 +1,72 @@
+/* Archive Atlas reminder: all years must remain selectable without crowding the ledger controls. */
+/* Archive Atlas reminder: a selected team unfolds as a chronological ledger; staff names are concise profile-entry points. */
+.staff-selectors--team-mode { grid-template-columns: minmax(190px, 1.3fr) minmax(170px, 1fr); }
+.team-staff-ledger { position: relative; margin-top: 22px; border: 1px solid #9e895c; border-top: 3px solid var(--gold); background: #fffdf8; box-shadow: 3px 3px 0 rgba(211,166,46,.22), inset 0 0 0 4px rgba(247,242,231,.7); }
+.team-staff-ledger-title { display: flex; align-items: baseline; justify-content: space-between; gap: 14px; padding: 12px 16px 10px 20px; border-bottom: 1px solid #d9cdb9; background: linear-gradient(90deg, #f4eddd 0 33%, #fffbf0 33% 68%, rgba(255,251,240,.15) 68%); }
+.team-staff-ledger-title p { color: var(--green); font: 600 9px "IBM Plex Mono", monospace; letter-spacing: .08em; }
+.team-staff-ledger-title h3 { margin: 0; color: #8f7022; font: 600 9px "IBM Plex Mono", monospace; letter-spacing: .08em; }
+.team-staff-season-list { position: relative; display: grid; padding-left: 18px; background: repeating-linear-gradient(180deg, transparent 0, transparent 74px, rgba(16,38,54,.045) 74px, rgba(16,38,54,.045) 75px); }
+.team-staff-season-list::before { position: absolute; top: 0; bottom: 0; left: 8px; width: 2px; background: linear-gradient(180deg, var(--gold), #59776b 72%, var(--blue)); content: ""; }
+.team-staff-season { position: relative; border-bottom: 1px solid #e3dacb; }
+.team-staff-season::before { position: absolute; z-index: 2; top: 10px; left: -15px; width: 8px; height: 8px; border: 2px solid #fffdf8; border-radius: 50%; background: var(--gold); box-shadow: 0 0 0 1px #8d7a4f; content: ""; }
+.team-staff-season:last-child { border-bottom: 0; }
+.team-staff-season > header { display: flex; align-items: baseline; gap: 8px; padding: 8px 14px; border-left: 2px solid rgba(16,38,54,.15); background: linear-gradient(90deg, #f1ead9 0 78px, #f7f2e7 78px); }
+.team-staff-season:nth-child(4n + 2) > header { background: linear-gradient(90deg, #edf2ea 0 78px, #f8faf6 78px); }
+.team-staff-season:nth-child(4n + 3) > header { background: linear-gradient(90deg, #f3ecdc 0 78px, #fffaf0 78px); }
+.team-staff-season:nth-child(4n) > header { background: linear-gradient(90deg, #edf0f1 0 78px, #f9fbfb 78px); }
+.team-staff-season > header time { min-width: 38px; color: var(--ink); font: 700 15px/1 "IBM Plex Serif", serif; letter-spacing: -.02em; }
+.team-staff-season > header span { color: #7b786e; font: 600 8px "IBM Plex Mono", monospace; letter-spacing: .07em; }
+.team-staff-season > header em { margin-left: auto; padding: 3px 5px; border: 1px solid #c99338; background: #fff3cf; color: #79550c; font: 700 7px/1 "IBM Plex Mono", monospace; font-style: normal; letter-spacing: .05em; }
+.team-staff-season.has-role-change > header { border-left: 3px solid #c99338; padding-left: 11px; }
+.team-staff-members { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.team-staff-member { display: grid; grid-template-columns: 22px minmax(0, 1fr); grid-template-rows: auto auto; column-gap: 7px; align-items: center; min-height: 52px; padding: 8px 11px; border-right: 1px solid #e3dacb; background: linear-gradient(180deg, rgba(255,255,255,.58), rgba(255,253,248,.22)); }
+.team-staff-member:last-child { border-right: 0; }
+.team-staff-role-mark { grid-row: 1 / -1; display: grid; place-items: center; width: 19px; height: 19px; color: #fff; border: 1px solid rgba(16,38,54,.25); background: var(--green); box-shadow: 1px 1px 0 rgba(16,38,54,.18); font: 700 9px "IBM Plex Mono", monospace; }
+.team-staff-member.role-hc .team-staff-role-mark { border-radius: 50%; background: var(--blue); }
+.team-staff-member.role-oc .team-staff-role-mark { background: #b18429; transform: rotate(45deg); }
+.team-staff-member.role-dc .team-staff-role-mark { background: var(--burgundy); }
+.team-staff-member small { color: #7b786e; font: 600 7px "IBM Plex Mono", monospace; letter-spacing: .08em; }
+.team-staff-member button, .team-staff-member strong { min-width: 0; overflow: hidden; color: var(--ink); font: 700 11px/1.15 "IBM Plex Serif", serif; text-align: left; text-overflow: ellipsis; white-space: nowrap; }
+.team-staff-member.is-role-change { background: linear-gradient(90deg, #fff3cf, #fffdf8 70%); box-shadow: inset 3px 0 0 #c99338; }
+.team-staff-member.is-role-change small { color: #8b5d04; }
+.team-staff-member button { display: flex; align-items: center; gap: 4px; width: 100%; padding: 0; border: 0; background: none; cursor: pointer; }
+.team-staff-member button:hover { color: #315e50; text-decoration: underline; text-decoration-color: var(--gold); text-underline-offset: 3px; }
+.team-staff-member button svg { flex: 0 0 auto; color: #9a8a70; }
+
+@media (max-width: 820px) {
+  .staff-selectors--team-mode { grid-template-columns: 1fr; }
+  .team-staff-ledger { margin-top: 13px; box-shadow: 2px 2px 0 rgba(211,166,46,.18), inset 0 0 0 3px rgba(247,242,231,.7); }
+  .team-staff-ledger-title { padding: 10px 12px 8px 16px; background: linear-gradient(90deg, #f4eddd 0 38%, #fffbf0 38%); }
+  .team-staff-season-list { padding-left: 13px; background: repeating-linear-gradient(180deg, transparent 0, transparent 62px, rgba(16,38,54,.04) 62px, rgba(16,38,54,.04) 63px); }
+  .team-staff-season-list::before { left: 5px; width: 2px; }
+  .team-staff-season::before { top: 9px; left: -11px; width: 7px; height: 7px; }
+  .team-staff-season > header { gap: 5px; padding: 7px 10px; background: linear-gradient(90deg, #f1ead9 0 61px, #f7f2e7 61px); }
+  .team-staff-season:nth-child(4n + 2) > header { background: linear-gradient(90deg, #edf2ea 0 61px, #f8faf6 61px); }
+  .team-staff-season:nth-child(4n + 3) > header { background: linear-gradient(90deg, #f3ecdc 0 61px, #fffaf0 61px); }
+  .team-staff-season:nth-child(4n) > header { background: linear-gradient(90deg, #edf0f1 0 61px, #f9fbfb 61px); }
+  .team-staff-season > header time { min-width: 34px; font-size: 13px; }
+  .team-staff-season > header span { overflow: hidden; max-width: 128px; text-overflow: ellipsis; white-space: nowrap; font-size: 7px; }
+  .team-staff-season > header em { padding: 2px 4px; font-size: 6px; }
+  .team-staff-members { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .team-staff-member { grid-template-columns: 18px minmax(0, 1fr); column-gap: 5px; min-height: 42px; padding: 6px 6px; border-right: 1px solid #e3dacb; border-bottom: 0; }
+  .team-staff-member:last-child { border-right: 0; }
+  .team-staff-role-mark { width: 16px; height: 16px; font-size: 8px; }
+  .team-staff-member small { font-size: 6px; }
+  .team-staff-member button, .team-staff-member strong { font-size: 9px; }
+  .team-staff-member button svg { width: 9px; height: 9px; }
+}
+
+@media (min-width: 821px) and (max-width: 1360px) {
+  .staff-catalog {
+    grid-template-columns: 1fr;
+    gap: 12px;
+    padding: 14px;
+    background: linear-gradient(90deg, #edf1eb 0 27%, #fffdf8 27%);
+  }
+
+  .staff-selectors {
+    grid-template-columns: minmax(190px, 1.3fr) minmax(150px, 1fr) minmax(88px, .55fr);
+  }
+
+  .staff-selectors--team-mode { grid-template-columns: minmax(190px, 1.3fr) minmax(150px, 1fr); }
+}
