@@ -682,6 +682,7 @@
 - [x] 現在UTCグループの公式RSSとNFL公式負傷情報を検証し、実在項目だけをofficial_feed_itemsへ同期する。
 - [x] 現在UTCグループの公式RSSとNFL公式負傷情報を検証し、実在項目だけをofficial_feed_itemsへ同期する。
 - [x] 現在UTCグループの公式RSSとNFL公式負傷情報を検証し、実在項目だけをofficial_feed_itemsへ同期する。
+- [x] 現在UTCグループの公式RSSとNFL公式負傷情報を検証し、実在項目だけをofficial_feed_itemsへ同期する。
 - [x] 現在UTCの対象8チームと公式RSSの取得可否を確認する。
 - [x] 対象チームの公式RSSとNFL公式負傷者ページを検証し、実在項目だけを選別する。
 - [x] 検証済み公式項目をofficial_feed_itemsへUPSERTし、チーム別保存件数を照合する。
