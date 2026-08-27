@@ -652,6 +652,7 @@
 - [x] Game Bookの短縮選手名をATLASの選手IDへ照合し、プロフィールを直接開く遷移へ変更する。
 - [x] 短縮名を含む実データで表記・ATLAS遷移を回帰テストとモバイル・PC表示で検証する。
 - [x] 現在UTCグループの公式RSSとNFL公式負傷情報を検証し、実在項目だけをofficial_feed_itemsへ同期する。
+- [x] 現在UTCグループの公式RSSとNFL公式負傷情報を検証し、実在項目だけをofficial_feed_itemsへ同期する。
 - [x] 現在UTCの対象8チームと公式RSSの取得可否を確認する。
 - [x] 対象チームの公式RSSとNFL公式負傷者ページを検証し、実在項目だけを選別する。
 - [x] 検証済み公式項目をofficial_feed_itemsへUPSERTし、チーム別保存件数を照合する。
