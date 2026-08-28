@@ -1,0 +1,50 @@
+/* Archive Atlas reminder: mobile views retain evidence-led hierarchy while reducing vertical density. */
+.tree-canvas .coach-dot-copy { display: block; padding: 3px 6px; }
+.tree-canvas .coach-dot-copy small { display: none; }
+
+@media (max-width: 820px) {
+  .tree-switcher {
+    display: block;
+    margin-top: 14px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+  }
+
+  .tree-switcher-title {
+    padding: 0 0 7px;
+    border-bottom: 1px solid #d8c7aa;
+  }
+
+  .tree-switcher-title small { display: none; }
+
+  .tree-switches {
+    display: flex;
+    flex-wrap: nowrap;
+    width: calc(100% + 24px);
+    margin: 0 -12px;
+    padding: 8px 12px 9px;
+    overflow-x: auto;
+    overscroll-behavior-inline: contain;
+    scroll-snap-type: x mandatory;
+    scrollbar-width: none;
+  }
+
+  .tree-switches::-webkit-scrollbar { display: none; }
+  .tree-switches button { flex: 0 0 94px; min-width: 94px; scroll-snap-align: start; }
+
+  .tree-canvas .coach-dot-copy { padding: 3px 5px; }
+  .tree-canvas .coach-dot-copy span { font-size: 8px; line-height: 1.1; }
+
+  .annotation-panel { padding: 18px 16px; }
+  .annotation-head { align-items: center; }
+  .annotation-head .overline { margin: 0; }
+  .profile-insignia { padding: 4px 6px; font-size: 8px; }
+  .profile-title { gap: 0.28rem; padding: 13px 0 10px; }
+  .profile-title h2 { font-size: 23px; }
+  .profile-role-line { gap: 0.24rem; }
+  .profile-role-line span { padding: 0.16rem 0.3rem; font-size: 0.56rem; }
+  .appointment-list { margin-top: 12px; }
+  .appointment-list .section-label { margin-bottom: 5px; }
+  .appointment { min-height: 31px; padding: 5px 0; }
+}

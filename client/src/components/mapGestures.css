@@ -1,0 +1,42 @@
+/* Archive Atlas map interaction: pan the complete paper plate as one stable visual surface; never cull its route lines or terrain texture. */
+.map-viewport {
+  overscroll-behavior: contain;
+  touch-action: none;
+  cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
+  overflow: hidden;
+}
+
+.map-viewport.is-dragging {
+  cursor: grabbing;
+  scroll-snap-type: none;
+}
+
+.map-stage .map-viewport .tree-canvas {
+  zoom: 1 !important;
+  transform: translate3d(var(--map-pan-x, 0px), var(--map-pan-y, 0px), 0) scale(var(--map-zoom, 1));
+  transform-origin: center center;
+  transition: none;
+  will-change: transform;
+  /* Paint containment and backface culling can drop a large textured SVG layer while it is translated on mobile GPUs. */
+  contain: layout style;
+  isolation: isolate;
+}
+
+.map-viewport.is-dragging .tree-canvas {
+  transition: none;
+}
+
+.map-viewport.is-dragging .coach-dot-copy,
+.map-viewport.is-dragging .lineage-parent-node,
+.map-viewport.is-dragging .lineage-parent-menu {
+  box-shadow: none !important;
+  transition: none !important;
+}
+
+.map-viewport button,
+.map-viewport a {
+  user-select: text;
+  -webkit-user-select: text;
+}
