@@ -232,8 +232,9 @@ describe("compact mobile result and schedule UI", () => {
   it("labels a protected final as the last game while keeping its official score out of spoiler-safe markup", () => {
     const snapshot = { nextGame: { opponentCode: "CLE", homeAway: "away" as const, seasonPhase: "preseason" as const, weekLabel: "PRESEASON WEEK 1", kickoffAt, venue: null, broadcast: null, gameState: "FINAL", awayScore: 10, homeScore: 7, sourceUrl: "https://www.nfl.com/games/bills-at-browns", daznUrl: null, nflHighlightUrl: "https://www.nfl.com/videos/bills-vs-browns-highlights", fetchedAt: kickoffAt }, gameDayStatus: { opponentCode: "CLE", homeAway: "away" as const, weekLabel: "PRESEASON WEEK 1", kickoffAt, gameState: "FINAL", awayScore: 10, homeScore: 7, sourceUrl: "https://www.nfl.com/games/bills-at-browns", fetchedAt: kickoffAt }, roster: [], rosterCounts: [], injuries: [], news: [], sources: { schedule: null, roster: null, injury: null } };
     const datedSnapshot = { ...snapshot, nextGame: { ...snapshot.nextGame, kickoffAt: new Date("2026-08-21T23:00:00.000Z"), gameDate: "2026-08-21" }, gameDayStatus: { ...snapshot.gameDayStatus, kickoffAt: new Date("2026-08-21T23:00:00.000Z"), gameDate: "2026-08-21" }, inactiveReport: { title: "NFL Official Inactives", summary: "QB Example Player", sourceUrl: "https://www.nfl.com/inactives/", publishedAt: kickoffAt } };
-    const spoilerMarkup = renderToStaticMarkup(createElement(OfficialGameTicket, { favorite, snapshot: datedSnapshot, loading: false, spoilerMode: true, onMarkWatched: () => undefined }));
-    const normalMarkup = renderToStaticMarkup(createElement(OfficialGameTicket, { favorite, snapshot: datedSnapshot, loading: false, spoilerMode: false, onMarkWatched: () => undefined }));
+    const openStats = () => undefined;
+    const spoilerMarkup = renderToStaticMarkup(createElement(OfficialGameTicket, { favorite, snapshot: datedSnapshot, loading: false, spoilerMode: true, onMarkWatched: () => undefined, onOpenGameStats: openStats }));
+    const normalMarkup = renderToStaticMarkup(createElement(OfficialGameTicket, { favorite, snapshot: datedSnapshot, loading: false, spoilerMode: false, onMarkWatched: () => undefined, onOpenGameStats: openStats }));
     expect(spoilerMarkup).toContain("LAST GAME");
     expect(spoilerMarkup).toContain("ネタバレ防止中");
     expect(spoilerMarkup).toContain("OFFICIAL GAME DATE");
@@ -241,12 +242,15 @@ describe("compact mobile result and schedule UI", () => {
     expect(spoilerMarkup).not.toContain("13:57");
     expect(spoilerMarkup).not.toContain("OFFICIAL SCORE 10 — 7");
     expect(spoilerMarkup).toContain('data-game-ticket-state="FINAL"');
-    expect(spoilerMarkup).toContain("min-h-[280px]");
+    expect(spoilerMarkup).toContain("min-h-[84px] sm:min-h-[88px]");
     expect(spoilerMarkup).toContain("relative flex flex-col p-4");
     expect(spoilerMarkup).toContain("border-t border-white/15 pt-2");
+    expect(spoilerMarkup).toContain('aria-hidden="true" class="inline-flex h-3"');
+    expect(spoilerMarkup).toContain("flex h-[72px] flex-col justify-center");
+    expect(spoilerMarkup).not.toContain("min-h-[280px]");
     expect(spoilerMarkup).toContain("REPORTED · QB Example Player");
     expect(normalMarkup).toContain("FINAL SCORE");
-    expect(normalMarkup).toContain("min-h-[280px]");
+    expect(normalMarkup).toContain("min-h-[84px] sm:min-h-[88px]");
     expect(normalMarkup).toMatch(/>10<\/span><span> — <\/span><span[^>]*>7<\/span>/);
     expect(normalMarkup).toContain("WATCH HIGHLIGHTS");
     expect(normalMarkup).toContain("ON TO THE NEXT GAME");
