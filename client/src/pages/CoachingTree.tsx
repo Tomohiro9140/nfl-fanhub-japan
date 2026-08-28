@@ -47,6 +47,7 @@ import "@/components/mobileStaffArchive.css";
 import "@/components/directoryStatusAndPathRecords.css";
 import "@/components/crossTreePathfinder.css";
 import "@/components/coachingTreeRepair.css";
+import "@/components/coachingTreeMobileClarity.css";
 
 type View = "tree" | "directory" | "staff";
 type MapPoint = { id: string; x: number; y: number; level: number; labelAlign: "left" | "right" };
@@ -256,9 +257,9 @@ function mapCurve(from: MapPoint, to: MapPoint) {
   return `M${fx} ${fy} C${fx + bend} ${fy}, ${tx - bend} ${ty}, ${tx} ${ty}`;
 }
 
-function CoachDot({ coach, point, active, onPath, parentFocused = false, muted, onSelect, onHover = () => {}, onLeave = () => {} }: { coach: Coach; point: MapPoint; active: boolean; onPath: boolean; parentFocused?: boolean; muted: boolean; onSelect: () => void; onHover?: () => void; onLeave?: () => void }) {
+function CoachDot({ coach, point, active, onPath, parentFocused = false, profileFocused = false, muted, onSelect, onHover = () => {}, onLeave = () => {} }: { coach: Coach; point: MapPoint; active: boolean; onPath: boolean; parentFocused?: boolean; profileFocused?: boolean; muted: boolean; onSelect: () => void; onHover?: () => void; onLeave?: () => void }) {
   const dominantRole = coach.roles.includes("HC") ? "HC" : coach.roles[0];
-  const nodeClass = `${roleClass(dominantRole)} ${active ? "is-active" : ""} ${onPath ? "is-on-path" : ""} ${parentFocused ? "is-parent-focus" : ""} ${muted ? "is-muted" : ""}`;
+  const nodeClass = `${roleClass(dominantRole)} ${active ? "is-active" : ""} ${onPath ? "is-on-path" : ""} ${parentFocused ? "is-parent-focus" : ""} ${profileFocused ? "is-profile-focus" : ""} ${muted ? "is-muted" : ""}`;
   return (
     <div className={`coach-node label-${point.labelAlign} ${nodeClass}`} style={{ left: `${point.x}%`, top: `${point.y}%` }}>
       <button
@@ -363,6 +364,7 @@ export default function Home() {
   const [staffRecordId, setStaffRecordId] = useState(() => initialAlmanacCoach().records[0]?.id ?? "");
   const [profileCareerHistories, setProfileCareerHistories] = useState<Record<string, Appointment[]>>({});
   const [highlightRootId, setHighlightRootId] = useState("");
+  const [profileMapFocusId, setProfileMapFocusId] = useState("");
   const [hoveredCoachId, setHoveredCoachId] = useState("");
   const [dismissedRootOfferId, setDismissedRootOfferId] = useState("");
   const [mapZoom, setMapZoom] = useState(1);
@@ -479,6 +481,34 @@ export default function Home() {
       }));
     return candidates.filter((candidate, index) => candidates.findIndex((item) => item.tree.id === candidate.tree.id) === index);
   }, [activeTree.id, activeTree.rootId]);
+  const lineageParentTreeIdByTreeId = useMemo(() => {
+    const parents = new Map<string, string>();
+    centralAtlasTrees.forEach((tree) => {
+      const parent = centralAtlasEdges
+        .filter((edge) => hierarchyRelationTypes.has(edge.relationType) && edge.to === tree.rootId)
+        .flatMap((edge) => centralAtlasTrees.filter((candidate) => candidate.id !== tree.id && candidate.nodeIds.includes(edge.from)))
+        .sort((left, right) => left.years.localeCompare(right.years) || left.nodeIds.length - right.nodeIds.length)[0];
+      if (parent) parents.set(tree.id, parent.id);
+    });
+    return parents;
+  }, []);
+  const lineageDepthByTreeId = useMemo(() => {
+    const depths = new Map<string, number>();
+    centralAtlasTrees.forEach((tree) => {
+      let depth = 0;
+      let currentId = tree.id;
+      const visited = new Set<string>([currentId]);
+      while (lineageParentTreeIdByTreeId.has(currentId)) {
+        const parentId = lineageParentTreeIdByTreeId.get(currentId)!;
+        if (visited.has(parentId)) break;
+        visited.add(parentId);
+        depth += 1;
+        currentId = parentId;
+      }
+      depths.set(tree.id, depth);
+    });
+    return depths;
+  }, [lineageParentTreeIdByTreeId]);
   const profileLineageLocations = useMemo(() => {
     return centralAtlasTrees
       .filter((tree) => tree.nodeIds.includes(selectedId))
@@ -487,10 +517,10 @@ export default function Home() {
           .filter((candidate) => hierarchyRelationTypes.has(candidate.relationType) && tree.nodeIds.includes(candidate.from) && tree.nodeIds.includes(candidate.to) && (candidate.from === selectedId || candidate.to === selectedId))
           .sort((a, b) => a.years.localeCompare(b.years))[0];
         const rootCoach = centralAtlasCoaches.find((coach) => coach.id === tree.rootId);
-        return { tree, edge, rootName: rootCoach?.name ?? tree.label };
+        return { tree, edge, rootName: rootCoach?.name ?? tree.label, depth: lineageDepthByTreeId.get(tree.id) ?? 0 };
       })
-      .sort((a, b) => a.tree.nodeIds.length - b.tree.nodeIds.length || a.tree.years.localeCompare(b.tree.years));
-  }, [selectedId]);
+      .sort((a, b) => a.depth - b.depth || a.tree.years.localeCompare(b.tree.years) || a.tree.nodeIds.length - b.tree.nodeIds.length);
+  }, [lineageDepthByTreeId, selectedId]);
   const activeRootPoint = mapPoints.find((point) => point.id === activeTree.rootId);
   const filteredEdges = useMemo(() => activeTreeEdges.filter((edge) => (routeTeam === "すべて" || edge.team.includes(routeTeam)) && edgeMatchesEra(edge, routeEra)), [activeTreeEdges, routeEra, routeTeam]);
   const isRelationFilterActive = routeTeam !== "すべて" || routeEra !== "すべて";
@@ -626,6 +656,7 @@ export default function Home() {
     selectedRelationKeyRef.current = "";
     setSelectedRelationKey("");
     setMapRelationKey("");
+    setProfileMapFocusId("");
     if (highlightRootId === nextId) {
       setHighlightRootId("");
       setHoveredCoachId("");
@@ -658,6 +689,7 @@ export default function Home() {
   function openProfileLineage(location: typeof profileLineageLocations[number]) {
     selectTree(location.tree.id, selectedId);
     setHighlightRootId(selectedId);
+    setProfileMapFocusId(selectedId);
     setHoveredCoachId("");
     if (location.edge) {
       selectedRelationKeyRef.current = location.edge.id;
@@ -687,6 +719,7 @@ export default function Home() {
     setPathEndId("");
     setSelectedRelationKey(firstEdge?.id ?? "");
     setMapRelationKey("");
+    setProfileMapFocusId("");
     setHighlightRootId("");
     setHoveredCoachId("");
   }
@@ -738,6 +771,7 @@ export default function Home() {
     const destinationTree = relationTree ?? targetTree;
     if (destinationTree) setActiveTreeId(destinationTree.id);
     setSelectedId(targetId);
+    setProfileMapFocusId("");
     setHighlightRootId(targetId);
     setHoveredCoachId("");
     const canShowRelationOnMap = Boolean(relationTree && hierarchyRelationTypes.has(edge.relationType));
@@ -767,6 +801,7 @@ export default function Home() {
     }
     selectedRelationKeyRef.current = edge.id;
     setSelectedRelationKey(edge.id);
+    setProfileMapFocusId("");
     if (origin === "map") setMapRelationKey(edge.id);
     syncStaffAlmanacToMapRelation(edge);
     setSelectedId(edge.to);
@@ -792,6 +827,7 @@ export default function Home() {
   function resetMapView() {
     fitMapToViewport(true);
     setHighlightRootId("");
+    setProfileMapFocusId("");
     setHoveredCoachId("");
     setSelectedRelationKey("");
     setMapRelationKey("");
@@ -1023,7 +1059,7 @@ export default function Home() {
                 {parentLineages.length === 1 && activeRootPoint && <button type="button" className="lineage-parent-node" style={{ left: `${Math.max(2, activeRootPoint.x - 14)}%`, top: `${activeRootPoint.y}%` }} onPointerDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); selectTree(parentLineages[0].tree.id); }} aria-label={`${parentLineages[0].coach.name}の系列を開く`}><span aria-hidden="true">←</span><span><small>PARENT PLATE</small><strong>{parentLineages[0].coach.name}</strong><em>系列を開く</em></span></button>}
                 {parentLineages.length > 1 && activeRootPoint && <div className="lineage-parent-menu" style={{ left: `${Math.max(2, activeRootPoint.x - 15)}%`, top: `${activeRootPoint.y}%` }} onPointerDown={(event) => event.stopPropagation()} role="group" aria-label="親系列の戻り先を選択"><span className="lineage-parent-menu__head"><i aria-hidden="true">←</i><small>PARENT PLATES</small></span>{parentLineages.map(({ tree, coach }) => <button key={tree.id} type="button" onClick={(event) => { event.stopPropagation(); selectTree(tree.id); }} aria-label={`${coach.name}の系列を開く`}><strong>{coach.name}</strong><small>{tree.label}</small></button>)}</div>}
                 <span className="era-caption era-one">{activeTree.teams[0]}<br />{activeTree.years}</span><span className="era-caption era-three">{activeTree.label}<br />ACTIVE</span>
-                {visibleMapPoints.map((point) => { const coach = centralAtlasCoaches.find((item) => item.id === point.id); const muted = !visibleIds.has(point.id) || (isLineageFocus && !lineageFocusIds.has(point.id)); return coach ? <CoachDot key={point.id} coach={coach} point={point} active={coach.id === selected.id} onPath={activePathIds.has(coach.id)} parentFocused={immediateParentFocus.ids.has(coach.id)} muted={muted} onSelect={() => chooseCoach(coach.id, true)} onHover={() => setHoveredCoachId(coach.id)} onLeave={() => setHoveredCoachId("")} /> : null; })}
+                {visibleMapPoints.map((point) => { const coach = centralAtlasCoaches.find((item) => item.id === point.id); const muted = !visibleIds.has(point.id) || (isLineageFocus && !lineageFocusIds.has(point.id)); return coach ? <CoachDot key={point.id} coach={coach} point={point} active={coach.id === selected.id} onPath={activePathIds.has(coach.id)} parentFocused={immediateParentFocus.ids.has(coach.id)} profileFocused={coach.id === profileMapFocusId} muted={muted} onSelect={() => chooseCoach(coach.id, true)} onHover={() => setHoveredCoachId(coach.id)} onLeave={() => setHoveredCoachId("")} /> : null; })}
               </div>
                 </div>
               </div>
@@ -1036,7 +1072,7 @@ export default function Home() {
 
           <aside className="annotation-panel" aria-label="選択中コーチと関係詳細">
             <div className="annotation-head"><p className="overline">03 / PROFILE</p><span className={`profile-insignia ${roleClass(selected.roles.includes("HC") ? "HC" : selected.roles[0])}`}><i className={`profile-role-glyph ${roleClass(selected.roles.includes("HC") ? "HC" : selected.roles[0])}`}>{roleGlyph(selected.roles.includes("HC") ? "HC" : selected.roles[0])}</i>{roleText(selected.roles)}</span></div>
-            <div className="profile-title"><h2>{selected.name}</h2><div className="profile-role-line">{selected.roles.map((role) => <span key={role} className={roleClass(role)}>{roleGlyph(role)} {role}</span>)}</div>{selectedStatus && <div className={`profile-status is-${selectedStatus.state}`}><i aria-hidden="true" /><span><b>{selectedStatus.label}</b><small>{selectedStatus.detail}</small></span></div>}{profileLineageLocations.length > 1 && <section className="profile-lineage-locations" aria-label={`${selected.name}の系譜地図での位置`}><div className="profile-lineage-locations__head"><b>系譜地図での位置</b><span>{profileLineageLocations.length}系列に表示</span></div><div className="profile-lineage-locations__list">{profileLineageLocations.map((location) => <button key={location.tree.id} type="button" onClick={() => openProfileLineage(location)}><strong>{location.rootName}系</strong><small>{location.edge ? `${location.edge.team} · ${location.edge.years}` : "系列起点"}</small><ArrowUpRight size={13} aria-hidden="true" /></button>)}</div></section>}</div>
+            <div className="profile-title"><h2>{selected.name}</h2><div className="profile-role-line">{selected.roles.map((role) => <span key={role} className={roleClass(role)}>{roleGlyph(role)} {role}</span>)}</div>{selectedStatus && <div className={`profile-status is-${selectedStatus.state}`}><i aria-hidden="true" /><span><b>{selectedStatus.label}</b><small>{selectedStatus.detail}</small></span></div>}{profileLineageLocations.length > 1 && <section className="profile-lineage-locations" aria-label={`${selected.name}の系譜地図での位置`}><div className="profile-lineage-locations__head"><b>系譜地図での位置</b><span>{profileLineageLocations.length}系列に表示</span></div><div className="profile-lineage-locations__list">{profileLineageLocations.map((location) => <button key={location.tree.id} type="button" data-lineage-depth={location.depth} style={{ "--lineage-depth": location.depth } as CSSProperties} onClick={() => openProfileLineage(location)}><strong>{location.rootName}系</strong><small>{location.edge ? `${location.edge.team} · ${location.edge.years}` : "系列起点"}</small><ArrowUpRight size={13} aria-hidden="true" /></button>)}</div></section>}</div>
             <div className="appointment-list"><div className="section-label"><span>NFL COACHING HISTORY</span><small>HC · OC · DC · STC</small></div>{selected.appointments.map((appointment: Appointment) => <ProfileAppointment key={`${appointment.years}-${appointment.team}-${appointment.role}-${appointment.title ?? ""}`} coachName={selected.name} appointment={appointment} onOpenAlmanac={openAppointmentInAlmanac} />)}</div>
           </aside>
         </section>

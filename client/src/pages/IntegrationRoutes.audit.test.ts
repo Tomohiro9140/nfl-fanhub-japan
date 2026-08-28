@@ -8,6 +8,7 @@ const atlasSource = readFileSync(resolve(process.cwd(), "client/src/pages/Atlas.
 const coachingTreeSource = readFileSync(resolve(process.cwd(), "client/src/pages/CoachingTree.tsx"), "utf8");
 const coachingTreeDataSource = readFileSync(resolve(process.cwd(), "client/src/data/centralAtlas.ts"), "utf8");
 const coachingTreeRepairSource = readFileSync(resolve(process.cwd(), "client/src/components/coachingTreeRepair.css"), "utf8");
+const coachingTreeMobileClaritySource = readFileSync(resolve(process.cwd(), "client/src/components/coachingTreeMobileClarity.css"), "utf8");
 const fieldlineSource = readFileSync(resolve(process.cwd(), "client/src/pages/Fieldline.tsx"), "utf8");
 const fieldlineAdminSource = readFileSync(resolve(process.cwd(), "client/src/pages/FieldlineAdmin.tsx"), "utf8");
 const fieldlineDataSource = readFileSync(resolve(process.cwd(), "server/fieldlineData.ts"), "utf8");
@@ -77,6 +78,13 @@ describe("embedded FAN/HUB application routes", () => {
     expect(coachingTreeRepairSource).toContain('.atlas-app .atlas-shell');
     expect(coachingTreeRepairSource).toContain('transform-origin: left top');
     expect(coachingTreeRepairSource).toContain('height: min(68vh, 700px)');
+    expect(coachingTreeSource).toContain('const [profileMapFocusId, setProfileMapFocusId]');
+    expect(coachingTreeSource).toContain('setProfileMapFocusId(selectedId)');
+    expect(coachingTreeSource).toContain('lineageDepthByTreeId');
+    expect(coachingTreeSource).toContain('data-lineage-depth={location.depth}');
+    expect(coachingTreeMobileClaritySource).toContain('.tree-switches button.is-active');
+    expect(coachingTreeMobileClaritySource).toContain('.coach-dot.is-profile-focus');
+    expect(coachingTreeMobileClaritySource).toContain('grid-template-columns: 94px minmax(0, 1fr)');
     expect(coachingTreeDataSource).toContain('centralAtlasTrees');
     expect(atlasSource).not.toContain('<iframe');
     expect(fieldlineSource).not.toContain('<iframe');

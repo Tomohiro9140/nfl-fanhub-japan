@@ -1,0 +1,41 @@
+.atlas-app .tree-switches button.is-active,
+.atlas-app .tree-switches button.is-active small {
+  border-color: #cfc2ad;
+  background: #fffdf8;
+  box-shadow: none;
+  color: #55635f;
+}
+
+.atlas-app .profile-lineage-locations__list button {
+  width: calc(100% - min(calc(var(--lineage-depth, 0) * 14px), 42px));
+  margin-inline-start: min(calc(var(--lineage-depth, 0) * 14px), 42px);
+}
+
+.atlas-app .profile-lineage-locations__list button[data-lineage-depth="0"] {
+  margin-inline-start: 0;
+}
+
+.atlas-app .coach-dot.is-profile-focus .coach-dot-marker {
+  background: #edc653;
+  box-shadow: 0 0 0 4px rgba(237, 198, 83, 0.36), 0 0 0 6px #a97e20, 0 2px 4px rgba(17, 33, 43, 0.2);
+}
+
+.atlas-app .coach-dot.is-profile-focus .coach-dot-copy {
+  background: #fff8dd;
+  box-shadow: 0 0 0 1px rgba(169, 126, 32, 0.36), 0 1px 0 rgba(255, 255, 255, 0.8);
+}
+
+@media (max-width: 820px) {
+  .atlas-app .map-search__body { gap: 6px; padding: 8px 8px 9px; }
+  .atlas-app .map-search__row { grid-template-columns: 94px minmax(0, 1fr); gap: 6px; min-height: 39px; }
+  .atlas-app .map-search__row-title { gap: 4px; white-space: nowrap; }
+  .atlas-app .map-search__row-title b { font-size: 7px; letter-spacing: 0.025em; }
+  .atlas-app .map-search__row .path-controls { grid-template-columns: minmax(0, 1fr) 27px minmax(0, 1fr); gap: 4px; }
+  .atlas-app .map-search__row .path-controls select { min-width: 0; padding: 7px 3px; font-size: 9px; }
+  .atlas-app .map-search__row .swap-path { width: 27px; min-width: 27px; }
+  .atlas-app .map-search__row .path-filters { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 42px; gap: 4px; }
+  .atlas-app .map-search__row .path-filters select { min-width: 0; padding: 6px 3px; font-size: 9px; }
+  .atlas-app .map-search__row .path-filters .clear-pathfinder-filters { width: 42px; min-width: 42px; padding: 6px 2px; font-size: 0; letter-spacing: 0; white-space: nowrap; }
+  .atlas-app .map-search__row .path-filters .clear-pathfinder-filters::after { content: "Clear"; font: 700 6px/1 "IBM Plex Mono", monospace; }
+  .atlas-app .profile-lineage-locations__list button { width: calc(100% - min(calc(var(--lineage-depth, 0) * 11px), 33px)); margin-inline-start: min(calc(var(--lineage-depth, 0) * 11px), 33px); }
+}
