@@ -22,6 +22,8 @@ const dashboard: LeagueDashboard = {
 describe("compact mobile result and schedule UI", () => {
   it("keeps the left team-comparison highlight fitted to its numeric value", () => {
     expect(gameStatsDialogSource).toContain("justify-self-start font-mono text-[12px]");
+    expect(gameStatsDialogSource).toContain('grid grid-cols-2 gap-1.5 sm:gap-2');
+    expect(gameStatsDialogSource).toContain('minmax(48px, 1.15fr)');
   });
   it("renders only the individual highlight action when a video is registered", () => {
     const markup = renderToStaticMarkup(createElement(OfficialLatestResults, { favorite, dashboard, loading: false, spoilerMode: true }));
@@ -42,6 +44,7 @@ describe("compact mobile result and schedule UI", () => {
     expect(revealedMarkup).toMatch(/>14<\/span><span> - <\/span><span[^>]*text-\[#a84420\][^>]*>29<\/span>/);
     expect(revealedMarkup).toContain("min-h-[84px]");
     expect(revealedMarkup).toContain("py-7 pb-2.5");
+    expect(markup).toContain('aria-label="スコア非表示"');
     expect(revealedMarkup).toContain("leading-[1.45]");
     expect(revealedMarkup).toContain("truncate pb-px leading-[1.45]");
     expect(revealedMarkup).not.toContain("memo-slip");
@@ -66,8 +69,8 @@ describe("compact mobile result and schedule UI", () => {
     const revealedMarkup = renderToStaticMarkup(createElement(OfficialLatestResults, { favorite, dashboard, loading: false, spoilerMode: false, onOpenGameStats: openStats }));
     const hiddenMarkup = renderToStaticMarkup(createElement(OfficialLatestResults, { favorite, dashboard, loading: false, spoilerMode: true, onOpenGameStats: openStats }));
 
-    expect(revealedMarkup).toContain("mt-2 inline-flex h-3");
-    expect(hiddenMarkup).toContain('aria-hidden="true" class="mt-2 block h-3"');
+    expect(revealedMarkup).toContain("relative mt-2 h-3");
+    expect(hiddenMarkup).toContain('aria-hidden="true" class="block h-3"');
     expect(hiddenMarkup).not.toContain("GAME STATS");
   });
 
