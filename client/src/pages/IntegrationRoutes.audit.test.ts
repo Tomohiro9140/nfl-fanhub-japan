@@ -88,6 +88,11 @@ describe("embedded FAN/HUB application routes", () => {
     expect(coachingTreeMobileClaritySource).toContain('grid-template-columns: 86px minmax(0, 1fr) !important;');
     expect(coachingTreeMobileClaritySource).toContain('align-items: center;');
     expect(coachingTreeMobileClaritySource).toContain('min-height: 44px');
+    expect(coachingTreeSource).toContain('className="map-search__row-label"');
+    expect(coachingTreeSource).toContain('className="relation-filter-help"');
+    expect(coachingTreeMobileClaritySource).toContain('grid-template-columns: minmax(0, 1fr) 20px;');
+    expect(coachingTreeMobileClaritySource).toContain('place-items: center; align-self: center;');
+    expect(coachingTreeMobileClaritySource).toContain('width: min(18rem, calc(100vw - 2rem));');
     expect(coachingTreeDataSource).toContain('centralAtlasTrees');
     expect(atlasSource).not.toContain('<iframe');
     expect(fieldlineSource).not.toContain('<iframe');

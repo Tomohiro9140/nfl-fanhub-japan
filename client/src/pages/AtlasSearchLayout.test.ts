@@ -13,10 +13,12 @@ describe("ATLAS検索トップのレイアウト", () => {
     expect(atlasStyles).toContain("font-size: 1.4rem !important;");
   });
 
-  it("名前・チーム検索で同じカード上端を使い、背の高いチーム検索カードを中央へ寄せる", () => {
-    expect(atlasStyles).toContain(".atlas-soft-grid > .atlas-shell > section,\n  .atlas-team-search-stage > .atlas-shell > section");
+  it("名前・チーム検索で同じカード上端を使い、背の高いチーム検索カードを下方向へだけ伸ばす", () => {
+    expect(atlasStyles).toContain("@media (max-width: 960px)");
+    expect(atlasStyles).toContain(".atlas-soft-grid > .atlas-shell > section");
     expect(atlasStyles).toContain("margin-top: clamp(7.75rem, calc(50svh - 13rem), 14.5rem) !important;");
     expect(atlasStyles).toContain("min-height: 100svh !important;");
+    expect(atlasStyles).not.toContain(".atlas-team-search-stage > .atlas-shell { display: flex;");
     expect(atlasSource).toContain('const isTeamSearch = mode === "filter";');
     expect(atlasSource).toContain('isLanding ? "h-[100svh] min-h-[100svh] overflow-hidden" : "min-h-screen pb-10"');
   });
