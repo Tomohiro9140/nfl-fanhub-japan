@@ -689,7 +689,9 @@ export default function Home() {
 
   function openProfileLineage(location: typeof profileLineageLocations[number]) {
     selectTree(location.tree.id, selectedId);
-    setHighlightRootId(selectedId);
+    // プロフィールの位置カードは、その場所に対応する1本の関係線だけを示す。
+    // 世代全体の黄色強調は、別の関係線まで関連しているように見せてしまうため解除する。
+    setHighlightRootId("");
     setProfileMapFocusId(selectedId);
     setHoveredCoachId("");
     if (location.edge) {
@@ -718,7 +720,8 @@ export default function Home() {
     setSelectedId(preferredCoachId);
     setPathStartId("");
     setPathEndId("");
-    setSelectedRelationKey(firstEdge?.id ?? "");
+    // 系譜プレートを開いた直後は、任意の先頭関係線を選択状態にしない。
+    setSelectedRelationKey("");
     setMapRelationKey("");
     setProfileMapFocusId("");
     setHighlightRootId("");
@@ -777,7 +780,9 @@ export default function Home() {
     if (destinationTree) setActiveTreeId(destinationTree.id);
     setSelectedId(targetId);
     setProfileMapFocusId("");
-    setHighlightRootId(targetId);
+    // Cross Treeのホップは、地図上に描ける当該関係線だけを青で示す。
+    // targetId起点の黄色い系譜文脈は、クリックした接続と無関係な線まで強調するため使わない。
+    setHighlightRootId("");
     setHoveredCoachId("");
     const canShowRelationOnMap = Boolean(relationTree && hierarchyRelationTypes.has(edge.relationType));
     selectedRelationKeyRef.current = canShowRelationOnMap ? edge.id : "";
@@ -1000,7 +1005,7 @@ export default function Home() {
                 <div className="cross-tree-finder__filters"><div className="cross-tree-filter"><p><span className="employment-status-dot" /> 在職状態</p><div className="employment-switches"><button className={activeEmployment === "NONE" ? "is-selected" : ""} onClick={() => setActiveEmployment("NONE")}>関係なし</button><button className={activeEmployment === "CURRENT_HC" ? "is-selected" : ""} onClick={() => setActiveEmployment("CURRENT_HC")}>現職HC</button><button className={activeEmployment === "CURRENT" ? "is-selected" : ""} onClick={() => setActiveEmployment("CURRENT")}>現職のみ</button></div></div><div className="cross-tree-filter"><p><span className="era-tick" /> 初回HC年</p><div className="era-list">{decades.map((era) => <button key={era} className={directoryEra === era ? "is-selected" : ""} onClick={() => setDirectoryEra(era)}>{era === "すべて" ? era : era.replace("s", "年代")}</button>)}</div></div></div>
                 <label className="cross-tree-search"><Search size={15} /><input type="search" value={crossCoachQuery} onChange={(event) => setCrossCoachQuery(event.target.value)} placeholder="候補名を絞り込む" aria-label="横断経路の候補名を検索" />{crossCoachQuery && <button type="button" onClick={() => setCrossCoachQuery("")} aria-label="候補名検索をクリア"><X size={13} /></button>}</label>
                 <div className="cross-tree-finder__controls"><label><i>FROM</i><select value={crossPathStartId} onChange={(event) => setCrossPathStartId(event.target.value)} aria-label="横断経路の出発コーチ"><option value="">From whom</option>{crossTreeSearchedCoaches.map((coach) => <option key={coach.id} value={coach.id}>{coach.name}</option>)}</select></label><button type="button" className="cross-tree-finder__swap" onClick={() => { setCrossPathStartId(crossPathEndId); setCrossPathEndId(crossPathStartId); }} disabled={!hasCrossTreeSearch} aria-label="出発コーチと到着コーチを入れ替える"><ArrowLeftRight size={15} /></button><label><i>TO</i><select value={crossPathEndId} onChange={(event) => setCrossPathEndId(event.target.value)} aria-label="横断経路の到着コーチ"><option value="">To whom</option>{crossTreeSearchedCoaches.map((coach) => <option key={coach.id} value={coach.id}>{coach.name}</option>)}</select></label></div>
-                {crossTreePath ? <div className="cross-tree-route"><div className="cross-tree-route__head"><span>SHORTEST ROUTE</span><strong>{crossTreePath.length} HOPS</strong></div><ol>{crossTreePath.map((edge, index) => { const fromId = crossTreePathCoachIds[index]; const toId = crossTreePathCoachIds[index + 1]; const fromCoach = atlasCatalogCoaches.find((item) => item.id === fromId); const toCoach = atlasCatalogCoaches.find((item) => item.id === toId); const season = relationSeason(edge); const fromMember = season?.members.find((member) => member.id === fromId); const toMember = season?.members.find((member) => member.id === toId); const fromRole = relationRoleOnlyLabel(edge, fromId, fromMember, fromCoach ? profileCareerHistories[profileHistoryKey(fromCoach.name)] : undefined); const toRole = relationRoleOnlyLabel(edge, toId, toMember, toCoach ? profileCareerHistories[profileHistoryKey(toCoach.name)] : undefined); return <li key={edge.id}><button type="button" className="cross-tree-route__coach" onClick={() => chooseCoach(fromId)}><span>{fromCoach?.name}</span></button><button type="button" className="cross-tree-route__edge" onClick={() => openCrossTreeHop(edge, toId)} aria-label={`${edge.team} ${edge.years}の関係を地図で開く`}><span>━</span><div className="cross-tree-route__meta"><strong>{edge.team}</strong><small>{edge.years}</small></div><div className="cross-tree-route__roles"><small><b>{fromCoach?.name}</b>{fromRole}</small><small><b>{toCoach?.name}</b>{toRole}</small></div><ArrowUpRight size={12} /></button>{index === crossTreePath.length - 1 && <button type="button" className="cross-tree-route__coach" onClick={() => chooseCoach(toId)}><span>{toCoach?.name}</span></button>}</li>; })}</ol></div> : hasCrossTreeSearch ? <p className="cross-tree-empty">この2人を結ぶ確認済みの横断経路はありません。</p> : <p className="cross-tree-empty">二人を選ぶと、全系列を横断する最短ルートを表示します。</p>}
+                {crossTreePath ? <div className="cross-tree-route"><div className="cross-tree-route__head"><span>SHORTEST ROUTE</span><strong>{crossTreePath.length} HOPS</strong></div><ol>{crossTreePath.map((edge, index) => { const fromId = crossTreePathCoachIds[index]; const toId = crossTreePathCoachIds[index + 1]; const fromCoach = atlasCatalogCoaches.find((item) => item.id === fromId); const toCoach = atlasCatalogCoaches.find((item) => item.id === toId); const season = relationSeason(edge); const fromMember = season?.members.find((member) => member.id === fromId); const toMember = season?.members.find((member) => member.id === toId); const fromRole = relationRoleOnlyLabel(edge, fromId, fromMember, fromCoach ? profileCareerHistories[profileHistoryKey(fromCoach.name)] : undefined); const toRole = relationRoleOnlyLabel(edge, toId, toMember, toCoach ? profileCareerHistories[profileHistoryKey(toCoach.name)] : undefined); return <li key={edge.id}><button type="button" className="cross-tree-route__coach" onClick={() => chooseCoach(fromId)}><span>{fromCoach?.name}</span></button><button type="button" className="cross-tree-route__edge" onClick={() => openCrossTreeHop(edge, toId)} aria-label={`${edge.team} ${edge.years}の関係を地図で開く`}><span>━</span><div className="cross-tree-route__meta"><strong>{edge.team}</strong><small>{edge.years}</small></div><div className="cross-tree-route__roles"><small><b>{fromCoach?.name}</b>{fromRole}</small><small><b>{toCoach?.name}</b>{toRole}</small></div></button>{index === crossTreePath.length - 1 && <button type="button" className="cross-tree-route__coach" onClick={() => chooseCoach(toId)}><span>{toCoach?.name}</span></button>}</li>; })}</ol></div> : hasCrossTreeSearch ? <p className="cross-tree-empty">この2人を結ぶ確認済みの横断経路はありません。</p> : <p className="cross-tree-empty">二人を選ぶと、全系列を横断する最短ルートを表示します。</p>}
                 <button type="button" className="cross-tree-clear" onClick={() => { setCrossPathStartId(""); setCrossPathEndId(""); setCrossCoachQuery(""); }} disabled={!crossPathStartId && !crossPathEndId && !crossCoachQuery}>Clear route</button>
               </section>
             )}
