@@ -80,6 +80,59 @@
   .atlas-soft-grid > .atlas-shell > section { transform: translateY(3.5rem); }
 }
 
+/* ATLAS search-stage reset: the title owns the header row, while both search modes
+   share one fixed card origin. This prevents the team form from jumping upward. */
+@media (max-width: 640px) {
+  .atlas-soft-grid > .atlas-shell,
+  .atlas-team-search-stage > .atlas-shell {
+    display: flex !important;
+    height: auto !important;
+    min-height: 100svh !important;
+    justify-content: flex-start !important;
+    padding-top: 1.25rem !important;
+  }
+
+  .atlas-soft-grid > .atlas-shell > header,
+  .atlas-team-search-stage > .atlas-shell > header {
+    position: static !important;
+    inset: auto !important;
+    height: 2.75rem;
+    min-height: 2.75rem;
+    transform: none !important;
+    margin: 0 !important;
+  }
+
+  .atlas-soft-grid > .atlas-shell > header > div > .atlas-display,
+  .atlas-team-search-stage > .atlas-shell > header > div > .atlas-display {
+    display: none !important;
+  }
+
+  .atlas-soft-grid > .atlas-shell > header > div > div > p:last-child,
+  .atlas-team-search-stage > .atlas-shell > header > div > div > p:last-child {
+    font-size: 1.4rem !important;
+    font-style: normal !important;
+    line-height: 1 !important;
+    text-shadow: none !important;
+    transform: none !important;
+  }
+
+  .atlas-soft-grid > .atlas-shell > section,
+  .atlas-team-search-stage > .atlas-shell > section {
+    width: 100%;
+    transform: none !important;
+    /* The team form is taller; center that full search window and retain the
+       identical card origin when switching back to the shorter name form. */
+    margin-top: clamp(8rem, calc(50svh - 10.25rem), 17rem) !important;
+  }
+
+  .atlas-soft-grid > .atlas-shell > footer,
+  .atlas-team-search-stage > .atlas-shell > footer {
+    position: static !important;
+    inset: auto !important;
+    margin-top: 1.5rem !important;
+  }
+}
+
 
 @media (prefers-reduced-motion: no-preference) {
   main > * { animation: note-rise .42s cubic-bezier(.23,1,.32,1) both; }
