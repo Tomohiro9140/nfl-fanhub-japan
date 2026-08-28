@@ -91,10 +91,13 @@
   .atlas-soft-grid > .atlas-shell > header {
     position: static !important;
     inset: auto !important;
-    height: 2.75rem;
-    min-height: 2.75rem;
+    /* The Atlas lockup is taller than its text line. Reserve its full visual
+       height so the NFL PLAYER overline never clips at the viewport edge. */
+    height: 6.25rem;
+    min-height: 6.25rem;
+    padding: 1rem 3.25rem 0 !important;
     transform: none !important;
-    margin: 0 !important;
+    margin: 0 0 -3.5rem !important;
   }
 
   .atlas-soft-grid > .atlas-shell > header > div > .atlas-display {
@@ -122,11 +125,24 @@
     inset: auto !important;
     margin-top: 1.5rem !important;
   }
+
+  /* The app switcher belongs to the same visual header as the Atlas lockup. */
+  .atlas-view.atlas-soft-grid > .fixed {
+    top: 3.625rem !important;
+    right: max(1rem, calc((100vw - 32rem) / 2 + 1rem)) !important;
+    transform: translateY(-50%);
+  }
 }
 
 /* Desktop keeps the same title anchor as the name search. The larger team form
    is deliberately anchored to the name card's upper edge and grows downward. */
 @media (min-width: 961px) {
+  .atlas-view.atlas-soft-grid > .fixed {
+    top: 25svh;
+    right: max(1rem, calc((100vw - 32rem) / 2 + 1rem));
+    transform: translateY(-50%);
+  }
+
   .atlas-team-search-stage > .atlas-shell {
     height: 100svh;
     min-height: 100svh;

@@ -9,7 +9,8 @@ describe("ATLAS検索トップのレイアウト", () => {
   it("モバイルではタイトルをヘッダー行へ分離し、旧中央の絶対配置を上書きする", () => {
     expect(atlasStyles).toContain("/* ATLAS search-stage reset:");
     expect(atlasStyles).toContain("position: static !important;");
-    expect(atlasStyles).toContain("height: 2.75rem;");
+    expect(atlasStyles).toContain("height: 6.25rem;");
+    expect(atlasStyles).toContain("margin: 0 0 -3.5rem !important;");
     expect(atlasStyles).toContain("font-size: 1.4rem !important;");
   });
 
@@ -28,6 +29,9 @@ describe("ATLAS検索トップのレイアウト", () => {
     expect((atlasSource.match(/<EmbeddedAppNav current="ATLAS"/g) ?? [])).toHaveLength(2);
     expect(atlasSource).toContain('const isLanding = mode === "name" && !typedQuery;');
     expect(atlasSource).toContain('isLanding ? "h-[100svh] min-h-[100svh] overflow-hidden" : "min-h-screen pb-10"');
+    expect(atlasStyles).toContain(".atlas-view.atlas-soft-grid > .fixed");
+    expect(atlasStyles).toContain("top: 3.625rem !important;");
+    expect(atlasStyles).toContain("top: 25svh;");
   });
 
   it("軽量な現役候補と全フィルターを先読みし、チーム変更時に追加待機しない", () => {

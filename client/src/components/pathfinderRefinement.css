@@ -65,6 +65,10 @@
 .map-search .relation-filter-help { z-index: 20; }
 .map-search .relation-filter-help p { z-index: 40; left: 0; width: min(280px, 70vw); }
 
+/* The explanatory trigger was removed from the product UI. Keep the legacy
+   selector inert as a safety net while old cached markup is being replaced. */
+.map-search .relation-filter-help { display: none !important; }
+
 @media (max-width: 1180px) {
   .map-search__row { grid-template-columns: 100px minmax(0, 1fr); }
 }
