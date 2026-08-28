@@ -714,6 +714,11 @@
 - [x] ネタバレON/OFFをまたいで区切り線の位置を固定し、下部余白を作らないGame Ticket配置へ修正する。
 - [x] チーム名・試合日・Game Status・Inactive・リンクを固定領域内でバランス良く配置する。
 - [x] LAST GAMEのネタバレON/OFF、モバイル・PC幅を回帰テスト、型チェック、本番ビルド、画面比較で検証する。
+- [x] ヘッダーからNEWS・STATUS RADAR・LEAGUE DESKへのリンクと、Game TicketのDAZN導線を削除する。
+- [x] Game Ticketの「ON TO THE NEXT GAME」操作を再訪時にも保持する。
+- [x] ATLASの名前・チーム検索でタイトルから検索ボックス下端までをモバイル中央に固定し、タブ切替で上端を動かさない。
+- [x] コーチングツリーのMAP SEARCHを、指定の2行構成で選択欄が潰れないレイアウトへ修正する。
+- [x] モバイル・PCの導線、Game Ticket状態、ATLAS、MAP SEARCHを回帰テスト・型チェック・本番ビルド・画面比較で検証する。
 - [x] 現在UTCの対象8チーム、公式RSS URL、既存同期運用を確認する。
 - [x] 対象チームの公式RSSとNFL公式負傷情報を再取得し、公開日時・URL・要約・チーム対応を検証する。
 - [x] 検証済み項目だけをofficial_feed_itemsへUPSERTし、チーム別保存結果と失敗URLを照合する。

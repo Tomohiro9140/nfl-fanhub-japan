@@ -12,13 +12,15 @@ describe("ATLAS検索トップのレイアウト", () => {
     expect(atlasStyles).toContain('font-family: "Barlow Condensed", "Noto Sans JP", sans-serif !important; font-size: clamp(4.25rem, 21vw, 5.5rem) !important; font-style: italic !important; font-weight: 800 !important;');
   });
 
-  it("検索フォーム本体を縦中央に置き、入力後は結果表示用に上へ展開する", () => {
+  it("検索フォーム本体を縦中央に置き、入力後もタイトルと検索ボックス上端を固定する", () => {
     expect(atlasStyles).toContain(".atlas-soft-grid > .atlas-shell { position: relative; display: flex; height: 100%; min-height: 0; flex-direction: column; justify-content: center; }");
-    expect(atlasStyles).toContain(".atlas-soft-grid:has(input:not(:placeholder-shown)) > .atlas-shell { justify-content: flex-start; padding-top: 7rem; }");
+    expect(atlasStyles).toContain(".atlas-soft-grid:has(input:not(:placeholder-shown)) > .atlas-shell { justify-content: center; padding-top: 0; }");
   });
 
   it("チーム検索は名前検索の上端を保ち、選択後の内容だけを下方向へ展開する", () => {
-    expect(atlasStyles).toContain(".atlas-team-search-stage > .atlas-shell { display: block; height: auto; min-height: calc(100svh - 4rem); padding-top: calc(50svh - 5rem) !important; }");
+    expect(atlasStyles).toContain(".atlas-team-search-stage > .atlas-shell { display: flex; height: 100%; min-height: 0; padding-top: 0 !important; }");
+    expect(atlasStyles).toContain(".atlas-soft-grid > .atlas-shell > header,\n  .atlas-team-search-stage > .atlas-shell > header { top: 33.5svh !important; }");
+    expect(atlasStyles).toContain(".atlas-soft-grid > .atlas-shell > section { transform: translateY(3.5rem); }");
     expect(atlasStyles).toContain(".atlas-team-search-stage > .atlas-shell > header { position: absolute !important; inset-inline: 0; top: 25svh !important; transform: translateY(-50%) !important; margin-bottom: 0 !important; }");
     expect(atlasSource).toContain('const isTeamSearch = mode === "filter";');
     expect(atlasSource).toContain('isLanding ? "h-[100svh] min-h-[100svh] overflow-hidden" : "min-h-screen pb-10"');

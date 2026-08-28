@@ -26,16 +26,16 @@
 }
 
 @media (max-width: 820px) {
-  .atlas-app .map-search__body { gap: 6px; padding: 8px 8px 9px; }
-  .atlas-app .map-search__row { grid-template-columns: 94px minmax(0, 1fr); gap: 6px; min-height: 39px; }
+  .atlas-app .map-search__body { gap: 9px; padding: 10px 10px 12px; }
+  .atlas-app .map-search__row { grid-template-columns: 96px minmax(0, 1fr); gap: 8px; min-height: 44px; }
   .atlas-app .map-search__row-title { gap: 4px; white-space: nowrap; }
-  .atlas-app .map-search__row-title b { font-size: 7px; letter-spacing: 0.025em; }
-  .atlas-app .map-search__row .path-controls { grid-template-columns: minmax(0, 1fr) 27px minmax(0, 1fr); gap: 4px; }
-  .atlas-app .map-search__row .path-controls select { min-width: 0; padding: 7px 3px; font-size: 9px; }
-  .atlas-app .map-search__row .swap-path { width: 27px; min-width: 27px; }
-  .atlas-app .map-search__row .path-filters { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 42px; gap: 4px; }
-  .atlas-app .map-search__row .path-filters select { min-width: 0; padding: 6px 3px; font-size: 9px; }
-  .atlas-app .map-search__row .path-filters .clear-pathfinder-filters { width: 42px; min-width: 42px; padding: 6px 2px; font-size: 0; letter-spacing: 0; white-space: nowrap; }
-  .atlas-app .map-search__row .path-filters .clear-pathfinder-filters::after { content: "Clear"; font: 700 6px/1 "IBM Plex Mono", monospace; }
+  .atlas-app .map-search__row-title b { font-size: 7px; letter-spacing: 0.02em; }
+  .atlas-app .map-search__row .path-controls { grid-template-columns: minmax(74px, 1fr) 32px minmax(74px, 1fr); gap: 6px; }
+  .atlas-app .map-search__row .path-controls select { min-width: 0; min-height: 38px; padding: 7px 5px; font-size: 10px; }
+  .atlas-app .map-search__row .swap-path { width: 32px; min-width: 32px; min-height: 38px; }
+  .atlas-app .map-search__row .path-filters { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 52px; gap: 6px; }
+  .atlas-app .map-search__row .path-filters select { min-width: 0; min-height: 38px; padding: 7px 5px; font-size: 10px; }
+  .atlas-app .map-search__row .path-filters .clear-pathfinder-filters { width: 52px; min-width: 52px; min-height: 38px; padding: 6px 3px; font-size: 0; letter-spacing: 0; white-space: nowrap; }
+  .atlas-app .map-search__row .path-filters .clear-pathfinder-filters::after { content: "Clear"; font: 700 7px/1 "IBM Plex Mono", monospace; }
   .atlas-app .profile-lineage-locations__list button { width: calc(100% - min(calc(var(--lineage-depth, 0) * 11px), 33px)); margin-inline-start: min(calc(var(--lineage-depth, 0) * 11px), 33px); }
 }

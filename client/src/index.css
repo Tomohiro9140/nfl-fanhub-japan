@@ -59,12 +59,12 @@
   .atlas-soft-grid > .atlas-shell > header > div > div { text-align: center; }
   .atlas-soft-grid > .atlas-shell > header > div > div > p:last-child { display: inline-block; font-family: "Barlow Condensed", "Noto Sans JP", sans-serif !important; font-size: clamp(4.25rem, 21vw, 5.5rem) !important; font-style: italic !important; font-weight: 800 !important; line-height: .74 !important; letter-spacing: -.045em !important; text-shadow: 2px 2px 0 rgba(217, 119, 6, .22); transform: skewX(-7deg); }
   .atlas-soft-grid > .atlas-shell > footer { position: absolute; inset-inline: 1rem; bottom: 1.25rem; }
-  .atlas-soft-grid:has(input:not(:placeholder-shown)) > .atlas-shell { justify-content: flex-start; padding-top: 7rem; }
-  .atlas-soft-grid:has(input:not(:placeholder-shown)) > .atlas-shell > header { position: static; transform: none; margin-bottom: 1rem; }
-  .atlas-soft-grid:has(input:not(:placeholder-shown)) > .atlas-shell > footer { position: static; margin-top: 1.5rem; }
-  .atlas-team-search-stage > .atlas-shell { display: block; height: auto; min-height: calc(100svh - 4rem); padding-top: calc(50svh - 5rem) !important; }
+  .atlas-soft-grid:has(input:not(:placeholder-shown)) > .atlas-shell { justify-content: center; padding-top: 0; }
+  .atlas-soft-grid:has(input:not(:placeholder-shown)) > .atlas-shell > header { position: absolute; transform: translateY(-50%); margin-bottom: 0; }
+  .atlas-soft-grid:has(input:not(:placeholder-shown)) > .atlas-shell > footer { position: absolute; margin-top: 0; }
+  .atlas-team-search-stage > .atlas-shell { display: flex; height: 100%; min-height: 0; padding-top: 0 !important; }
   .atlas-team-search-stage > .atlas-shell > header { position: absolute !important; inset-inline: 0; top: 25svh !important; transform: translateY(-50%) !important; margin-bottom: 0 !important; }
-  .atlas-team-search-stage > .atlas-shell > footer { position: static !important; margin-top: 1.5rem !important; }
+  .atlas-team-search-stage > .atlas-shell > footer { position: absolute !important; margin-top: 0 !important; }
   .atlas-view p:empty { display: none; }
   .fieldline-hub-surface { background-color: #f7f5f0; background-image: radial-gradient(circle at 8% -10%, rgba(232, 93, 42, .10), transparent 26rem), radial-gradient(circle at 95% 14%, rgba(16, 33, 58, .06), transparent 28rem); }
   .game-stats-dialog .font-mono,
@@ -75,6 +75,9 @@
   main > div, main section, main article { min-width: 0; max-width: 100%; }
   .ticket-cut::before { left: 0; }
   .ticket-cut::after { right: 0; }
+  .atlas-soft-grid > .atlas-shell > header,
+  .atlas-team-search-stage > .atlas-shell > header { top: 33.5svh !important; }
+  .atlas-soft-grid > .atlas-shell > section { transform: translateY(3.5rem); }
 }
 
 

@@ -84,7 +84,8 @@ describe("embedded FAN/HUB application routes", () => {
     expect(coachingTreeSource).toContain('data-lineage-depth={location.depth}');
     expect(coachingTreeMobileClaritySource).toContain('.tree-switches button.is-active');
     expect(coachingTreeMobileClaritySource).toContain('.coach-dot.is-profile-focus');
-    expect(coachingTreeMobileClaritySource).toContain('grid-template-columns: 94px minmax(0, 1fr)');
+    expect(coachingTreeMobileClaritySource).toContain('grid-template-columns: 96px minmax(0, 1fr)');
+    expect(coachingTreeMobileClaritySource).toContain('min-height: 38px');
     expect(coachingTreeDataSource).toContain('centralAtlasTrees');
     expect(atlasSource).not.toContain('<iframe');
     expect(fieldlineSource).not.toContain('<iframe');

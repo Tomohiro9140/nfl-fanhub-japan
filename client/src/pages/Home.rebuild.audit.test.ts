@@ -43,11 +43,15 @@ describe("mobile team page information hierarchy", () => {
     expect(markup).not.toContain("OFFICIAL BRIEFING");
   });
 
-  it("keeps mobile menu destinations and section numbering aligned with the rebuilt page", () => {
+  it("keeps the mobile menu focused on the four app destinations", () => {
     const markup = renderToStaticMarkup(createElement(Home));
-    expect(markup).toContain('href="#updates"');
-    expect(markup).toContain('href="#status"');
-    expect(markup).toContain('href="#league"');
+    expect(markup).toContain('href="#home"');
+    expect(markup).toContain('href="/atlas/"');
+    expect(markup).toContain('href="/coaching-tree/"');
+    expect(markup).toContain('href="/fieldline/"');
+    expect(markup).not.toContain('href="#updates"');
+    expect(markup).not.toContain('href="#status"');
+    expect(markup).not.toContain('href="#league"');
     expect(markup).not.toContain('href="#results"');
     expect(markup).not.toContain('href="#safe"');
     expect(markup).toContain("01");
@@ -79,6 +83,8 @@ describe("mobile team page information hierarchy", () => {
     expect(source).not.toContain("視聴済みを解除しました。LAST GAMEへ戻します。");
     expect(source).not.toContain("toast(");
     expect(source).toContain("setForceLastGame(true)");
+    expect(source).toContain("useState(() => {");
+    expect(source).toContain('window.localStorage.getItem(`${watchedTicketStorageKey}:${favorite.code}`)');
     expect(source).toContain("!snapshot.canRestoreLastGame");
     expect(source).not.toContain("localStorage.removeItem(`${watchedTicketStorageKey}:${favorite.code}`)");
   });
