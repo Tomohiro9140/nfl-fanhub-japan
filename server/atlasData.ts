@@ -311,9 +311,25 @@ async function searchUniverse() {
 export async function atlasFilters(team?: string) {
   const { active, directory } = await searchUniverse();
   const teams = Array.from(new Set(active.map((player) => player.team.abbreviation))).map((code) => teamFor(code, directory)).sort((left, right) => left.name.localeCompare(right.name));
-  const availablePositions = new Set(active.filter((player) => !team || player.team.abbreviation === team).map((player) => atlasPositionGroup(player.position)));
+  const positionsByTeam = Object.fromEntries(teams.map(({ abbreviation }) => {
+    const available = new Set(active.filter((player) => player.team.abbreviation === abbreviation).map((player) => atlasPositionGroup(player.position)));
+    return [abbreviation, POSITION_ORDER.filter((position) => available.has(position))];
+  }));
+  const availablePositions = new Set(team ? (positionsByTeam[team] ?? []) : active.map((player) => atlasPositionGroup(player.position)));
   const positions = POSITION_ORDER.filter((position) => availablePositions.has(position));
-  return { teams, positions, season: currentSeason };
+  return { teams, positions, positionsByTeam, season: currentSeason };
+}
+
+/** Returns only current-roster matches so type-ahead can respond before the complete historic search finishes. */
+export async function atlasSearchSuggestions(query: string) {
+  const term = normalizeAtlasText(query);
+  if (term.length < 2) return { players: [] as AtlasPlayerResult[] };
+  const { active } = await searchUniverse();
+  const players = active
+    .filter((player) => normalizeAtlasText(player.name).includes(term))
+    .sort((left, right) => Number(!normalizeAtlasText(left.name).startsWith(term)) - Number(!normalizeAtlasText(right.name).startsWith(term)) || left.name.localeCompare(right.name))
+    .slice(0, 8);
+  return { players };
 }
 
 export async function atlasSearch(query: string) {

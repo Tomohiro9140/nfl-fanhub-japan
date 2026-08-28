@@ -32,4 +32,11 @@ describe("ATLAS検索トップのレイアウト", () => {
     expect(atlasSource).toContain('const isLanding = mode === "name" && !typedQuery;');
     expect(atlasSource).toContain('isLanding ? "h-[100svh] min-h-[100svh] overflow-hidden" : "min-h-screen pb-10"');
   });
+
+  it("軽量な現役候補と全フィルターを先読みし、チーム変更時に追加待機しない", () => {
+    expect(atlasSource).toContain('window.setTimeout(() => setDebouncedQuery(nameQuery), 120)');
+    expect(atlasSource).toContain('trpc.atlas.searchSuggestions.useQuery(nameInput');
+    expect(atlasSource).toContain('const filters = trpc.atlas.filters.useQuery(undefined, { staleTime: 6 * 60 * 60_000, refetchOnMount: false })');
+    expect(atlasSource).toContain('const teamPositions = filters.data?.positionsByTeam?.[team]');
+  });
 });
