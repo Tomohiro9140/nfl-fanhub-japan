@@ -122,7 +122,20 @@
     transform: none !important;
     /* The team form is taller; center that full search window and retain the
        identical card origin when switching back to the shorter name form. */
-    margin-top: clamp(8rem, calc(50svh - 10.25rem), 17rem) !important;
+    margin-top: clamp(7.75rem, calc(50svh - 13rem), 14.5rem) !important;
+  }
+
+  /* Both search modes use the same header and card anchors. The taller team
+     controls grow downward only, so changing tabs never shifts the card top. */
+  .atlas-soft-grid > .atlas-shell > .atlas-search-header,
+  .atlas-team-search-stage > .atlas-shell > .atlas-search-header {
+    height: 2.75rem !important;
+    min-height: 2.75rem !important;
+  }
+
+  .atlas-soft-grid > .atlas-shell > .atlas-search-card,
+  .atlas-team-search-stage > .atlas-shell > .atlas-search-card {
+    margin-top: clamp(7.75rem, calc(50svh - 13rem), 14.5rem) !important;
   }
 
   .atlas-soft-grid > .atlas-shell > footer,
