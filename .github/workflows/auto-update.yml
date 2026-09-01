@@ -7,6 +7,9 @@ on:
     - cron: '0 9 * * *'
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   update:
     runs-on: ubuntu-latest
@@ -30,8 +33,9 @@ jobs:
       - name: 依存パッケージのインストール
         run: pnpm install --no-frozen-lockfile
 
-      - name: APIサーバーファイルの生成
+      - name: APIサーバーの完全合体ビルド
         run: |
+          mkdir -p api
           pnpm exec esbuild server/api.ts --platform=node --packages=external --bundle --format=esm --outfile=api/index.js
 
       - name: データベースのテーブル作成
@@ -51,5 +55,6 @@ jobs:
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add api/index.js
           git add -A
-          git diff --staged --quiet || (git commit -m "chore: API生成とデータ更新" && git push)
+          git diff --staged --quiet || (git commit -m "chore: API完全ビルドとデータ同期 [skip ci]" && git push)
