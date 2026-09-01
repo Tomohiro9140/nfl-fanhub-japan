@@ -57,4 +57,4 @@ jobs:
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git add api/index.js
           git add -A
-          git diff --staged --quiet || (git commit -m "chore: API完全ビルドとデータ同期 [skip ci]" && git push)
+          git diff --staged --quiet || (git commit -m "chore: API完全ビルドとデータ同期" && git push)
