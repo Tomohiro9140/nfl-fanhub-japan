@@ -2,13 +2,10 @@ name: NFL Data Auto Update
 
 on:
   schedule:
-    # 毎日 日本時間 午前3時 (協定世界時 18:00)
     - cron: '0 18 * * *'
-    # 毎日 日本時間 午前10時 (試合結果・ニュース更新用 01:00)
     - cron: '0 1 * * *'
-    # 毎日 日本時間 午後6時 (夕方更新用 09:00)
     - cron: '0 9 * * *'
-  workflow_dispatch: # 手動実行ボタン
+  workflow_dispatch:
 
 jobs:
   update:
@@ -33,7 +30,11 @@ jobs:
       - name: 依存パッケージのインストール
         run: pnpm install --no-frozen-lockfile
 
-      - name: データベースのテーブル（棚）作成
+      - name: APIサーバーファイルの生成
+        run: |
+          pnpm exec esbuild server/api.ts --platform=node --packages=external --bundle --format=esm --outfile=api/index.js
+
+      - name: データベースのテーブル作成
         run: |
           pnpm run db:push || true
 
@@ -46,9 +47,9 @@ jobs:
           node scripts/refreshPftAvailability.mjs || true
           node scripts/generateJapaneseNewsSummary.mjs || true
 
-      - name: 最新データをGitHubに保存
+      - name: 生成ファイルと最新データをGitHubに保存
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git add -A
-          git diff --staged --quiet || (git commit -m "chore: 自動データ更新 [skip ci]" && git push)
+          git diff --staged --quiet || (git commit -m "chore: API生成とデータ更新" && git push)
