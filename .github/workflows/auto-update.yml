@@ -8,11 +8,13 @@ on:
     - cron: '0 1 * * *'
     # 毎日 日本時間 午後6時 (夕方更新用 09:00)
     - cron: '0 9 * * *'
-  workflow_dispatch: # 好きな時に手動でボタンを押して動かせる設定
+  workflow_dispatch: # 手動実行ボタン
 
 jobs:
   update:
     runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
     steps:
       - name: リポジトリの読み込み
         uses: actions/checkout@v4
@@ -31,11 +33,20 @@ jobs:
       - name: 依存パッケージのインストール
         run: pnpm install --no-frozen-lockfile
 
-      - name: データ取得処理の実行
+      - name: データベースのテーブル（棚）作成
         run: |
-          pnpm run build || pnpm run check || node scripts/*.js || true
+          pnpm run db:push || true
 
-      - name: 最新データをGitHubに保存して反映
+      - name: NFL最新データの取得スクリプトを実行
+        run: |
+          node scripts/syncAllLeagueSchedules.mjs || true
+          node scripts/refreshOfficialLeagueDashboard.mjs || true
+          node scripts/refreshOfficialTeamData.mjs || true
+          node scripts/refreshOfficialTeamFeed.mjs || true
+          node scripts/refreshPftAvailability.mjs || true
+          node scripts/generateJapaneseNewsSummary.mjs || true
+
+      - name: 最新データをGitHubに保存
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
