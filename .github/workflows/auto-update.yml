@@ -52,7 +52,7 @@ jobs:
           # 2. リーグ順位・最新スコア・ハイライト更新
           npx tsx -e 'import("./scripts/refreshOfficialLeagueDashboard.mjs").then(() => process.exit(0)).catch(e => { console.error(e); process.exit(1); })'
 
-          # 3. 8チームごとの公式ロスター更新（時間帯に応じたローテーション）
+          # 3. 8チームごとの公式ロスター更新
           npx tsx -e '
             import("./server/officialTeamData.ts").then(async m => {
               const groups = [
@@ -90,7 +90,17 @@ jobs:
             }).catch(e => { console.error(e); process.exit(1); });
           '
 
-          # 5. PFT出場可否・移籍情報（Status Radar）更新
+          # 5. PFT / CBS 補助ニュース取得（全32チーム一括解析）
+          npx tsx -e '
+            import("./server/externalTeamNews.ts").then(async m => {
+              const allTeams = ["ARI","ATL","BAL","BUF","CAR","CHI","CIN","CLE","DAL","DEN","DET","GB","HOU","IND","JAX","KC","LV","LAC","LAR","MIA","MIN","NE","NO","NYG","NYJ","PHI","PIT","SF","SEA","TB","TEN","WAS"];
+              const res = await m.refreshExternalTeamNews(allTeams);
+              console.log("External News Stored:", res);
+              process.exit(0);
+            }).catch(e => { console.error(e); process.exit(1); });
+          '
+
+          # 6. PFT出場可否・移籍情報（Status Radar）更新
           npx tsx -e 'import("./scripts/refreshPftAvailability.mjs").then(() => process.exit(0)).catch(e => { console.error(e); process.exit(1); })'
 
       - name: 生成ファイルと最新データをGitHubに保存
