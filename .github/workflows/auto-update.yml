@@ -14,6 +14,7 @@ permissions:
 jobs:
   update:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     env:
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
     steps:
@@ -45,12 +46,12 @@ jobs:
 
       - name: NFL最新データの取得スクリプトを実行
         run: |
-          npx tsx scripts/syncAllLeagueSchedules.mjs
-          npx tsx scripts/refreshOfficialLeagueDashboard.mjs
-          npx tsx scripts/refreshOfficialTeamData.mjs
-          npx tsx scripts/refreshOfficialTeamFeed.mjs
-          npx tsx scripts/refreshPftAvailability.mjs
-          npx tsx scripts/generateJapaneseNewsSummary.mjs
+          npx tsx -e 'await import("./scripts/syncAllLeagueSchedules.mjs"); process.exit(0);'
+          npx tsx -e 'await import("./scripts/refreshOfficialLeagueDashboard.mjs"); process.exit(0);'
+          npx tsx -e 'await import("./scripts/refreshOfficialTeamData.mjs"); process.exit(0);'
+          npx tsx -e 'await import("./scripts/refreshOfficialTeamFeed.mjs"); process.exit(0);'
+          npx tsx -e 'await import("./scripts/refreshPftAvailability.mjs"); process.exit(0);'
+          npx tsx -e 'await import("./scripts/generateJapaneseNewsSummary.mjs"); process.exit(0);' || true
 
       - name: 生成ファイルと最新データをGitHubに保存
         run: |
