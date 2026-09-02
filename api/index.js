@@ -1212,8 +1212,27 @@ function registerStorageProxy(app2) {
       return;
     }
     if (!ENV.forgeApiUrl || !ENV.forgeApiKey) {
-      res.status(500).send("Storage proxy not configured");
-      return;
+      try {
+        const originResp = await fetch(
+          `https://nfl-fanhub-japan.com/manus-storage/${encodeURI(key)}`
+        );
+        if (!originResp.ok) {
+          res.status(originResp.status).send(originResp.statusText);
+          return;
+        }
+        const contentType = originResp.headers.get("content-type");
+        if (contentType) {
+          res.setHeader("Content-Type", contentType);
+        }
+        res.setHeader("Cache-Control", "public, max-age=86400");
+        const arrayBuffer = await originResp.arrayBuffer();
+        res.send(Buffer.from(arrayBuffer));
+        return;
+      } catch (err) {
+        console.error("[StorageProxy Fallback] failed:", err);
+        res.status(500).send("Storage proxy fallback error");
+        return;
+      }
     }
     try {
       const forgeUrl = new URL(
