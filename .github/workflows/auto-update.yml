@@ -46,12 +46,12 @@ jobs:
 
       - name: NFL最新データの取得スクリプトを実行
         run: |
-          npx tsx -e 'await import("./scripts/syncAllLeagueSchedules.mjs"); process.exit(0);'
-          npx tsx -e 'await import("./scripts/refreshOfficialLeagueDashboard.mjs"); process.exit(0);'
-          npx tsx -e 'await import("./scripts/refreshOfficialTeamData.mjs"); process.exit(0);'
-          npx tsx -e 'await import("./scripts/refreshOfficialTeamFeed.mjs"); process.exit(0);'
-          npx tsx -e 'await import("./scripts/refreshPftAvailability.mjs"); process.exit(0);'
-          npx tsx -e 'await import("./scripts/generateJapaneseNewsSummary.mjs"); process.exit(0);' || true
+          npx tsx -e 'import("./scripts/syncAllLeagueSchedules.mjs").then(() => process.exit(0)).catch(e => { console.error(e); process.exit(1); })'
+          npx tsx -e 'import("./scripts/refreshOfficialLeagueDashboard.mjs").then(() => process.exit(0)).catch(e => { console.error(e); process.exit(1); })'
+          npx tsx -e 'import("./scripts/refreshOfficialTeamData.mjs").then(() => process.exit(0)).catch(e => { console.error(e); process.exit(1); })'
+          npx tsx -e 'import("./scripts/refreshOfficialTeamFeed.mjs").then(() => process.exit(0)).catch(e => { console.error(e); process.exit(1); })'
+          npx tsx -e 'import("./scripts/refreshPftAvailability.mjs").then(() => process.exit(0)).catch(e => { console.error(e); process.exit(1); })'
+          npx tsx -e 'import("./scripts/generateJapaneseNewsSummary.mjs").then(() => process.exit(0)).catch(e => { console.error(e); process.exit(1); })' || true
 
       - name: 生成ファイルと最新データをGitHubに保存
         run: |
