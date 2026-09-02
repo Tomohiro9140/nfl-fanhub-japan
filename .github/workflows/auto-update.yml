@@ -46,12 +46,36 @@ jobs:
 
       - name: NFL最新データの取得スクリプトを実行
         run: |
+          # 1. 全463試合の日程更新
           npx tsx -e 'import("./scripts/syncAllLeagueSchedules.mjs").then(() => process.exit(0)).catch(e => { console.error(e); process.exit(1); })'
+
+          # 2. リーグ順位・最新スコア・ハイライト更新
           npx tsx -e 'import("./scripts/refreshOfficialLeagueDashboard.mjs").then(() => process.exit(0)).catch(e => { console.error(e); process.exit(1); })'
-          npx tsx -e 'import("./scripts/refreshOfficialTeamData.mjs").then(() => process.exit(0)).catch(e => { console.error(e); process.exit(1); })'
-          npx tsx -e 'import("./scripts/refreshOfficialTeamFeed.mjs").then(() => process.exit(0)).catch(e => { console.error(e); process.exit(1); })'
+
+          # 3. 全32チームの公式ロスター更新
+          npx tsx -e '
+            import("./server/officialTeamData.ts").then(async m => {
+              const teams = ["ARI","ATL","BAL","BUF","CAR","CHI","CIN","CLE","DAL","DEN","DET","GB","HOU","IND","JAX","KC","LV","LAC","LAR","MIA","MIN","NE","NO","NYG","NYJ","PHI","PIT","SF","SEA","TB","TEN","WAS"];
+              for (const t of teams) {
+                try { await m.refreshOfficialTeamData(t); } catch(err) { console.error("Roster error for " + t, err); }
+              }
+              process.exit(0);
+            }).catch(e => { console.error(e); process.exit(1); });
+          '
+
+          # 4. 全32チームの公式ニュース・RSS・負傷者情報更新
+          npx tsx -e '
+            import("./server/officialFeeds.ts").then(async m => {
+              const teams = ["ARI","ATL","BAL","BUF","CAR","CHI","CIN","CLE","DAL","DEN","DET","GB","HOU","IND","JAX","KC","LV","LAC","LAR","MIA","MIN","NE","NO","NYG","NYJ","PHI","PIT","SF","SEA","TB","TEN","WAS"];
+              for (const t of teams) {
+                try { await m.refreshOfficialTeamFeed(t); } catch(err) { console.error("Feed error for " + t, err); }
+              }
+              process.exit(0);
+            }).catch(e => { console.error(e); process.exit(1); });
+          '
+
+          # 5. PFT出場可否・移籍情報（Status Radar）更新
           npx tsx -e 'import("./scripts/refreshPftAvailability.mjs").then(() => process.exit(0)).catch(e => { console.error(e); process.exit(1); })'
-          npx tsx -e 'import("./scripts/generateJapaneseNewsSummary.mjs").then(() => process.exit(0)).catch(e => { console.error(e); process.exit(1); })' || true
 
       - name: 生成ファイルと最新データをGitHubに保存
         run: |
