@@ -2,9 +2,10 @@ name: NFL Data Auto Update
 
 on:
   schedule:
+    - cron: '0 0 * * *'
+    - cron: '0 6 * * *'
+    - cron: '0 12 * * *'
     - cron: '0 18 * * *'
-    - cron: '0 1 * * *'
-    - cron: '0 9 * * *'
   workflow_dispatch:
 
 permissions:
@@ -44,12 +45,12 @@ jobs:
 
       - name: NFL最新データの取得スクリプトを実行
         run: |
-          node scripts/syncAllLeagueSchedules.mjs || true
-          node scripts/refreshOfficialLeagueDashboard.mjs || true
-          node scripts/refreshOfficialTeamData.mjs || true
-          node scripts/refreshOfficialTeamFeed.mjs || true
-          node scripts/refreshPftAvailability.mjs || true
-          node scripts/generateJapaneseNewsSummary.mjs || true
+          npx tsx scripts/syncAllLeagueSchedules.mjs
+          npx tsx scripts/refreshOfficialLeagueDashboard.mjs
+          npx tsx scripts/refreshOfficialTeamData.mjs
+          npx tsx scripts/refreshOfficialTeamFeed.mjs
+          npx tsx scripts/refreshPftAvailability.mjs
+          npx tsx scripts/generateJapaneseNewsSummary.mjs
 
       - name: 生成ファイルと最新データをGitHubに保存
         run: |
