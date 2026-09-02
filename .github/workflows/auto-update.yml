@@ -52,10 +52,18 @@ jobs:
           # 2. リーグ順位・最新スコア・ハイライト更新
           npx tsx -e 'import("./scripts/refreshOfficialLeagueDashboard.mjs").then(() => process.exit(0)).catch(e => { console.error(e); process.exit(1); })'
 
-          # 3. 全32チームの公式ロスター更新
+          # 3. 8チームごとの公式ロスター更新（時間帯に応じたローテーション）
           npx tsx -e '
             import("./server/officialTeamData.ts").then(async m => {
-              const teams = ["ARI","ATL","BAL","BUF","CAR","CHI","CIN","CLE","DAL","DEN","DET","GB","HOU","IND","JAX","KC","LV","LAC","LAR","MIA","MIN","NE","NO","NYG","NYJ","PHI","PIT","SF","SEA","TB","TEN","WAS"];
+              const groups = [
+                ["ARI","ATL","BAL","BUF","CAR","CHI","CIN","CLE"],
+                ["DAL","DEN","DET","GB","HOU","IND","JAX","KC"],
+                ["LV","LAC","LAR","MIA","MIN","NE","NO","NYG"],
+                ["NYJ","PHI","PIT","SF","SEA","TB","TEN","WAS"]
+              ];
+              const slot = Math.floor(new Date().getUTCHours() / 6) % 4;
+              const teams = groups[slot];
+              console.log("Updating Rosters for Group " + (slot + 1) + ":", teams);
               for (const t of teams) {
                 try { await m.refreshOfficialTeamData(t); } catch(err) { console.error("Roster error for " + t, err); }
               }
@@ -63,10 +71,18 @@ jobs:
             }).catch(e => { console.error(e); process.exit(1); });
           '
 
-          # 4. 全32チームの公式ニュース・RSS・負傷者情報更新
+          # 4. 8チームごとの公式ニュース・RSS・負傷情報更新
           npx tsx -e '
             import("./server/officialFeeds.ts").then(async m => {
-              const teams = ["ARI","ATL","BAL","BUF","CAR","CHI","CIN","CLE","DAL","DEN","DET","GB","HOU","IND","JAX","KC","LV","LAC","LAR","MIA","MIN","NE","NO","NYG","NYJ","PHI","PIT","SF","SEA","TB","TEN","WAS"];
+              const groups = [
+                ["ARI","ATL","BAL","BUF","CAR","CHI","CIN","CLE"],
+                ["DAL","DEN","DET","GB","HOU","IND","JAX","KC"],
+                ["LV","LAC","LAR","MIA","MIN","NE","NO","NYG"],
+                ["NYJ","PHI","PIT","SF","SEA","TB","TEN","WAS"]
+              ];
+              const slot = Math.floor(new Date().getUTCHours() / 6) % 4;
+              const teams = groups[slot];
+              console.log("Updating Feeds for Group " + (slot + 1) + ":", teams);
               for (const t of teams) {
                 try { await m.refreshOfficialTeamFeed(t); } catch(err) { console.error("Feed error for " + t, err); }
               }
