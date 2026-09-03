@@ -1,6 +1,8 @@
-type CsvRow = Record<string, string>;
-
+import fs from "fs";
+import path from "path";
 import { storageGetSignedUrl } from "./storage";
+
+type CsvRow = Record<string, string>;
 
 type CacheEntry<T> = {
   value: T;
@@ -731,10 +733,9 @@ export async function atlasContracts(playerId: string) {
   const { roster } = await atlasPlayerContext(playerId);
   try {
     const index = await cached("atlas:active-contract-index", CACHE_TTL.contracts, async () => {
-      const signedUrl = await storageGetSignedUrl(ACTIVE_CONTRACTS_KEY);
-      const response = await fetch(signedUrl, { headers: { "User-Agent": USER_AGENT } });
-      if (!response.ok) throw new Error(`Active contract archive returned ${response.status}`);
-      return await response.json() as ContractIndex;
+      const filePath = path.resolve(process.cwd(), "server/data/active_contracts.json");
+      const content = await fs.promises.readFile(filePath, "utf-8");
+      return JSON.parse(content) as ContractIndex;
     });
     const record = index.contracts?.[playerId];
     if (!record) return { available: true, contract: null, source: { provider: index.source || "NFLverse / Over The Cap", updatedAt: index.sourceUpdatedAt || new Date().toISOString() } };
