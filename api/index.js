@@ -2382,6 +2382,10 @@ ${reference.text}
 import { z as z2 } from "zod";
 import { TRPCError as TRPCError3 } from "@trpc/server";
 
+// server/atlasData.ts
+import fs from "fs";
+import path from "path";
+
 // server/storage.ts
 function getForgeConfig() {
   const forgeUrl = ENV.forgeApiUrl;
@@ -2419,7 +2423,6 @@ var NFLVERSE_RELEASES = "https://github.com/nflverse/nflverse-data/releases/down
 var currentSeason2 = Math.max(2025, (/* @__PURE__ */ new Date()).getUTCFullYear());
 var USER_AGENT = "NFL-Fan-Hub-Japan-Atlas/1.0";
 var HISTORIC_ROSTER_KEY = "atlas-historic-roster-index_ccf81874.json";
-var ACTIVE_CONTRACTS_KEY = "nfl-active-contracts_42bb7ee5.json";
 var POSITION_ORDER = ["QB", "RB", "WR", "TE", "OL", "DL", "LB", "DB", "K", "P", "LS"];
 var CACHE_TTL = {
   roster: 20 * 60 * 1e3,
@@ -3089,10 +3092,9 @@ async function atlasContracts(playerId) {
   const { roster } = await atlasPlayerContext(playerId);
   try {
     const index2 = await cached("atlas:active-contract-index", CACHE_TTL.contracts, async () => {
-      const signedUrl = await storageGetSignedUrl(ACTIVE_CONTRACTS_KEY);
-      const response = await fetch(signedUrl, { headers: { "User-Agent": USER_AGENT } });
-      if (!response.ok) throw new Error(`Active contract archive returned ${response.status}`);
-      return await response.json();
+      const filePath = path.resolve(process.cwd(), "server/data/active_contracts.json");
+      const content = await fs.promises.readFile(filePath, "utf-8");
+      return JSON.parse(content);
     });
     const record = index2.contracts?.[playerId];
     if (!record) return { available: true, contract: null, source: { provider: index2.source || "NFLverse / Over The Cap", updatedAt: index2.sourceUpdatedAt || (/* @__PURE__ */ new Date()).toISOString() } };
