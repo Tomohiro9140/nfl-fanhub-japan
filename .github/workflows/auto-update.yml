@@ -6,6 +6,7 @@ on:
     - cron: '0 6 * * *'
     - cron: '0 12 * * *'
     - cron: '0 18 * * *'
+    - cron: '0 21 * * 2' # 毎週水曜 06:00 JST (火曜 21:00 UTC) FIELDLINE週次更新用
   workflow_dispatch:
 
 permissions:
@@ -14,7 +15,7 @@ permissions:
 jobs:
   update:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     env:
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
     steps:
@@ -102,6 +103,9 @@ jobs:
 
           # 6. PFT出場可否・移籍情報（Status Radar）更新
           npx tsx -e 'import("./scripts/refreshPftAvailability.mjs").then(() => process.exit(0)).catch(e => { console.error(e); process.exit(1); })'
+
+          # 7. FIELDLINE 2026週次集計（未公開・404時は安全にスキップ）
+          npx tsx scripts/import-fieldline-season.mjs 2026 || echo "[FIELDLINE] 2026 season data not yet released by nflverse, skipped safely."
 
       - name: 生成ファイルと最新データをGitHubに保存
         run: |
