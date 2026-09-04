@@ -1,180 +1,189 @@
-import io
-import gzip
-import csv
-import json
-import os
-import re
-import urllib.request
-from datetime import datetime, timezone
+const fs = require('fs');
+const path = require('path');
+const zlib = require('zlib');
+const readline = require('readline');
+const { Readable } = require('stream');
 
-HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+const HEADERS = {
+  "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+  "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
+};
 
-def clean_to_m(val):
-    if not val:
-        return 0.0
-    clean = re.sub(r"[^0-9.-]", "", str(val))
-    try:
-        n = float(clean)
-        return round(n / 1_000_000, 2)
-    except Exception:
-        return 0.0
-
-def to_int(val):
-    if not val:
-        return 0
-    clean = re.sub(r"[^0-9.-]", "", str(val))
-    try:
-        return int(float(clean))
-    except Exception:
-        return 0
-
-print("1/4: players.csv を取得中...")
-otc_to_gsis = {}
-req_p = urllib.request.Request(
-    "https://github.com/nflverse/nflverse-data/releases/download/players/players.csv",
-    headers=HEADERS
-)
-with urllib.request.urlopen(req_p) as resp:
-    reader = csv.DictReader(io.TextIOWrapper(resp, encoding="utf-8"))
-    for r in reader:
-        otc_id = r.get("otc_id")
-        gsis_id = r.get("gsis_id")
-        if otc_id and gsis_id and otc_id != "NA":
-            otc_to_gsis[otc_id.strip()] = gsis_id.strip()
-
-print(f" -> 紐付け完了 ({len(otc_to_gsis)} 選手)")
-
-print("2/4: historical_contracts.csv.gz を解析中...")
-req_c = urllib.request.Request(
-    "https://github.com/nflverse/nflverse-data/releases/download/contracts/historical_contracts.csv.gz",
-    headers=HEADERS
-)
-contracts_by_otc = {}
-with urllib.request.urlopen(req_c) as resp:
-    with gzip.GzipFile(fileobj=resp) as gz:
-        reader = csv.DictReader(io.TextIOWrapper(gz, encoding="utf-8"))
-        for r in reader:
-            otc_id = r.get("otc_id", "").strip()
-            if not otc_id or otc_id == "NA":
-                continue
-            if otc_id not in contracts_by_otc:
-                contracts_by_otc[otc_id] = []
-            contracts_by_otc[otc_id].append(r)
-
-print("3/4: Over The Cap から年度別内訳テーブルを取得中...")
-def fetch_otc_season_breakdown(otc_id):
-    url = f"https://overthecap.com/player/_/{otc_id}"
-    req = urllib.request.Request(url, headers=HEADERS)
-    try:
-        with urllib.request.urlopen(req, timeout=15) as resp:
-            html = resp.read().decode("utf-8", errors="ignore")
-    except Exception as e:
-        print(f"  [Warn] OTC取得失敗 ({otc_id}): {e}")
-        return []
-
-    tables = re.findall(r"<table[\s\S]*?<\/table>", html, re.I)
-    if not tables:
-        return []
-
-    # Table #5 (インデックス4) を最優先、見つからない場合は探索
-    target_table = None
-    if len(tables) >= 5:
-        target_table = tables[4]
-    else:
-        for t in tables:
-            if "Base Salary" in t:
-                target_table = t
-                break
-
-    if not target_table:
-        return []
-
-    rows = re.findall(r"<tr[^>]*>([\s\S]*?)<\/tr>", target_table, re.I)
-    seasons = []
-    for tr in rows[1:]:
-        tds = re.findall(r"<td[^>]*>([\s\S]*?)<\/td>", tr, re.I)
-        cleaned = [re.sub(r"<[^>]+>", "", d).strip() for d in tds]
-        if len(cleaned) >= 8 and re.match(r"^\d{4}$", cleaned[0]):
-            year_val = int(cleaned[0])
-            # 現契約（2022年以降）に絞り込み
-            if year_val >= 2022:
-                seasons.append({
-                    "year": cleaned[0],
-                    "team": cleaned[1],
-                    "baseSalary": clean_to_m(cleaned[2]),
-                    "proratedBonus": clean_to_m(cleaned[3]),
-                    "optionBonus": clean_to_m(cleaned[4]),
-                    "rosterBonus": clean_to_m(cleaned[5]),
-                    "workoutBonus": clean_to_m(cleaned[6]),
-                    "guaranteed": clean_to_m(cleaned[7]),
-                    "capHit": clean_to_m(cleaned[8]),
-                    "cashPaid": clean_to_m(cleaned[10] if len(cleaned) > 10 else cleaned[9])
-                })
-    return seasons
-
-target_otc_ids = {"1060"}
-otc_seasons_map = {}
-for oid in target_otc_ids:
-    print(f" -> OTC ID {oid} の詳細テーブル取得中...")
-    parsed = fetch_otc_season_breakdown(oid)
-    print(f"    取得成功件数: {len(parsed)} 件")
-    otc_seasons_map[oid] = parsed
-
-print("4/4: active_contracts.json インデックス構築中...")
-result_contracts = {}
-for otc_id, rows in contracts_by_otc.items():
-    gsis_id = otc_to_gsis.get(otc_id)
-    if not gsis_id:
-        continue
-
-    def parse_year(x):
-        try:
-            return int(x.get("year_signed", 0))
-        except Exception:
-            return 0
-
-    rows.sort(key=parse_year)
-    active_row = next((r for r in reversed(rows) if str(r.get("is_active", "")).upper() == "TRUE"), rows[-1])
-
-    contract_history = []
-    for r in rows:
-        contract_history.append({
-            "team": r.get("team") or "",
-            "yearSigned": to_int(r.get("year_signed")),
-            "years": to_int(r.get("years")),
-            "total": clean_to_m(r.get("value")),
-            "apy": clean_to_m(r.get("apy")),
-            "guaranteed": clean_to_m(r.get("guaranteed")),
-            "type": "Contract",
-            "status": "",
-            "amountEarned": 0.0
-        })
-
-    seasons = otc_seasons_map.get(otc_id, [])
-
-    result_contracts[gsis_id] = {
-        "team": active_row.get("team") or "",
-        "yearSigned": to_int(active_row.get("year_signed")),
-        "years": to_int(active_row.get("years")),
-        "total": clean_to_m(active_row.get("value")),
-        "apy": clean_to_m(active_row.get("apy")),
-        "guaranteed": clean_to_m(active_row.get("guaranteed")),
-        "seasonHistory": seasons,
-        "contractHistory": contract_history
-    }
-
-output_payload = {
-    "source": "NFLverse / Over The Cap",
-    "sourceUpdatedAt": datetime.now(timezone.utc).isoformat(),
-    "contracts": result_contracts
+function cleanToM(val) {
+  if (!val) return 0;
+  const n = parseFloat(String(val).replace(/[^0-9.-]/g, ""));
+  return isNaN(n) ? 0 : Math.round((n / 1000000) * 100) / 100;
 }
 
-os.makedirs("server/data", exist_ok=True)
-output_path = "server/data/active_contracts.json"
-with open(output_path, "w", encoding="utf-8") as f:
-    json.dump(output_payload, f, ensure_ascii=False)
+function toInt(val) {
+  if (!val) return 0;
+  const n = parseInt(String(val).replace(/[^0-9.-]/g, ""), 10);
+  return isNaN(n) ? 0 : n;
+}
 
-print(f"完了: {output_path} ({len(result_contracts)} 選手)")
-if "00-0026498" in result_contracts:
-    st = result_contracts["00-0026498"]
-    print(f"Stafford seasonHistory 件数: {len(st.get('seasonHistory', []))}")
+async function fetchCsv(url, isGz = false) {
+  const res = await fetch(url, { headers: HEADERS });
+  if (!res.ok) throw new Error(`Failed to fetch ${url}: ${res.status}`);
+  const buffer = Buffer.from(await res.arrayBuffer());
+  const text = isGz ? zlib.gunzipSync(buffer).toString('utf-8') : buffer.toString('utf-8');
+  
+  const lines = text.split('\n');
+  const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
+  const rows = [];
+  
+  for (let i = 1; i < lines.length; i++) {
+    const line = lines[i].trim();
+    if (!line) continue;
+    // 簡易CSVパース
+    const cols = [];
+    let current = '';
+    let inQuotes = false;
+    for (let c = 0; c < line.length; c++) {
+      const char = line[c];
+      if (char === '"') {
+        inQuotes = !inQuotes;
+      } else if (char === ',' && !inQuotes) {
+        cols.push(current.trim().replace(/^"|"$/g, ''));
+        current = '';
+      } else {
+        current += char;
+      }
+    }
+    cols.push(current.trim().replace(/^"|"$/g, ''));
+    
+    if (cols.length === headers.length) {
+      const rowObj = {};
+      headers.forEach((h, idx) => rowObj[h] = cols[idx]);
+      rows.push(rowObj);
+    }
+  }
+  return rows;
+}
+
+async function fetchOtcSeasonBreakdown(otcId) {
+  try {
+    const url = `https://overthecap.com/player/_/${otcId}`;
+    const res = await fetch(url, { headers: HEADERS });
+    if (!res.ok) return [];
+    const html = await res.text();
+    
+    const tables = html.match(/<table[\s\S]*?<\/table>/gi) || [];
+    if (tables.length <= 4) return [];
+    
+    const target = tables[4]; // Table #5
+    const trs = (target.match(/<tr[^>]*>([\s\S]*?)<\/tr>/gi) || []).slice(1);
+    const seasons = [];
+
+    for (const tr of trs) {
+      const tds = (tr.match(/<td[^>]*>([\s\S]*?)<\/td>/gi) || []).map(d => d.replace(/<[^>]+>/g, "").trim());
+      if (tds.length >= 8 && /^\d{4}$/.test(tds[0])) {
+        const yearVal = parseInt(tds[0], 10);
+        if (yearVal >= 2022) {
+          seasons.push({
+            year: tds[0],
+            team: tds[1],
+            baseSalary: cleanToM(tds[2]),
+            proratedBonus: cleanToM(tds[3]),
+            optionBonus: cleanToM(tds[4]),
+            rosterBonus: cleanToM(tds[5]),
+            workoutBonus: cleanToM(tds[6]),
+            guaranteed: cleanToM(tds[7]),
+            capHit: cleanToM(tds[8]),
+            cashPaid: cleanToM(tds[10] || tds[9])
+          });
+        }
+      }
+    }
+    return seasons;
+  } catch (e) {
+    console.log(`[Warn] OTC fetch error (${otcId}):`, e.message);
+    return [];
+  }
+}
+
+async function main() {
+  console.log("1/4: players.csv を取得中...");
+  const players = await fetchCsv("https://github.com/nflverse/nflverse-data/releases/download/players/players.csv");
+  const otToGsis = {};
+  players.forEach(p => {
+    if (p.otc_id && p.gsis_id && p.otc_id !== "NA") {
+      otToGsis[p.otc_id.trim()] = p.gsis_id.trim();
+    }
+  });
+  console.log(` -> 紐付け完了 (${Object.keys(otToGsis).length} 選手)`);
+
+  console.log("2/4: historical_contracts.csv.gz を取得中...");
+  const contractsRaw = await fetchCsv("https://github.com/nflverse/nflverse-data/releases/download/contracts/historical_contracts.csv.gz", true);
+  const contractsByOtc = {};
+  contractsRaw.forEach(r => {
+    const otcId = (r.otc_id || "").trim();
+    if (!otcId || otcId === "NA") return;
+    if (!contractsByOtc[otcId]) contractsByOtc[otcId] = [];
+    contractsByOtc[otcId].push(r);
+  });
+
+  console.log("3/4: Over The Cap から Stafford (1060) の詳細内訳を取得中...");
+  const staffordOtcId = "1060";
+  const staffordSeasons = await fetchOtcSeasonBreakdown(staffordOtcId);
+  console.log(` -> Stafford 取得件数: ${staffordSeasons.length} 件`);
+
+  const otcSeasonsMap = {
+    [staffordOtcId]: staffordSeasons
+  };
+
+  console.log("4/4: active_contracts.json インデックス構築中...");
+  const resultContracts = {};
+
+  for (const [otcId, rows] of Object.entries(contractsByOtc)) {
+    const gsisId = otToGsis[otcId];
+    if (!gsisId) continue;
+
+    rows.sort((a, b) => parseInt(a.year_signed || 0, 10) - parseInt(b.year_signed || 0, 10));
+    const activeRow = rows.slice().reverse().find(r => String(r.is_active || "").toUpperCase() === "TRUE") || rows[rows.length - 1];
+
+    const contractHistory = rows.map(r => ({
+      team: r.team || "",
+      yearSigned: toInt(r.year_signed),
+      years: toInt(r.years),
+      total: cleanToM(r.value),
+      apy: cleanToM(r.apy),
+      guaranteed: cleanToM(r.guaranteed),
+      type: "Contract",
+      status: "",
+      amountEarned: 0.0
+    }));
+
+    const seasons = otcSeasonsMap[otcId] || [];
+
+    resultContracts[gsisId] = {
+      team: activeRow.team || "",
+      yearSigned: toInt(activeRow.year_signed),
+      years: toInt(activeRow.years),
+      total: cleanToM(activeRow.value),
+      apy: cleanToM(active_row.apy),
+      guaranteed: cleanToM(active_row.guaranteed),
+      seasonHistory: seasons,
+      contractHistory: contractHistory
+    };
+  }
+
+  const payload = {
+    source: "NFLverse / Over The Cap",
+    sourceUpdatedAt: new Date().toISOString(),
+    contracts: resultContracts
+  };
+
+  fs.mkdirSync("server/data", { recursive: true });
+  const outputPath = "server/data/active_contracts.json";
+  fs.writeFileSync(outputPath, JSON.stringify(payload, null, 2), "utf-8");
+  
+  console.log(`完了: ${outputPath} (${Object.keys(resultContracts).length} 選手)`);
+  if (resultContracts["00-0026498"]) {
+    console.log(`Stafford seasonHistory 件数: ${resultContracts["00-0026498"].seasonHistory.length}`);
+  }
+}
+
+main().catch(err => {
+  console.error("エラー発生:", err);
+  process.exit(1);
+});
