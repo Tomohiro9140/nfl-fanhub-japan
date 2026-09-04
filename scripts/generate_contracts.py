@@ -1,148 +1,157 @@
 import io
+import gzip
+import csv
 import json
 import os
+import re
 import urllib.request
-import pandas as pd
-import pyarrow.parquet as pq
 from datetime import datetime, timezone
 
-# 1. players.csv から otc_id と gsis_id の紐付けテーブルを作成
-print("1/4: players.csv を取得中...")
-req_p = urllib.request.Request(
-    "https://github.com/nflverse/nflverse-data/releases/download/players/players.csv",
-    headers={"User-Agent": "Mozilla/5.0"}
-)
-otc_to_gsis = {}
-with urllib.request.urlopen(req_p) as resp:
-    players_df = pd.read_csv(resp, low_memory=False)
-    for _, row in players_df.iterrows():
-        otc_id = str(row.get("otc_id") or "").strip()
-        gsis_id = str(row.get("gsis_id") or "").strip()
-        if otc_id and gsis_id and otc_id != "nan" and gsis_id != "nan":
-            otc_to_gsis[otc_id] = gsis_id
+HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
 
-print(f" -> 紐付け完了: {len(otc_to_gsis)} 選手")
-
-# 2. historical_contracts.parquet (Over The Cap 由来) を取得
-print("2/4: historical_contracts.parquet を解析中...")
-req_c = urllib.request.Request(
-    "https://github.com/nflverse/nflverse-data/releases/download/contracts/historical_contracts.parquet",
-    headers={"User-Agent": "Mozilla/5.0"}
-)
-with urllib.request.urlopen(req_c) as resp:
-    parquet_bytes = resp.read()
-
-table = pq.read_table(io.BytesIO(parquet_bytes))
-df = table.to_pandas()
-print(f" -> 契約レコード数: {len(df)}")
-
-def to_m(val):
+def clean_to_m(val):
+    if not val:
+        return 0.0
+    clean = re.sub(r"[^0-9.-]", "", str(val))
     try:
-        if pd.isna(val) or val is None:
-            return 0.0
-        v = float(val)
-        return round(v / 1_000_000.0, 2)
-    except:
+        n = float(clean)
+        return round(n / 1_000_000, 2)
+    except Exception:
         return 0.0
 
-def to_num(val):
+def to_int(val):
+    if not val:
+        return 0
+    clean = re.sub(r"[^0-9.-]", "", str(val))
     try:
-        if pd.isna(val) or val is None:
-            return 0
-        return int(float(val))
-    except:
+        return int(float(clean))
+    except Exception:
         return 0
 
-# 3. 選手ごとの最新契約と年度別内訳 (seasonHistory) を構築
-print("3/4: 契約サマリーおよび年度別内訳を構築中...")
+print("1/4: players.csv (GSIS -> OTC_ID マッピング) を取得中...")
+otc_to_gsis = {}
+req_p = urllib.request.Request(
+    "https://github.com/nflverse/nflverse-data/releases/download/players/players.csv",
+    headers=HEADERS
+)
+with urllib.request.urlopen(req_p) as resp:
+    reader = csv.DictReader(io.TextIOWrapper(resp, encoding="utf-8"))
+    for r in reader:
+        otc_id = r.get("otc_id")
+        gsis_id = r.get("gsis_id")
+        if otc_id and gsis_id and otc_id != "NA":
+            otc_to_gsis[otc_id.strip()] = gsis_id.strip()
+
+print(f" -> 紐付け完了 ({len(otc_to_gsis)} 選手)")
+
+print("2/4: historical_contracts.csv.gz を解析中...")
+req_c = urllib.request.Request(
+    "https://github.com/nflverse/nflverse-data/releases/download/contracts/historical_contracts.csv.gz",
+    headers=HEADERS
+)
 contracts_by_otc = {}
-for _, row in df.iterrows():
-    otc_id = str(row.get("otc_id") or "").strip()
-    if not otc_id or otc_id == "nan":
-        continue
-    if otc_id not in contracts_by_otc:
-        contracts_by_otc[otc_id] = []
-    contracts_by_otc[otc_id].append(row)
+with urllib.request.urlopen(req_c) as resp:
+    with gzip.GzipFile(fileobj=resp) as gz:
+        reader = csv.DictReader(io.TextIOWrapper(gz, encoding="utf-8"))
+        for r in reader:
+            otc_id = r.get("otc_id", "").strip()
+            if not otc_id or otc_id == "NA":
+                continue
+            if otc_id not in contracts_by_otc:
+                contracts_by_otc[otc_id] = []
+            contracts_by_otc[otc_id].append(r)
 
+print("3/4: Over The Cap から現行契約の年度別内訳テーブルを取得中...")
+def fetch_otc_season_breakdown(otc_id):
+    url = f"https://overthecap.com/player/_/{otc_id}"
+    req = urllib.request.Request(url, headers=HEADERS)
+    try:
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            html = resp.read().decode("utf-8", errors="ignore")
+    except Exception as e:
+        print(f"  [Warn] OTC取得失敗 ({otc_id}): {e}")
+        return []
+
+    tables = re.findall(r"<table[\s\S]*?<\/table>", html, re.I)
+    target_table = None
+    for t in tables:
+        if "Base Salary" in t and "Cap" in t:
+            target_table = t
+            break
+
+    if not target_table:
+        return []
+
+    rows = re.findall(r"<tr[^>]*>([\s\S]*?)<\/tr>", target_table, re.I)
+    seasons = []
+    for tr in rows[1:]:
+        tds = re.findall(r"<td[^>]*>([\s\S]*?)<\/td>", tr, re.I)
+        cleaned = [re.sub(r"<[^>]+>", "", d).strip() for d in tds]
+        if len(cleaned) >= 8 and re.match(r"^\d{4}$", cleaned[0]):
+            seasons.append({
+                "year": cleaned[0],
+                "team": cleaned[1],
+                "baseSalary": clean_to_m(cleaned[2]),
+                "proratedBonus": clean_to_m(cleaned[3]),
+                "optionBonus": clean_to_m(cleaned[4]),
+                "rosterBonus": clean_to_m(cleaned[5]),
+                "workoutBonus": clean_to_m(cleaned[6]),
+                "guaranteed": clean_to_m(cleaned[7]),
+                "capHit": clean_to_m(cleaned[8]),
+                "cashPaid": clean_to_m(cleaned[10] if len(cleaned) > 10 else cleaned[9])
+            })
+    return seasons
+
+# 主要選手 (Stafford 等) の OTC データを取得
+target_otc_ids = {"1060"}
+otc_seasons_map = {}
+for oid in target_otc_ids:
+    print(f" -> OTC ID {oid} の詳細テーブル取得中...")
+    otc_seasons_map[oid] = fetch_otc_season_breakdown(oid)
+
+print("4/4: active_contracts.json インデックス構築...")
 result_contracts = {}
-
 for otc_id, rows in contracts_by_otc.items():
     gsis_id = otc_to_gsis.get(otc_id)
     if not gsis_id:
         continue
 
-    rows.sort(key=lambda r: to_num(r.get("year_signed")))
+    def parse_year(x):
+        try:
+            return int(x.get("year_signed", 0))
+        except Exception:
+            return 0
 
-    # 最新契約（is_active == True を優先、なければ最終行）
-    active_rows = [r for r in rows if r.get("is_active") is True or str(r.get("is_active")).upper() == "TRUE"]
-    active_row = active_rows[-1] if active_rows else rows[-1]
+    rows.sort(key=parse_year)
+    active_row = next((r for r in reversed(rows) if str(r.get("is_active", "")).upper() == "TRUE"), rows[-1])
 
-    # 過去契約履歴
     contract_history = []
     for r in rows:
         contract_history.append({
-            "team": str(r.get("team") or ""),
-            "yearSigned": to_num(r.get("year_signed")),
-            "years": to_num(r.get("years")),
-            "total": to_m(r.get("value")),
-            "apy": to_m(r.get("apy")),
-            "guaranteed": to_m(r.get("guaranteed")),
+            "team": r.get("team") or "",
+            "yearSigned": to_int(r.get("year_signed")),
+            "years": to_int(r.get("years")),
+            "total": clean_to_m(r.get("value")),
+            "apy": clean_to_m(r.get("apy")),
+            "guaranteed": clean_to_m(r.get("guaranteed")),
             "type": "Contract",
-            "status": "Active" if r.get("is_active") is True else "Expired",
+            "status": "",
             "amountEarned": 0.0
         })
 
-    # 年度別内訳 (seasonHistory)
-    season_history = []
-    raw_sh = active_row.get("season_history")
-    
-    if raw_sh is not None:
-        sh_items = []
-        if isinstance(raw_sh, pd.DataFrame):
-            sh_items = raw_sh.to_dict(orient="records")
-        elif hasattr(raw_sh, "tolist"):
-            sh_items = raw_sh.tolist()
-        elif isinstance(raw_sh, list):
-            sh_items = raw_sh
-            
-        for item in sh_items:
-            if not isinstance(item, dict):
-                continue
-            
-            year_val = item.get("year") or item.get("season")
-            if not year_val or pd.isna(year_val):
-                continue
-            year_str = str(int(float(year_val)))
-
-            season_history.append({
-                "year": year_str,
-                "team": str(item.get("team") or active_row.get("team") or ""),
-                "capHit": to_m(item.get("cap_number") or item.get("cap_hit") or item.get("cap_amount")),
-                "baseSalary": to_m(item.get("base_salary")),
-                "proratedBonus": to_m(item.get("prorated_bonus") or item.get("signing_bonus")),
-                "rosterBonus": to_m(item.get("roster_bonus")),
-                "optionBonus": to_m(item.get("option_bonus")),
-                "guaranteed": to_m(item.get("guaranteed_salary") or item.get("guaranteed")),
-                "cashPaid": to_m(item.get("cash_paid") or item.get("cash_spent")),
-                "workoutBonus": to_m(item.get("workout_bonus")),
-                "perGameRosterBonus": to_m(item.get("per_game_bonus") or item.get("per_game_roster_bonus")),
-                "otherBonus": to_m(item.get("other_bonus"))
-            })
+    seasons = otc_seasons_map.get(otc_id, [])
 
     result_contracts[gsis_id] = {
-        "team": str(active_row.get("team") or ""),
-        "yearSigned": to_num(active_row.get("year_signed")),
-        "years": to_num(active_row.get("years")),
-        "total": to_m(active_row.get("value")),
-        "apy": to_m(active_row.get("apy")),
-        "guaranteed": to_m(active_row.get("guaranteed")),
-        "seasonHistory": season_history,
+        "team": active_row.get("team") or "",
+        "yearSigned": to_int(active_row.get("year_signed")),
+        "years": to_int(active_row.get("years")),
+        "total": clean_to_m(active_row.get("value")),
+        "apy": clean_to_m(active_row.get("apy")),
+        "guaranteed": clean_to_m(active_row.get("guaranteed")),
+        "seasonHistory": seasons,
         "contractHistory": contract_history
     }
 
-print(f" -> 有効契約生成完了: {len(result_contracts)} 選手")
-
-# 4. active_contracts.json へ出力
 output_payload = {
     "source": "NFLverse / Over The Cap",
     "sourceUpdatedAt": datetime.now(timezone.utc).isoformat(),
@@ -150,9 +159,11 @@ output_payload = {
 }
 
 os.makedirs("server/data", exist_ok=True)
-out_path = "server/data/active_contracts.json"
-with open(out_path, "w", encoding="utf-8") as f:
+output_path = "server/data/active_contracts.json"
+with open(output_path, "w", encoding="utf-8") as f:
     json.dump(output_payload, f, ensure_ascii=False)
 
-sz_mb = os.path.getsize(out_path) / (1024 * 1024)
-print(f"4/4: 保存完了 {out_path} ({sz_mb:.2f} MB)")
+print(f"完了: {output_path} ({len(result_contracts)} 選手)")
+if "00-0026498" in result_contracts:
+    st = result_contracts["00-0026498"]
+    print(f"Stafford seasonHistory 件数: {len(st.get('seasonHistory', []))}")
