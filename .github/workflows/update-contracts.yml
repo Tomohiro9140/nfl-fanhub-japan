@@ -1,0 +1,36 @@
+name: Update NFL Contracts Data
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 3 * * 2'
+
+jobs:
+  update-contracts:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install pandas pyarrow
+
+      - name: Run contracts generator
+        run: |
+          python scripts/generate_contracts.py
+
+      - name: Commit and push if changed
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add server/data/active_contracts.json
+          git diff --quiet && git diff --staged --quiet || (git commit -m "chore(data): auto-update NFL contracts via Over The Cap / NFLverse [skip ci]" && git push origin main)
