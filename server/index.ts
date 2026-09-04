@@ -11,10 +11,7 @@ async function startServer() {
   const app = express();
   const server = createServer(app);
 
-  app.use(express.json());
-
-  // 1. APIエンドポイントのマウント
-  app.use("/api", apiApp);
+  // 1. apiApp 自体にすでに "/api/trpc" 等が含まれているため、ルート (/) にそのままマウント
   app.use(apiApp);
 
   // 2. 静的ファイルの配信
@@ -25,10 +22,10 @@ async function startServer() {
 
   app.use(express.static(staticPath));
 
-  // 3. SPAクライアントサイドルーティング (API以外をindex.htmlへ)
+  // 3. SPAルーティング (APIリクエスト以外の全パスを index.html へ流す)
   app.get("*", (req, res) => {
     if (req.path.startsWith("/api")) {
-      return res.status(404).json({ error: "Not Found" });
+      return res.status(404).json({ error: "API Route Not Found" });
     }
     res.sendFile(path.join(staticPath, "index.html"));
   });
