@@ -29,4 +29,4 @@ jobs:
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git add server/data/active_contracts.json
-          git diff --quiet && git diff --staged --quiet || (git commit -m "chore(data): auto-update NFL contracts via Over The Cap / NFLverse [skip ci]" && git push origin main)
+          git diff --quiet && git diff --staged --quiet || (git commit -m "chore(data): auto-update NFL contracts via Over The Cap / NFLverse" && git push origin main)
