@@ -7,7 +7,7 @@ import re
 import urllib.request
 from datetime import datetime, timezone
 
-HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
+HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
 
 def clean_to_m(val):
     if not val:
@@ -28,7 +28,7 @@ def to_int(val):
     except Exception:
         return 0
 
-print("1/4: players.csv (GSIS -> OTC_ID マッピング) を取得中...")
+print("1/4: players.csv を取得中...")
 otc_to_gsis = {}
 req_p = urllib.request.Request(
     "https://github.com/nflverse/nflverse-data/releases/download/players/players.csv",
@@ -61,23 +61,30 @@ with urllib.request.urlopen(req_c) as resp:
                 contracts_by_otc[otc_id] = []
             contracts_by_otc[otc_id].append(r)
 
-print("3/4: Over The Cap から現行契約の年度別内訳テーブルを取得中...")
+print("3/4: Over The Cap から年度別内訳テーブルを取得中...")
 def fetch_otc_season_breakdown(otc_id):
     url = f"https://overthecap.com/player/_/{otc_id}"
     req = urllib.request.Request(url, headers=HEADERS)
     try:
-        with urllib.request.urlopen(req, timeout=10) as resp:
+        with urllib.request.urlopen(req, timeout=15) as resp:
             html = resp.read().decode("utf-8", errors="ignore")
     except Exception as e:
         print(f"  [Warn] OTC取得失敗 ({otc_id}): {e}")
         return []
 
     tables = re.findall(r"<table[\s\S]*?<\/table>", html, re.I)
+    if not tables:
+        return []
+
+    # Table #5 (インデックス4) を最優先、見つからない場合は探索
     target_table = None
-    for t in tables:
-        if "Base Salary" in t and "Cap" in t:
-            target_table = t
-            break
+    if len(tables) >= 5:
+        target_table = tables[4]
+    else:
+        for t in tables:
+            if "Base Salary" in t:
+                target_table = t
+                break
 
     if not target_table:
         return []
@@ -88,28 +95,32 @@ def fetch_otc_season_breakdown(otc_id):
         tds = re.findall(r"<td[^>]*>([\s\S]*?)<\/td>", tr, re.I)
         cleaned = [re.sub(r"<[^>]+>", "", d).strip() for d in tds]
         if len(cleaned) >= 8 and re.match(r"^\d{4}$", cleaned[0]):
-            seasons.append({
-                "year": cleaned[0],
-                "team": cleaned[1],
-                "baseSalary": clean_to_m(cleaned[2]),
-                "proratedBonus": clean_to_m(cleaned[3]),
-                "optionBonus": clean_to_m(cleaned[4]),
-                "rosterBonus": clean_to_m(cleaned[5]),
-                "workoutBonus": clean_to_m(cleaned[6]),
-                "guaranteed": clean_to_m(cleaned[7]),
-                "capHit": clean_to_m(cleaned[8]),
-                "cashPaid": clean_to_m(cleaned[10] if len(cleaned) > 10 else cleaned[9])
-            })
+            year_val = int(cleaned[0])
+            # 現契約（2022年以降）に絞り込み
+            if year_val >= 2022:
+                seasons.append({
+                    "year": cleaned[0],
+                    "team": cleaned[1],
+                    "baseSalary": clean_to_m(cleaned[2]),
+                    "proratedBonus": clean_to_m(cleaned[3]),
+                    "optionBonus": clean_to_m(cleaned[4]),
+                    "rosterBonus": clean_to_m(cleaned[5]),
+                    "workoutBonus": clean_to_m(cleaned[6]),
+                    "guaranteed": clean_to_m(cleaned[7]),
+                    "capHit": clean_to_m(cleaned[8]),
+                    "cashPaid": clean_to_m(cleaned[10] if len(cleaned) > 10 else cleaned[9])
+                })
     return seasons
 
-# 主要選手 (Stafford 等) の OTC データを取得
 target_otc_ids = {"1060"}
 otc_seasons_map = {}
 for oid in target_otc_ids:
     print(f" -> OTC ID {oid} の詳細テーブル取得中...")
-    otc_seasons_map[oid] = fetch_otc_season_breakdown(oid)
+    parsed = fetch_otc_season_breakdown(oid)
+    print(f"    取得成功件数: {len(parsed)} 件")
+    otc_seasons_map[oid] = parsed
 
-print("4/4: active_contracts.json インデックス構築...")
+print("4/4: active_contracts.json インデックス構築中...")
 result_contracts = {}
 for otc_id, rows in contracts_by_otc.items():
     gsis_id = otc_to_gsis.get(otc_id)
