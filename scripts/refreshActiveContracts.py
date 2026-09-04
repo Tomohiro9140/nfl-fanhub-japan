@@ -2,7 +2,10 @@ import urllib.request, gzip, io, csv, json, os
 from datetime import datetime, timezone
 
 print("1/3: players.csv を取得中...")
-req_p = urllib.request.Request("https://github.com/nflverse/nflverse-data/releases/download/players/players.csv", headers={"User-Agent": "Mozilla/5.0"})
+req_p = urllib.request.Request(
+    "https://github.com/nflverse/nflverse-data/releases/download/players/players.csv",
+    headers={"User-Agent": "Mozilla/5.0"}
+)
 otc_to_gsis = {}
 with urllib.request.urlopen(req_p) as resp:
     reader = csv.DictReader(io.TextIOWrapper(resp, encoding="utf-8"))
@@ -14,8 +17,12 @@ with urllib.request.urlopen(req_p) as resp:
 
 print(f" -> 紐付け完了 ({len(otc_to_gsis)} 選手)")
 
-print("2/3: historical_contracts.csv.gz を解析中...")
-req_c = urllib.request.Request("https://github.com/nflverse/nflverse-data/releases/download/contracts/historical_contracts.csv.gz", headers={"User-Agent": "Mozilla/5.0"})
+print("2/3: historical_contracts.csv.gz をストリーミング解析中...")
+req_c = urllib.request.Request(
+    "https://github.com/nflverse/nflverse-data/releases/download/contracts/historical_contracts.csv.gz",
+    headers={"User-Agent": "Mozilla/5.0"}
+)
+
 contracts_by_otc = {}
 with urllib.request.urlopen(req_c) as resp:
     with gzip.GzipFile(fileobj=resp) as gz:
@@ -28,7 +35,22 @@ with urllib.request.urlopen(req_c) as resp:
                 contracts_by_otc[otc_id] = []
             contracts_by_otc[otc_id].append(r)
 
-print("3/3: gsis_id インデックスを構築中...")
+print("3/3: Mドル単位変換とインデックス構築中...")
+
+def to_m(val):
+    try:
+        v = float(val)
+        return round(v / 1_000_000, 2) if v == v else 0.0
+    except:
+        return 0.0
+
+def to_num(val):
+    try:
+        v = float(val)
+        return int(v) if v == v else 0
+    except:
+        return 0
+
 result_contracts = {}
 for otc_id, rows in contracts_by_otc.items():
     gsis_id = otc_to_gsis.get(otc_id)
@@ -40,34 +62,29 @@ for otc_id, rows in contracts_by_otc.items():
         except: return 0
     rows.sort(key=parse_year)
 
-    active_row = next((r for r in reversed(rows) if r.get("is_active", "").upper() == "TRUE"), rows[-1])
-
-    def to_num(val):
-        try:
-            v = float(val)
-            return v if v == v else 0
-        except:
-            return 0
+    active_row = next((r for r in reversed(rows) if str(r.get("is_active", "")).upper() == "TRUE"), rows[-1])
 
     contract_history = []
     for r in rows:
         contract_history.append({
-            "team": r.get("team"),
-            "yearSigned": int(to_num(r.get("year_signed"))),
-            "years": int(to_num(r.get("years"))),
-            "total": to_num(r.get("value")),
-            "apy": to_num(r.get("apy")),
-            "guaranteed": to_num(r.get("guaranteed")),
-            "type": "Contract"
+            "team": r.get("team") or "",
+            "yearSigned": to_num(r.get("year_signed")),
+            "years": to_num(r.get("years")),
+            "total": to_m(r.get("value")),
+            "apy": to_m(r.get("apy")),
+            "guaranteed": to_m(r.get("guaranteed")),
+            "type": "Contract",
+            "status": "",
+            "amountEarned": 0.0
         })
 
     result_contracts[gsis_id] = {
-        "team": active_row.get("team"),
-        "yearSigned": int(to_num(active_row.get("year_signed"))),
-        "years": int(to_num(active_row.get("years"))),
-        "total": to_num(active_row.get("value")),
-        "apy": to_num(active_row.get("apy")),
-        "guaranteed": to_num(active_row.get("guaranteed")),
+        "team": active_row.get("team") or "",
+        "yearSigned": to_num(active_row.get("year_signed")),
+        "years": to_num(active_row.get("years")),
+        "total": to_m(active_row.get("value")),
+        "apy": to_m(active_row.get("apy")),
+        "guaranteed": to_m(active_row.get("guaranteed")),
         "seasonHistory": [],
         "contractHistory": contract_history
     }
@@ -85,3 +102,7 @@ with open(output_path, "w", encoding="utf-8") as f:
 
 size_mb = os.path.getsize(output_path) / (1024 * 1024)
 print(f"完了: {output_path} ({len(result_contracts)} 選手, {size_mb:.2f} MB)")
+
+mahomes = result_contracts.get("00-0033873")
+if mahomes:
+    print(f"Mahomes 検証: {mahomes['yearSigned']}年 / {mahomes['years']}年契約 / 総額: ${mahomes['total']}M / APY: ${mahomes['apy']}M")
