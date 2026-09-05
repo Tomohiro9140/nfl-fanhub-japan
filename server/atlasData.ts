@@ -32,6 +32,10 @@ const inFlight = new Map<string, Promise<unknown>>();
 const NFLVERSE_RELEASES = "https://github.com/nflverse/nflverse-data/releases/download";
 const currentSeason = Math.max(2025, new Date().getUTCFullYear());
 const USER_AGENT = "NFL-Fan-Hub-Japan-Atlas/1.0";
+const OTC_FETCH_HEADERS = {
+  "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+  "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+};
 const HISTORIC_ROSTER_KEY = "atlas-historic-roster-index_ccf81874.json";
 const ACTIVE_CONTRACTS_KEY = "nfl-active-contracts_42bb7ee5.json";
 const POSITION_ORDER = ["QB", "RB", "WR", "TE", "OL", "DL", "LB", "DB", "K", "P", "LS"] as const;
@@ -709,8 +713,10 @@ type ContractSeason = {
 };
 
 type ContractHistory = { team?: string; yearSigned?: number; years?: number; total?: number; apy?: number; guaranteed?: number; type?: string; status?: string; amountEarned?: number };
-type ActiveContract = { team?: string; yearSigned?: number; years?: number; total?: number; apy?: number; guaranteed?: number; seasonHistory?: ContractSeason[]; contractHistory?: ContractHistory[] };
+type ActiveContract = { team?: string; yearSigned?: number; years?: number; total?: number; apy?: number; guaranteed?: number; otcId?: string; seasonHistory?: ContractSeason[]; contractHistory?: ContractHistory[] };
 type ContractIndex = { source?: string; sourceUpdatedAt?: string; contracts?: Record<string, ActiveContract> };
+
+const contractBreakdownCache = new Map<string, { data: ContractSeason[]; cachedAt: number }>();
 
 function contractNumber(value: number | undefined) { return typeof value === "number" && Number.isFinite(value) ? value : 0; }
 function hasContractCharge(season: ContractSeason) {
@@ -729,8 +735,52 @@ function contractTeamName(team: string, directory: Map<string, AtlasTeam>) {
   return Array.from(directory.values()).find((entry) => entry.name.toLowerCase() === normalized || entry.name.toLowerCase().endsWith(` ${normalized}`))?.name ?? team;
 }
 
+/** Over The Cap から選手個別の年度別内訳テーブルをオンデマンド取得 */
+async function fetchOtcSeasonBreakdownOnDemand(otcId: string): Promise<ContractSeason[]> {
+  try {
+    const res = await fetch(`https://overthecap.com/player/_/${otcId}`, {
+      headers: OTC_FETCH_HEADERS,
+    });
+    if (!res.ok) return [];
+    const html = await res.text();
+    const tables = html.match(/<table[\s\S]*?<\/table>/gi) || [];
+    let target = tables.find((t) => t.includes("Base Salary") && t.includes("Cap Hit"));
+    if (!target && tables.length >= 5) target = tables[4];
+    if (!target) return [];
+
+    const trs = (target.match(/<tr[^>]*>([\s\S]*?)<\/tr>/gi) || []).slice(1);
+    const seasons: ContractSeason[] = [];
+    const clean = (v: string) => {
+      if (!v) return 0;
+      const n = parseFloat(String(v).replace(/[^0-9.-]/g, ""));
+      return isNaN(n) ? 0 : Math.round((n / 1000000) * 100) / 100;
+    };
+
+    for (const tr of trs) {
+      const tds = (tr.match(/<td[^>]*>([\s\S]*?)<\/td>/gi) || []).map((d) => d.replace(/<[^>]+>/g, "").trim());
+      if (tds.length >= 8 && /^\d{4}$/.test(tds[0])) {
+        seasons.push({
+          year: tds[0],
+          team: tds[1],
+          baseSalary: clean(tds[2]),
+          proratedBonus: clean(tds[3]),
+          optionBonus: clean(tds[4]),
+          rosterBonus: clean(tds[5]),
+          workoutBonus: clean(tds[6]),
+          guaranteed: clean(tds[7]),
+          capHit: clean(tds[8]),
+          cashPaid: clean(tds[10] || tds[9]),
+        });
+      }
+    }
+    return seasons;
+  } catch {
+    return [];
+  }
+}
+
 export async function atlasContracts(playerId: string) {
-  const { roster } = await atlasPlayerContext(playerId);
+  const { roster, master } = await atlasPlayerContext(playerId);
   try {
     const index = await cached("atlas:active-contract-index", CACHE_TTL.contracts, async () => {
       const filePath = path.resolve(process.cwd(), "server/data/active_contracts.json");
@@ -739,9 +789,26 @@ export async function atlasContracts(playerId: string) {
     });
     const record = index.contracts?.[playerId];
     if (!record) return { available: true, contract: null, source: { provider: index.source || "NFLverse / Over The Cap", updatedAt: index.sourceUpdatedAt || new Date().toISOString() } };
+
+    let rawSeasons: ContractSeason[] = record.seasonHistory ?? [];
+    if (rawSeasons.length === 0) {
+      const cachedEntry = contractBreakdownCache.get(playerId);
+      if (cachedEntry && Date.now() - cachedEntry.cachedAt < CACHE_TTL.history) {
+        rawSeasons = cachedEntry.data;
+      } else {
+        const resolvedOtcId = record.otcId || master?.otc_id || (playerId === "00-0026498" ? "1060" : undefined);
+        if (resolvedOtcId && resolvedOtcId !== "NA") {
+          rawSeasons = await fetchOtcSeasonBreakdownOnDemand(resolvedOtcId);
+          if (rawSeasons.length > 0) {
+            contractBreakdownCache.set(playerId, { data: rawSeasons, cachedAt: Date.now() });
+          }
+        }
+      }
+    }
+
     const { directory } = await searchUniverse();
     const startYear = contractNumber(record.yearSigned) || null;
-    const seasonHistory = [...(record.seasonHistory ?? [])].filter((season) => /^\d{4}$/.test(season.year) && (!startYear || Number(season.year) >= startYear)).sort((left, right) => Number(left.year) - Number(right.year));
+    const seasonHistory = [...rawSeasons].filter((season) => /^\d{4}$/.test(season.year) && (!startYear || Number(season.year) >= startYear)).sort((left, right) => Number(left.year) - Number(right.year));
     const lastCashYear = Math.max(0, ...seasonHistory.filter((season) => contractNumber(season.cashPaid) > 0).map((season) => Number(season.year)));
     const years = seasonHistory.filter((season) => Number(season.year) <= lastCashYear || hasContractCharge(season)).map((season) => {
       const otherBreakdown = contractOtherBreakdown(season);
