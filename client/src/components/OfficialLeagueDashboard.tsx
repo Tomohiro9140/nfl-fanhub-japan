@@ -3,7 +3,6 @@ import React, { useMemo, useState } from "react";
 import { nflTeams, officialTeamScheduleUrl, type FavoriteTeam } from "@/lib/nflTeams";
 import { abbreviatedMatchup, getFavoriteLatestResults, getFavoriteSchedule, getNextSevenDayGames, seasonWeekLabel, type LeagueCalendarGame } from "@/lib/leagueCalendar";
 import { daznWatchTarget } from "@/lib/daznWatch";
-import { compactVenue } from "@/lib/gameVenue";
 import { hasIndividualOfficialHighlight } from "@/lib/nflHighlights";
 
 export type LeagueDashboard = {
@@ -21,7 +20,6 @@ function calendarDate(value: Date) {
   const d = new Date(value);
   const dateStr = new Intl.DateTimeFormat("ja-JP", { month: "numeric", day: "numeric", weekday: "short", timeZone: "Asia/Tokyo" }).format(d);
   
-  // 秒が 59（TBDフラグ）の場合は時間を非表示にし "TBD" と表記
   if (d.getSeconds() === 59) {
     return `${dateStr} TBD`;
   }
@@ -76,8 +74,6 @@ export function OfficialLatestResults({ favorite, dashboard, loading, spoilerMod
               const homeWon = !spoilerMode && hasOfficialScore && homeScore > awayScore;
               const gameDate = jstResultDate(game.kickoffAt, game.gameDate);
               const hasExactKickoff = Boolean(game.kickoffAt);
-              const venue = compactVenue(game.venue);
-              const resultMeta = [game.weekLabel ?? "OFFICIAL", !spoilerMode && game.gameState !== "FINAL" ? game.gameState : null].filter(Boolean).join(" · ");
               return (
                 <div key={game.id} className="grid min-h-[84px] grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 py-7 pb-2.5">
                   <a href={game.gameUrl} target="_blank" rel="noreferrer" className="min-w-0 self-center overflow-visible text-[13px] leading-[1.45]">
@@ -87,8 +83,6 @@ export function OfficialLatestResults({ favorite, dashboard, loading, spoilerMod
                   <div className="relative min-w-[106px] self-center text-right">
                     <div className="absolute bottom-full right-0 mb-1.5 w-[164px] text-right">
                       {gameDate ? <p className="font-mono text-[8px] font-bold leading-[10px] tracking-[.08em] text-[#526173]">{hasExactKickoff ? "GAME DATE" : "OFFICIAL DATE"} · {gameDate}{hasExactKickoff ? " JST" : ""}</p> : null}
-                      <p className="font-mono text-[8px] font-bold leading-[10px] tracking-[.08em] text-[#64748b]">{resultMeta}</p>
-                      {venue ? <p className="truncate font-mono text-[8px] font-bold leading-[10px] tracking-[.08em] text-[#7a6557]" title={game.venue ?? undefined}>VENUE · {venue}</p> : null}
                     </div>
                     <p className="relative font-mono text-[26px] font-black leading-[.85] tracking-[-.06em]"><span className={spoilerMode ? "invisible" : undefined}><span className={awayWon ? "text-[#a84420]" : undefined}>{game.awayScore ?? "—"}</span><span> - </span><span className={homeWon ? "text-[#a84420]" : undefined}>{game.homeScore ?? "—"}</span></span>{spoilerMode ? <span aria-label="スコア非表示" className="absolute inset-0 grid place-items-center">—</span> : null}</p>
                     {game.gameState === "FINAL" && onOpenGameStats ? <div className="relative mt-2 h-3">{!spoilerMode ? <button type="button" onClick={() => onOpenGameStats(game.gameUrl)} onPointerEnter={() => onWarmGameStats?.(game.gameUrl)} onPointerDown={() => onWarmGameStats?.(game.gameUrl)} onFocus={() => onWarmGameStats?.(game.gameUrl)} className="absolute right-0 inline-flex h-3 items-center gap-1 font-mono text-[8px] font-black tracking-[.06em] text-[#a84420] underline decoration-[#e85d2a] decoration-2 underline-offset-2"><BarChart3 className="h-3 w-3" /> GAME STATS</button> : <span aria-hidden="true" className="block h-3" />}</div> : null}
