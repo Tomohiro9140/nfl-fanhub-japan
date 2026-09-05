@@ -923,10 +923,14 @@ export async function atlasContracts(playerId: string) {
         };
       });
 
-      const history = otcData.contractHistory.map((entry) => ({
-        ...entry,
-        team: contractTeamName(entry.team || playerTeam, directory),
-      }));
+      // 契約履歴を最新順（降順）に並び替えて反映
+      const history = otcData.contractHistory
+        .slice()
+        .reverse()
+        .map((entry) => ({
+          ...entry,
+          team: contractTeamName(entry.team || playerTeam, directory),
+        }));
 
       return {
         available: true,
