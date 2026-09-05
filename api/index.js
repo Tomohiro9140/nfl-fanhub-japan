@@ -3307,8 +3307,32 @@ async function atlasContracts(playerId) {
     };
   }
 }
+function cleanupExpiredCaches() {
+  const now = Date.now();
+  let clearedGeneral = 0;
+  let clearedContracts = 0;
+  for (const [key, entry] of cache.entries()) {
+    if (entry.expiresAt <= now) {
+      cache.delete(key);
+      clearedGeneral++;
+    }
+  }
+  for (const [key, entry] of contractDataCache.entries()) {
+    if (now - entry.cachedAt >= CACHE_TTL.contracts) {
+      contractDataCache.delete(key);
+      clearedContracts++;
+    }
+  }
+  if (clearedGeneral > 0 || clearedContracts > 0) {
+    console.log(`[ATLAS Memory Cleanup] Cleared expired entries: General=${clearedGeneral}, Contracts=${clearedContracts}`);
+  }
+}
+var cleanupInterval = setInterval(cleanupExpiredCaches, 60 * 60 * 1e3);
+if (cleanupInterval.unref) {
+  cleanupInterval.unref();
+}
 searchUniverse().catch((err) => {
-  console.warn("[ATLAS] Pre-warmup notice:", err.message);
+  console.warn("[ATLAS Warmup] Background preload failed:", err?.message || err);
 });
 
 // server/fieldlineData.ts
