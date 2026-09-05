@@ -92,7 +92,6 @@ export function OfficialGameTicket({ favorite, snapshot, loading, spoilerMode = 
               <p className="font-mono text-[9px] font-semibold tracking-[.14em] text-[#a5b3c9]">{game.kickoffAtEstimated && gameStatus.label === "LIVE" ? "OFFICIAL SCOREBOARD" : "JST"}</p>
               <p className="mt-1 font-display text-lg font-extrabold leading-none">{game.kickoffAtEstimated && gameStatus.label === "LIVE" ? "LIVE NOW" : fmtDate(game.kickoffAt)}</p>
               <GameCountdown kickoffAt={game.kickoffAt} result={{ gameState: game.gameState, awayScore: game.awayScore, homeScore: game.homeScore }} hideFinalScore={spoilerMode} className="mt-1 text-[9px]" />
-              {venue ? <p className="mt-1 truncate text-[10px] text-[#ffc1a7]" title={game.venue ?? undefined}>{venue}</p> : null}
             </>}
           </div>
           <div className="text-right"><p className={`font-display text-base font-bold leading-tight ${isRevealedFinal && favoriteScore !== null && opponentScore !== null && opponentScore > favoriteScore ? "text-[#ffc1a7]" : ""}`}>{opponentLabel}</p></div>
