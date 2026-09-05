@@ -743,16 +743,19 @@ function contractNumber(value: number | undefined) {
   return typeof value === "number" && Number.isFinite(value) ? value : 0;
 }
 
-/** 
- * OTCテーブルの文字列（例: "$8,000,000", "$61,245"）を純粋な数値に変換。
- * 結合ゴミ文字列（例: "$14,000,000$10,000,000..."）が含まれる場合は先頭の金額だけを正しく抽出。
+/**
+ * OTCテーブルのドル文字列（例: "$16,000,000", "$811,245"）を 
+ * フロントエンドUIが期待する「100万ドル単位（Million）」の数値に変換。
+ * 例: $16,000,000 -> 16.0 | $811,245 -> 0.81
+ * 末尾のデッドマネー等による数字結合文字列も先頭1つのみを安全に抽出。
  */
-function cleanDollar(val: string | undefined): number {
+function cleanToMillions(val: string | undefined): number {
   if (!val) return 0;
   const match = val.match(/\$?\s*([0-9]{1,3}(?:,[0-9]{3})*(?:\.[0-9]+)?)/);
   if (!match || !match[1]) return 0;
-  const num = parseFloat(match[1].replace(/,/g, ""));
-  return isNaN(num) ? 0 : num;
+  const rawNum = parseFloat(match[1].replace(/,/g, ""));
+  if (isNaN(rawNum) || rawNum === 0) return 0;
+  return Math.round((rawNum / 1_000_000) * 100) / 100;
 }
 
 function cleanToInt(val: string | undefined): number {
@@ -791,67 +794,63 @@ async function fetchOtcComprehensiveData(otcId: string, teamFallback: string): P
     const tables = html.match(/<table[\s\S]*?<\/table>/gi) || [];
     if (tables.length === 0) return null;
 
-    // 1. Table [0] (Current Contract) の動的パース
+    // 1. Table [0] (Current Contract) のパース
     const t0 = tables[0];
     const t0Rows = (t0.match(/<tr[^>]*>[\s\S]*?<\/tr>/gi) || []);
     const seasonHistory: ContractSeason[] = [];
 
-    // ヘッダー行 (Row 0) から各カラムのインデックスを動的に検出
-    let idxYear = 0;
-    let idxBase = -1;
-    let idxProrated = -1;
-    let idxOption = -1;
-    let idxRoster = -1;
-    let idxGuaranteed = -1;
-    let idxCapHit = -1;
-
-    if (t0Rows.length > 0) {
-      const headerCells = (t0Rows[0].match(/<t[hd][^>]*>([\s\S]*?)<\/t[hd]>/gi) || [])
-        .map(c => c.replace(/<[^>]+>/g, "").trim().toLowerCase());
-
-      headerCells.forEach((h, i) => {
-        if (h.includes("year")) idxYear = i;
-        else if (h.includes("base salary")) idxBase = i;
-        else if (h.includes("prorated")) idxProrated = i;
-        else if (h.includes("option bonus") || h === "option") idxOption = i;
-        else if (h.includes("roster bonus") || h === "roster") idxRoster = i;
-        else if (h.includes("guaranteed")) idxGuaranteed = i;
-        else if (h.includes("capnumber") || h.includes("cap hit") || h.includes("cap number")) idxCapHit = i;
-      });
-    }
-
-    // 2段組ヘッダーの場合の補正 (Row 1 が Signing/Option などの場合)
-    if (t0Rows.length > 1) {
-      const subHeaderCells = (t0Rows[1].match(/<t[hd][^>]*>([\s\S]*?)<\/t[hd]>/gi) || [])
-        .map(c => c.replace(/<[^>]+>/g, "").trim().toLowerCase());
-      if (subHeaderCells.some(s => s.includes("option"))) {
-        // Staffordのような多段構造のケース
-        if (idxOption === -1) idxOption = 4;
-      }
-    }
-
-    // 各行を動的インデックスに基づいてパース
-    for (let i = 1; i < t0Rows.length; i++) {
+    for (let i = 0; i < t0Rows.length; i++) {
       const tr = t0Rows[i];
       const cells = (tr.match(/<t[hd][^>]*>([\s\S]*?)<\/t[hd]>/gi) || []).map(c => c.replace(/<[^>]+>/g, "").trim());
       if (cells.length < 3) continue;
 
-      const yearCell = cells[idxYear] || cells[0] || "";
-      const yearMatch = yearCell.match(/\b(20\d{2})\b/);
-      if (!yearMatch) continue; // "Total" 等の集計行はスキップ
+      // 最初のセルから西暦4桁を判定
+      const yearMatch = cells[0].match(/\b(20\d{2})\b/);
+      if (!yearMatch) continue;
       const yearStr = yearMatch[1];
 
-      const baseText = idxBase >= 0 ? (cells[idxBase] || "") : "";
-      const isVoid = baseText.toLowerCase().includes("void") || yearCell.toLowerCase().includes("void");
+      // パーセンテージ列（"Cap %" 例: "15.4%", "0.4%"）の位置を特定
+      const pctIdx = cells.findIndex(c => /^\d+(\.\d+)?%$/.test(c.trim()));
 
-      const baseSalary = isVoid ? 0 : cleanDollar(baseText);
-      const proratedBonus = idxProrated >= 0 ? cleanDollar(cells[idxProrated]) : 0;
-      const optionBonus = idxOption >= 0 ? cleanDollar(cells[idxOption]) : 0;
-      const rosterBonus = idxRoster >= 0 ? cleanDollar(cells[idxRoster]) : 0;
-      const guaranteed = idxGuaranteed >= 0 ? cleanDollar(cells[idxGuaranteed]) : 0;
-      const capHit = idxCapHit >= 0 ? cleanDollar(cells[idxCapHit]) : (baseSalary + proratedBonus + optionBonus + rosterBonus);
+      // CapNumber (Cap Hit) は必ず Cap % の直前の列に存在する
+      let capHit = 0;
+      if (pctIdx > 0) {
+        capHit = cleanToMillions(cells[pctIdx - 1]);
+      }
 
-      // 実質的なキャップチャージが全くない遠い未来のVoid行のみ除外
+      // Base Salary は 年齢(Age) の直後の列に存在する（cells[2]）
+      const baseText = cells[2] || "";
+      const isVoid = baseText.toLowerCase().includes("void") || cells[0].toLowerCase().includes("void");
+      const baseSalary = isVoid ? 0 : cleanToMillions(baseText);
+
+      // Prorated Signing Bonus は Base Salary の次（cells[3]）
+      const proratedBonus = cleanToMillions(cells[3]);
+
+      // Roster / Option ボーナス等の抽出
+      let rosterBonus = 0;
+      let optionBonus = 0;
+      if (cells.length > 5 && pctIdx > 4) {
+        rosterBonus = cleanToMillions(cells[4]);
+        if (pctIdx >= 7) {
+          optionBonus = cleanToMillions(cells[5]);
+        }
+      }
+
+      // Guaranteed Salary の抽出（CapHit の前にある保証額セル）
+      let guaranteed = 0;
+      if (pctIdx >= 3) {
+        for (let c = 4; c < pctIdx - 1; c++) {
+          const val = cleanToMillions(cells[c]);
+          if (val > guaranteed) guaranteed = val;
+        }
+      }
+
+      // Cap Hit が特定できなかった場合の安全な合算フォールバック
+      if (capHit === 0 && !isVoid) {
+        capHit = Math.round((baseSalary + proratedBonus + rosterBonus + optionBonus) * 100) / 100;
+      }
+
+      // チャージのない未来の不要な Void 行のみスキップ
       if (isVoid && capHit === 0 && proratedBonus === 0 && optionBonus === 0) {
         continue;
       }
@@ -866,7 +865,7 @@ async function fetchOtcComprehensiveData(otcId: string, teamFallback: string): P
         workoutBonus: 0,
         guaranteed,
         capHit,
-        cashPaid: baseSalary + rosterBonus,
+        cashPaid: Math.round((baseSalary + rosterBonus) * 100) / 100,
         isVoidYear: isVoid,
       });
     }
@@ -886,10 +885,10 @@ async function fetchOtcComprehensiveData(otcId: string, teamFallback: string): P
           const status = cells[2] || "";
           const yearSigned = cleanToInt(cells[3]);
           const years = cleanToInt(cells[4]);
-          const total = cleanDollar(cells[5]);
-          const apy = cleanDollar(cells[6]);
-          const guaranteed = cleanDollar(cells[7]);
-          const amountEarned = cleanDollar(cells[8]);
+          const total = cleanToMillions(cells[5]);
+          const apy = cleanToMillions(cells[6]);
+          const guaranteed = cleanToMillions(cells[7]);
+          const amountEarned = cleanToMillions(cells[8]);
 
           const entry: ContractHistory = {
             team: rowTeam,
