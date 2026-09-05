@@ -10,8 +10,12 @@ export const TEAM_NAMES: Record<string, string> = {
   ARI: "Arizona Cardinals", ATL: "Atlanta Falcons", BAL: "Baltimore Ravens", BUF: "Buffalo Bills", CAR: "Carolina Panthers", CHI: "Chicago Bears", CIN: "Cincinnati Bengals", CLE: "Cleveland Browns", DAL: "Dallas Cowboys", DEN: "Denver Broncos", DET: "Detroit Lions", GB: "Green Bay Packers", HOU: "Houston Texans", IND: "Indianapolis Colts", JAX: "Jacksonville Jaguars", KC: "Kansas City Chiefs", LAC: "Los Angeles Chargers", LAR: "Los Angeles Rams", LV: "Las Vegas Raiders", MIA: "Miami Dolphins", MIN: "Minnesota Vikings", NE: "New England Patriots", NO: "New Orleans Saints", NYG: "New York Giants", NYJ: "New York Jets", PHI: "Philadelphia Eagles", PIT: "Pittsburgh Steelers", SF: "San Francisco 49ers", SEA: "Seattle Seahawks", TB: "Tampa Bay Buccaneers", TEN: "Tennessee Titans", WAS: "Washington Commanders",
 };
 
-export const TEAM_NICKNAMES: Record<string, string> = {
-  ARI: "Cardinals", ATL: "Falcons", BAL: "Ravens", BUF: "Bills", CAR: "Panthers", CHI: "Bears", CIN: "Bengals", CLE: "Browns", DAL: "Cowboys", DEN: "Broncos", DET: "Lions", GB: "Packers", HOU: "Texans", IND: "Colts", JAX: "Jaguars", KC: "Chiefs", LAC: "Chargers", LAR: "Rams", LV: "Raiders", MIA: "Dolphins", MIN: "Vikings", NE: "Patriots", NO: "Saints", NYG: "Giants", NYJ: "Jets", PHI: "Eagles", PIT: "Steelers", SF: "49ers", SEA: "Seahawks", TB: "Buccaneers", TEN: "Titans", WAS: "Commanders",
+// ESPN API上のチームIDマッピング
+const ESPN_TEAM_IDS: Record<string, string> = {
+  ARI: "22", ATL: "1", BAL: "33", BUF: "2", CAR: "29", CHI: "3", CIN: "4", CLE: "5",
+  DAL: "6", DEN: "7", DET: "8", GB: "9", HOU: "34", IND: "11", JAX: "30", KC: "12",
+  LAC: "24", LAR: "14", LV: "13", MIA: "15", MIN: "16", NE: "17", NO: "18", NYG: "19",
+  NYJ: "20", PHI: "21", PIT: "23", SF: "25", SEA: "26", TB: "27", TEN: "10", WAS: "28",
 };
 
 function decodeCodePoint(value: string, radix: number) {
@@ -35,8 +39,6 @@ export function normalizeOfficialText(value: string) {
   return (repaired.includes("") ? decodedEntities : repaired).normalize("NFC").replace(/[\u0000-\u001f\u007f]/g, " ").replace(/\s+/g, " ").trim();
 }
 
-const text = normalizeOfficialText;
-
 function hash(value: string) {
   return createHash("sha256").update(value).digest("hex");
 }
@@ -55,87 +57,74 @@ export function getOfficialTeamDataSources(teamCode: string) {
   };
 }
 
-function parseKickoff(value: string) {
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) || date.getUTCFullYear() < 2000 ? undefined : date;
-}
-
-function phaseFor(kickoffAt: Date) {
-  if (kickoffAt.getUTCMonth() === 7) return "preseason" as const;
-  return "regular" as const;
-}
-
 function gameEntry(teamCode: string, opponentCode: string, homeAway: "home" | "away", kickoffAt: Date, seasonPhase: "preseason" | "regular" | "postseason", weekLabel: string | null, venue: string | null, broadcast: string | null, sourceUrl: string): InsertOfficialGame {
   return { externalId: hash(`${teamCode}:${kickoffAt.toISOString()}:${opponentCode}`), teamCode, opponentCode, homeAway, seasonPhase, weekLabel, kickoffAt, venue, broadcast, sourceUrl, fetchedAt: new Date() };
 }
 
-/** リーグ全体の週別スケジュールページを一括フェッチして全チーム分の試合を抽出する */
-async function fetchAllLeagueGames(): Promise<Map<string, InsertOfficialGame[]>> {
+// ESPN APIから指定チームの全スケジュールを取得
+async function fetchEspnTeamGames(teamCode: string): Promise<InsertOfficialGame[]> {
+  const espnId = ESPN_TEAM_IDS[teamCode];
+  if (!espnId) return [];
   const season = currentSeason();
-  const teamGamesMap = new Map<string, InsertOfficialGame[]>();
-  Object.keys(TEAM_NAMES).forEach(code => teamGamesMap.set(code, []));
+  const url = `https://site.api.espn.com/apis/site/v2/sports/football/nfl/teams/${espnId}/schedule?season=${season}`;
 
-  // Preseason (1-3) と Regular (1-18) のページを巡回
-  const urls: string[] = [];
-  for (let w = 1; w <= 3; w++) urls.push(`https://www.nfl.com/schedules/${season}/by-week/preseason-week-${w}`);
-  for (let w = 1; w <= 18; w++) urls.push(`https://www.nfl.com/schedules/${season}/by-week/week-${w}`);
+  try {
+    const res = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0" } });
+    if (!res.ok) return [];
+    const data = (await res.json()) as { events?: Array<Record<string, unknown>> };
+    const events = data.events ?? [];
+    const games: InsertOfficialGame[] = [];
 
-  await Promise.allSettled(urls.map(async (url) => {
-    try {
-      const res = await fetch(url, { headers: { Accept: "text/html", "User-Agent": "Mozilla/5.0 NFLFanHubJapan/1.0" } });
-      if (!res.ok) return;
-      const html = await res.text();
-      
-      // ページ内のチームマッチアップ情報を抽出
-      const cards = html.split(/(?=<li\b|<div\b|<article\b)/i);
-      for (const card of cards) {
-        const kickoffValue = card.match(/(?:datetime|data-gametime|data-start-date|data-iso-time)="([^"]+)"/i)?.[1];
-        if (!kickoffValue) continue;
-        const kickoffAt = parseKickoff(kickoffValue);
-        if (!kickoffAt) continue;
+    for (const event of events) {
+      const competitions = (event.competitions as Array<Record<string, unknown>>) ?? [];
+      const comp = competitions[0];
+      if (!comp) continue;
 
-        // 含まれるチームを特定
-        const foundCodes = Object.keys(TEAM_NAMES).filter(code => {
-          const name = TEAM_NAMES[code];
-          const nick = TEAM_NICKNAMES[code];
-          return card.includes(name) || card.includes(code) || (nick && card.includes(nick));
-        });
+      const dateStr = String(comp.date || event.date || "");
+      const kickoffAt = new Date(dateStr);
+      if (Number.isNaN(kickoffAt.getTime())) continue;
 
-        if (foundCodes.length >= 2) {
-          const [teamA, teamB] = foundCodes;
-          const plain = text(card);
-          const seasonPhase = phaseFor(kickoffAt);
-          const weekNum = url.match(/(?:week-|preseason-week-)(\d+)/i)?.[1];
-          const weekLabel = weekNum ? (seasonPhase === "preseason" ? `PRESEASON WEEK ${weekNum}` : `WEEK ${weekNum}`) : null;
-          const venue = text(card.match(/(?:venue|stadium|location)[^>]*>([\s\S]*?)<\//i)?.[1] ?? "") || null;
-          const broadcast = card.match(/\b(CBS|FOX|NBC|ESPN|NFLN|PRIME|NETFLIX)\b/i)?.[0] ?? null;
+      const competitors = (comp.competitors as Array<Record<string, unknown>>) ?? [];
+      const teamComp = competitors.find((c) => {
+        const t = c.team as Record<string, unknown> | undefined;
+        return String(t?.id) === espnId;
+      });
+      const oppComp = competitors.find((c) => {
+        const t = c.team as Record<string, unknown> | undefined;
+        return String(t?.id) !== espnId;
+      });
 
-          // ホーム/アウェイ判定
-          const nameA = TEAM_NAMES[teamA];
-          const nameB = TEAM_NAMES[teamB];
-          let aIsHome = false;
-          if (new RegExp(`${nameB}.*?(?:at|@).*?(${nameA})`, "i").test(plain) || new RegExp(`${TEAM_NICKNAMES[teamB]}.*?(?:at|@).*?(${TEAM_NICKNAMES[teamA]})`, "i").test(plain)) {
-            aIsHome = true;
-          }
+      if (!teamComp || !oppComp) continue;
 
-          const entryA = gameEntry(teamA, teamB, aIsHome ? "home" : "away", kickoffAt, seasonPhase, weekLabel, venue, broadcast, url);
-          const entryB = gameEntry(teamB, teamA, aIsHome ? "away" : "home", kickoffAt, seasonPhase, weekLabel, venue, broadcast, url);
+      const oppTeam = oppComp.team as Record<string, unknown> | undefined;
+      const oppId = String(oppTeam?.id || "");
+      const oppEntry = Object.entries(ESPN_TEAM_IDS).find(([, id]) => id === oppId);
+      if (!oppEntry) continue;
+      const oppCode = oppEntry[0];
 
-          const listA = teamGamesMap.get(teamA) || [];
-          if (!listA.some(g => g.externalId === entryA.externalId)) listA.push(entryA);
-          teamGamesMap.set(teamA, listA);
+      const homeAway = String(teamComp.homeAway) === "home" ? "home" : "away";
+      const seasonType = Number(comp.seasonType || event.seasonType || 2);
+      const seasonPhase = seasonType === 1 ? "preseason" : seasonType === 3 ? "postseason" : "regular";
 
-          const listB = teamGamesMap.get(teamB) || [];
-          if (!listB.some(g => g.externalId === entryB.externalId)) listB.push(entryB);
-          teamGamesMap.set(teamB, listB);
-        }
-      }
-    } catch {
-      // ネットワークエラー等は無視して続行
+      const weekObj = comp.week as Record<string, unknown> | undefined;
+      const weekNum = Number(weekObj?.number || 1);
+      const weekLabel = seasonPhase === "preseason" ? `PRESEASON WEEK ${weekNum}` : seasonPhase === "postseason" ? `POSTSEASON` : `WEEK ${weekNum}`;
+
+      const venueObj = comp.venue as Record<string, unknown> | undefined;
+      const venue = String(venueObj?.fullName || "") || null;
+
+      const broadcasts = (comp.broadcasts as Array<Record<string, unknown>>) ?? [];
+      const names = broadcasts.flatMap((b) => (Array.isArray(b.names) ? b.names : [])) as string[];
+      const broadcast = names[0] || null;
+
+      const sourceUrl = `https://www.nfl.com/schedules/${season}/by-team/${TEAM_NAMES[teamCode].toLowerCase().replace(/\s+/g, "-")}`;
+      games.push(gameEntry(teamCode, oppCode, homeAway, kickoffAt, seasonPhase, weekLabel, venue, broadcast, sourceUrl));
     }
-  }));
 
-  return teamGamesMap;
+    return games;
+  } catch {
+    return [];
+  }
 }
 
 export function parseOfficialRosterPage(html: string, teamCode: string, sourceUrl: string): InsertOfficialRosterEntry[] {
@@ -169,22 +158,12 @@ async function fetchOfficialHtml(url: string) {
   }
 }
 
-// キャッシュとして一括取得した全リーグのスケジュールを保持
-let cachedLeagueGames: Map<string, InsertOfficialGame[]> | null = null;
-let lastLeagueFetchTime = 0;
-
 export async function refreshOfficialTeamData(teamCode: string) {
-  const now = Date.now();
-  if (!cachedLeagueGames || now - lastLeagueFetchTime > 30 * 60 * 1000) {
-    cachedLeagueGames = await fetchAllLeagueGames();
-    lastLeagueFetchTime = now;
-  }
-
   const { rosterUrl } = getOfficialTeamDataSources(teamCode);
   const rosterHtml = await fetchOfficialHtml(rosterUrl).catch(() => "");
   const roster = parseOfficialRosterPage(rosterHtml, teamCode, rosterUrl);
 
-  const teamGames = cachedLeagueGames.get(teamCode) ?? [];
+  const teamGames = await fetchEspnTeamGames(teamCode);
   if (teamGames.length > 0) {
     await replaceOfficialGamesForTeam(teamCode, teamGames);
   }
