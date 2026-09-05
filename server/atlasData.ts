@@ -239,7 +239,7 @@ async function hallOfFameYears(): Promise<Map<string, number>> {
     try {
       const response = await fetch("https://en.wikipedia.org/w/api.php?action=parse&page=List_of_Pro_Football_Hall_of_Fame_inductees&prop=wikitext&format=json&origin=*", { headers: { "User-Agent": USER_AGENT } });
       if (!response.ok) return fallback;
-      const payload = await response.json() as { parse?: {指示?: string; wikitext?: { "*"?: string } } };
+      const payload = await response.json() as { parse?: { wikitext?: { "*"?: string } } };
       const values = payload.parse?.wikitext?.["*"] ?? "";
       values.split(/\n\|-/).forEach((row) => {
         const columns = row.split("||");
@@ -314,8 +314,7 @@ export async function atlasSearchSuggestions(query: string) {
   const { active } = await searchUniverse();
   const players = active
     .filter((player) => normalizeAtlasText(player.name).includes(term))
-    .sort((left, right) => Number(!normalizeAtlasText(left.name).startsWith(term)) - Number(!normalizeAtlasText(right.name).startsWith(term)) || left.name.localeCompare(right.name))
-    .slice(0, 8);
+    .sort((left, right) => Number(!normalizeAtlasText(left.name).startsWith(term)) - Number(!normalizeAtlasText(right.name).startsWith(term)) || left.name.localeCompare(right.name));
   return { players };
 }
 
@@ -484,19 +483,17 @@ async function atlasCareerUncached(playerId: string) {
   const recentStart = Math.max(historic?.coverage.endSeason ? historic.coverage.endSeason + 1 : start, start);
   const seasons = Array.from({ length: Math.max(0, end - recentStart + 1) }, (_, index) => recentStart + index);
 
-  // ロスターCSVと週間スタッツCSVの両方から実所属チームを収集して結合
   const recentSeasons = await mapInBatches(seasons, 4, async (season) => {
     try {
       const rosterRows = await rosterForSeason(season).catch(() => [] as CsvRow[]);
       const rosterTeams = rosterRows.filter((row) => row.gsis_id === playerId).map((row) => teamAliases[row.team] ?? row.team).filter(Boolean);
 
-      // 週間スタッツから実際に試合出場したチームも取得
       let statTeams: string[] = [];
       try {
         const statRows = await fetchPlayerCsvRows(`${NFLVERSE_RELEASES}/player_stats/player_stats_${season}.csv`, playerId);
-        statTeams = statRows.map((r) => teamAliases[r.recent_team || ""] || r.recent_team || teamAliases[r.team || ""] || r.team).filter(Boolean);
+        statTeams = statRows.map((r) => teamAliases[r.recent_team || r.posteam || ""] || r.recent_team || r.posteam || teamAliases[r.team || ""] || r.team).filter(Boolean);
       } catch {
-        // スタッツが取れない場合はロスターのみ
+        // ロスターのみ利用
       }
 
       const mergedTeams = Array.from(new Set([...rosterTeams, ...statTeams]));
@@ -594,7 +591,7 @@ const sum = (rows: CsvRow[], sources: string[]) => rows.reduce((total, row) => t
 const ratio = (rows: CsvRow[], numerator: string[], denominator: string[], percent = false) => { const divisor = sum(rows, denominator); return divisor ? Number((sum(rows, numerator) / divisor * (percent ? 100 : 1)).toFixed(percent ? 1 : 2)) : 0; };
 const weightedAverage = (rows: CsvRow[], value: string, weight: string) => { const totalWeight = sum(rows, [weight]); return totalWeight ? Number((rows.reduce((total, row) => total + number(row[value]) * number(row[weight]), 0) / totalWeight).toFixed(2)) : 0; };
 const gameCount = (rows: CsvRow[]) => rows.some((row) => row.game_id || row.week)
-  ? new Set(rows.map((row) => row.game_id || `${row.season}-${row.week}-${row.recent_team || row.team}`)).size
+  ? new Set(rows.map((row) => row.game_id || `${row.season}-${row.week}-${row.recent_team || row.posteam || row.team}`)).size
   : sum(rows, ["games"]);
 const maxValue = (rows: CsvRow[], sources: string[]) => Math.max(0, ...rows.flatMap((row) => sources.map((source) => number(row[source]))));
 const passerRating = (rows: CsvRow[]) => { const attempts = sum(rows, ["attempts"]); if (!attempts) return 0; const bounded = (value: number) => Math.max(0, Math.min(2.375, value)); const completions = sum(rows, ["completions"]); const yards = sum(rows, ["passing_yards"]); const touchdowns = sum(rows, ["passing_tds"]); const interceptions = sum(rows, ["passing_interceptions"]); return Number((((bounded((completions / attempts - 0.3) * 5) + bounded((yards / attempts - 3) * 0.25) + bounded(touchdowns / attempts * 20) + bounded(2.375 - interceptions / attempts * 25)) / 6) * 100).toFixed(1)); };
@@ -625,26 +622,29 @@ export function summarizeAtlasStats(rows: CsvRow[], playerId: string, position: 
   const columns = statColumnsByPosition[group];
   const bySeason = new Map<number, Map<string, CsvRow[]>>();
 
-  rows.filter((row) => row.player_id === playerId && (!row.season_type || row.season_type === "REG"))
-    .forEach((row) => {
-      const season = number(row.season);
-      const team = teamAliases[row.recent_team || ""] || row.recent_team || teamAliases[row.team || ""] || row.team || "FA";
-      if (!season) return;
-      const teams = bySeason.get(season) ?? new Map<string, CsvRow[]>();
-      teams.set(team, [...(teams.get(team) ?? []), row]);
-      bySeason.set(season, teams);
-    });
+  rows.filter((row) => {
+    // player_id, gsis_id, passer_player_id などのいずれかに一致
+    const matchesId = row.player_id === playerId || row.gsis_id === playerId || row.passer_player_id === playerId || row.rusher_player_id === playerId || row.receiver_player_id === playerId;
+    return matchesId && (!row.season_type || row.season_type === "REG");
+  }).forEach((row) => {
+    const season = number(row.season);
+    // recent_team, posteam, team の順で実所属チームを判定
+    const rawTeam = row.recent_team || row.posteam || row.team || "FA";
+    const team = teamAliases[rawTeam] ?? rawTeam;
+    if (!season) return;
+    const teams = bySeason.get(season) ?? new Map<string, CsvRow[]>();
+    teams.set(team, [...(teams.get(team) ?? []), row]);
+    bySeason.set(season, teams);
+  });
 
   const valuesFor = (seasonRows: CsvRow[]) => Object.fromEntries(columns.map((column) => [column.key, column.calculate ? column.calculate(seasonRows) : sum(seasonRows, column.sources ?? [])]));
 
   const seasons = Array.from(bySeason.entries()).sort(([left], [right]) => right - left).flatMap(([season, teams]) => {
-    // 該当シーズン内での出場週（minWeek）を基準に、チームを行動時系列順（早い週→遅い週）にソート
     const teamEntries = Array.from(teams.entries()).map(([team, seasonRows]) => {
       const minWeek = Math.min(...seasonRows.map((r) => number(r.week) || 99));
       return { team, seasonRows, minWeek };
     }).sort((a, b) => a.minWeek - b.minWeek);
 
-    // 単一チーム所属の場合はその1行のみ
     if (teamEntries.length < 2) {
       return [{
         season,
@@ -654,9 +654,6 @@ export function summarizeAtlasStats(rows: CsvRow[], playerId: string, position: 
       }];
     }
 
-    // 複数チーム所属の場合（ESPN準拠の並び順）：
-    // 上から見た時に: TOTAL -> 2番目のチーム(NYJ/LAR) -> 1番目のチーム(LV/CAR)
-    // （＝下から時系列順に読んだ時に: 1番目(LV/CAR) -> 2番目(NYJ/LAR) -> TOTAL となる構成）
     const totalRow = {
       season,
       team: "TOTAL",
@@ -664,8 +661,6 @@ export function summarizeAtlasStats(rows: CsvRow[], playerId: string, position: 
       values: valuesFor(Array.from(teams.values()).flat()),
     };
 
-    // teamEntries は [LV, NYJ]（昇順）なので、逆順 [NYJ, LV] にして TOTAL を先頭に置くことで
-    // 上から: TOTAL -> NYJ -> LV （下から: LV -> NYJ -> TOTAL）が完成
     const chronologicalReversed = [...teamEntries].reverse().map((entry) => ({
       season,
       team: entry.team,
@@ -710,9 +705,23 @@ async function fetchPlayerCsvRows(url: string, playerId: string): Promise<CsvRow
   const consumeLine = (line: string) => {
     if (!line) return;
     const cells = parseLine(line);
-    if (!headers) { headers = cells.map((header) => header.replace(/^\uFEFF/, "").trim()); return; }
-    const idIndex = headers.indexOf("player_id");
-    if (idIndex < 0 || cells[idIndex] !== playerId) return;
+    if (!headers) {
+      headers = cells.map((header) => header.replace(/^\uFEFF/, "").trim());
+      return;
+    }
+
+    // player_id, gsis_id, passer_player_id などの複数候補インデックスを検索
+    const idIndices = [
+      headers.indexOf("player_id"),
+      headers.indexOf("gsis_id"),
+      headers.indexOf("passer_player_id"),
+      headers.indexOf("rusher_player_id"),
+      headers.indexOf("receiver_player_id"),
+    ].filter((idx) => idx >= 0);
+
+    const isMatch = idIndices.some((idx) => cells[idx] === playerId);
+    if (!isMatch) return;
+
     rows.push(Object.fromEntries(headers.map((header, index) => [header, (cells[index] ?? "").trim()])));
   };
 
@@ -880,7 +889,6 @@ async function fetchOtcComprehensiveData(otcId: string, teamFallback: string): P
     const tables = html.match(/<table[\s\S]*?<\/table>/gi) || [];
     if (tables.length === 0) return null;
 
-    // 1. Table [0] (Current Contract) のパース
     const t0 = tables[0];
     const t0Rows = (t0.match(/<tr[^>]*>[\s\S]*?<\/tr>/gi) || []);
     const seasonHistory: ContractSeason[] = [];
@@ -953,7 +961,6 @@ async function fetchOtcComprehensiveData(otcId: string, teamFallback: string): P
       });
     }
 
-    // 2. Table [2] (Contract History) のパース
     let contractHistory: ContractHistory[] = [];
     let currentContract: CurrentContractSummary | null = null;
 
