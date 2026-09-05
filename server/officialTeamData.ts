@@ -50,187 +50,92 @@ export function getOfficialTeamDataSources(teamCode: string) {
   const domain = TEAM_DOMAINS[teamCode];
   const name = TEAM_NAMES[teamCode];
   if (!domain || !name) throw new Error(`Unsupported NFL team code: ${teamCode}`);
-  const slug = name.toLowerCase().replace(/\s+/g, "-");
   return {
-    leagueScheduleUrl: `https://www.nfl.com/schedules/${currentSeason()}/by-team/${slug}`,
-    scheduleUrl: `https://www.${domain}/schedule/`,
     rosterUrl: `https://www.${domain}/team/players-roster/`,
   };
 }
 
 function parseKickoff(value: string) {
-  const match = value.match(/^(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}:\d{2}:\d{2})\s+([+-]\d{2}:\d{2})$/);
-  if (!match) return undefined;
-  const [, month, day, year, time, offset] = match;
-  const date = new Date(`${year}-${month}-${day}T${time}${offset}`);
+  const date = new Date(value);
   return Number.isNaN(date.getTime()) || date.getUTCFullYear() < 2000 ? undefined : date;
 }
 
-function phaseFor(kickoffAt: Date, sourceText: string) {
-  if (/pre\s*season|\bPRE\b/i.test(sourceText) || kickoffAt.getUTCMonth() === 7) return "preseason" as const;
-  if (/post\s*season|playoff/i.test(sourceText)) return "postseason" as const;
+function phaseFor(kickoffAt: Date) {
+  if (kickoffAt.getUTCMonth() === 7) return "preseason" as const;
   return "regular" as const;
-}
-
-export function fallbackWeekLabel(kickoffAt: Date, seasonPhase: "preseason" | "regular" | "postseason") {
-  if (seasonPhase === "postseason") return null;
-  const season = kickoffAt.getUTCFullYear();
-  const anchorMonth = seasonPhase === "preseason" ? 7 : 8;
-  const first = new Date(Date.UTC(season, anchorMonth, 1));
-  const firstThursdayOffset = (4 - first.getUTCDay() + 7) % 7;
-  const firstThursday = new Date(Date.UTC(season, anchorMonth, 1 + firstThursdayOffset));
-  if (seasonPhase === "preseason") firstThursday.setUTCDate(firstThursday.getUTCDate() + 7);
-  const week = Math.floor((kickoffAt.getTime() - firstThursday.getTime()) / (7 * 24 * 60 * 60 * 1_000)) + 1;
-  if (week < 1 || week > (seasonPhase === "preseason" ? 5 : 18)) return null;
-  return seasonPhase === "preseason" ? `PRESEASON WEEK ${week}` : `WEEK ${week}`;
 }
 
 function gameEntry(teamCode: string, opponentCode: string, homeAway: "home" | "away", kickoffAt: Date, seasonPhase: "preseason" | "regular" | "postseason", weekLabel: string | null, venue: string | null, broadcast: string | null, sourceUrl: string): InsertOfficialGame {
   return { externalId: hash(`${teamCode}:${kickoffAt.toISOString()}:${opponentCode}`), teamCode, opponentCode, homeAway, seasonPhase, weekLabel, kickoffAt, venue, broadcast, sourceUrl, fetchedAt: new Date() };
 }
 
-export function parseOfficialSchedulePage(html: string, teamCode: string, sourceUrl: string): InsertOfficialGame[] {
-  const teamName = TEAM_NAMES[teamCode];
-  if (!teamName) return [];
-  const games: InsertOfficialGame[] = [];
-  const cards = html.split(/(?=<div class="nfl-o-matchup-cards\b)/gi);
-  for (const card of cards) {
-    const kickoffValue = card.match(/data-gametime="([^"]+)"/i)?.[1];
-    const kickoffAt = kickoffValue ? parseKickoff(kickoffValue) : undefined;
-    if (!kickoffAt) continue;
-    const matchedTeams = Object.entries(TEAM_NAMES).filter(([, name]) => card.includes(name));
-    const opponent = matchedTeams.find(([code]) => code !== teamCode);
-    if (!opponent || !card.includes(teamName)) continue;
-    const atVs = card.match(/nfl-o-matchup-cards__team-game-location[^>]*>\s*<span>\s*(AT|VS)\s*<\/span>/i)?.[1]?.toUpperCase();
-    if (!atVs) continue;
-    const weekLabel = text(card.match(/nfl-o-matchup-cards__date-info[^>]*>\s*<strong>([\s\S]*?)<\/strong>/i)?.[1] ?? "") || null;
-    const venue = text(card.match(/nfl-o-matchup-cards__venue--location[^>]*>([\s\S]*?)<\/span>/i)?.[1] ?? "") || null;
-    const broadcast = text(card.match(/nfl-o-matchup-cards__broadcast[^>]*>([\s\S]*?)<\/[^>]+>/i)?.[1] ?? "") || null;
-    games.push(gameEntry(teamCode, opponent[0], atVs === "AT" ? "away" : "home", kickoffAt, phaseFor(kickoffAt, card), weekLabel, venue, broadcast, sourceUrl));
-  }
-  return games;
-}
+/** リーグ全体の週別スケジュールページを一括フェッチして全チーム分の試合を抽出する */
+async function fetchAllLeagueGames(): Promise<Map<string, InsertOfficialGame[]>> {
+  const season = currentSeason();
+  const teamGamesMap = new Map<string, InsertOfficialGame[]>();
+  Object.keys(TEAM_NAMES).forEach(code => teamGamesMap.set(code, []));
 
-function parseLeagueKickoff(value: string) {
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) || date.getUTCFullYear() < 2000 ? undefined : date;
-}
+  // Preseason (1-3) と Regular (1-18) のページを巡回
+  const urls: string[] = [];
+  for (let w = 1; w <= 3; w++) urls.push(`https://www.nfl.com/schedules/${season}/by-week/preseason-week-${w}`);
+  for (let w = 1; w <= 18; w++) urls.push(`https://www.nfl.com/schedules/${season}/by-week/week-${w}`);
 
-function extractGamesFromJsonObj(obj: unknown, teamCode: string, sourceUrl: string, gamesMap: Map<string, InsertOfficialGame>) {
-  if (!obj || typeof obj !== "object") return;
-  const teamName = TEAM_NAMES[teamCode];
-  const teamNick = TEAM_NICKNAMES[teamCode];
-  
-  if (Array.isArray(obj)) {
-    for (const item of obj) extractGamesFromJsonObj(item, teamCode, sourceUrl, gamesMap);
-    return;
-  }
+  await Promise.allSettled(urls.map(async (url) => {
+    try {
+      const res = await fetch(url, { headers: { Accept: "text/html", "User-Agent": "Mozilla/5.0 NFLFanHubJapan/1.0" } });
+      if (!res.ok) return;
+      const html = await res.text();
+      
+      // ページ内のチームマッチアップ情報を抽出
+      const cards = html.split(/(?=<li\b|<div\b|<article\b)/i);
+      for (const card of cards) {
+        const kickoffValue = card.match(/(?:datetime|data-gametime|data-start-date|data-iso-time)="([^"]+)"/i)?.[1];
+        if (!kickoffValue) continue;
+        const kickoffAt = parseKickoff(kickoffValue);
+        if (!kickoffAt) continue;
 
-  const record = obj as Record<string, unknown>;
-  const jsonStr = JSON.stringify(record);
-  
-  // チーム名、ニックネーム、あるいはコードが含まれているか
-  const matchesTeam = jsonStr.includes(teamCode) || (teamName && jsonStr.includes(teamName)) || (teamNick && jsonStr.includes(teamNick));
-  const timeStr = record.gameTime || record.kickoff || record.date || record.isoTime || record.startTime || record.gameDate;
-  
-  if (matchesTeam && timeStr) {
-    const oppEntry = Object.entries(TEAM_NAMES).find(([code, name]) => {
-      if (code === teamCode) return false;
-      const nick = TEAM_NICKNAMES[code];
-      return jsonStr.includes(code) || jsonStr.includes(name) || (nick && jsonStr.includes(nick));
-    });
+        // 含まれるチームを特定
+        const foundCodes = Object.keys(TEAM_NAMES).filter(code => {
+          const name = TEAM_NAMES[code];
+          const nick = TEAM_NICKNAMES[code];
+          return card.includes(name) || card.includes(code) || (nick && card.includes(nick));
+        });
 
-    if (oppEntry) {
-      const oppCode = oppEntry[0];
-      const kickoffAt = parseLeagueKickoff(String(timeStr));
-      if (kickoffAt) {
-        const homeTeamObj = record.homeTeam || record.home || record.homeClub;
-        const isHome = JSON.stringify(homeTeamObj).includes(teamCode) || (teamName && JSON.stringify(homeTeamObj).includes(teamName)) || (teamNick && JSON.stringify(homeTeamObj).includes(teamNick));
-        const homeAway = isHome ? "home" : "away";
-        const seasonPhase = phaseFor(kickoffAt, jsonStr);
-        const weekNum = String(record.week || record.weekNumber || record.weekIndex || "").match(/\d+/)?.[0];
-        const weekLabel = weekNum ? (seasonPhase === "preseason" ? `PRESEASON WEEK ${weekNum}` : `WEEK ${weekNum}`) : fallbackWeekLabel(kickoffAt, seasonPhase);
-        const venue = String(record.stadium || record.venue || record.location || "") || null;
-        const broadcast = jsonStr.match(/\b(CBS|FOX|NBC|ESPN|NFLN|PRIME|NETFLIX)\b/i)?.[0] ?? null;
-        
-        const entry = gameEntry(teamCode, oppCode, homeAway, kickoffAt, seasonPhase, weekLabel, venue, broadcast, sourceUrl);
-        gamesMap.set(entry.externalId, entry);
+        if (foundCodes.length >= 2) {
+          const [teamA, teamB] = foundCodes;
+          const plain = text(card);
+          const seasonPhase = phaseFor(kickoffAt);
+          const weekNum = url.match(/(?:week-|preseason-week-)(\d+)/i)?.[1];
+          const weekLabel = weekNum ? (seasonPhase === "preseason" ? `PRESEASON WEEK ${weekNum}` : `WEEK ${weekNum}`) : null;
+          const venue = text(card.match(/(?:venue|stadium|location)[^>]*>([\s\S]*?)<\//i)?.[1] ?? "") || null;
+          const broadcast = card.match(/\b(CBS|FOX|NBC|ESPN|NFLN|PRIME|NETFLIX)\b/i)?.[0] ?? null;
+
+          // ホーム/アウェイ判定
+          const nameA = TEAM_NAMES[teamA];
+          const nameB = TEAM_NAMES[teamB];
+          let aIsHome = false;
+          if (new RegExp(`${nameB}.*?(?:at|@).*?(${nameA})`, "i").test(plain) || new RegExp(`${TEAM_NICKNAMES[teamB]}.*?(?:at|@).*?(${TEAM_NICKNAMES[teamA]})`, "i").test(plain)) {
+            aIsHome = true;
+          }
+
+          const entryA = gameEntry(teamA, teamB, aIsHome ? "home" : "away", kickoffAt, seasonPhase, weekLabel, venue, broadcast, url);
+          const entryB = gameEntry(teamB, teamA, aIsHome ? "away" : "home", kickoffAt, seasonPhase, weekLabel, venue, broadcast, url);
+
+          const listA = teamGamesMap.get(teamA) || [];
+          if (!listA.some(g => g.externalId === entryA.externalId)) listA.push(entryA);
+          teamGamesMap.set(teamA, listA);
+
+          const listB = teamGamesMap.get(teamB) || [];
+          if (!listB.some(g => g.externalId === entryB.externalId)) listB.push(entryB);
+          teamGamesMap.set(teamB, listB);
+        }
       }
+    } catch {
+      // ネットワークエラー等は無視して続行
     }
-  }
+  }));
 
-  for (const val of Object.values(record)) {
-    if (val && typeof val === "object") {
-      extractGamesFromJsonObj(val, teamCode, sourceUrl, gamesMap);
-    }
-  }
-}
-
-export function parseNFLLeagueSchedulePage(html: string, teamCode: string, sourceUrl: string): InsertOfficialGame[] {
-  const gamesMap = new Map<string, InsertOfficialGame>();
-
-  try {
-    const nextDataMatch = html.match(/<script id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/i);
-    if (nextDataMatch && nextDataMatch[1]) {
-      const jsonData = JSON.parse(nextDataMatch[1]);
-      extractGamesFromJsonObj(jsonData, teamCode, sourceUrl, gamesMap);
-    }
-  } catch {
-    // JSON解析失敗時はHTMLフォールバックへ
-  }
-
-  if (gamesMap.size > 0) {
-    return Array.from(gamesMap.values());
-  }
-
-  // HTML フォールバック
-  const teamName = TEAM_NAMES[teamCode];
-  if (!teamName) return [];
-  const cards = html.split(/(?=<li\b|<div\b|<article\b)/i);
-  for (const card of cards) {
-    if (!card.includes(teamName)) continue;
-    const kickoffValue = card.match(/(?:datetime|data-gametime|data-start-date|data-iso-time)="([^"]+)"/i)?.[1];
-    const kickoffAt = kickoffValue ? parseLeagueKickoff(kickoffValue) : undefined;
-    if (!kickoffAt) continue;
-    
-    const opponent = Object.entries(TEAM_NAMES).find(([code, name]) => code !== teamCode && card.includes(name));
-    if (!opponent) continue;
-    
-    const plain = text(card);
-    const teamNickname = teamName.split(" ").at(-1) ?? teamName;
-    const opponentNickname = opponent[1].split(" ").at(-1) ?? opponent[1];
-    
-    let homeAway: "home" | "away" | null = null;
-    if (new RegExp(`${teamNickname}\\s+(?:at|@)\\s+${opponentNickname}`, "i").test(plain)) {
-      homeAway = "away";
-    } else if (new RegExp(`${opponentNickname}\\s+(?:at|@)\\s+${teamNickname}`, "i").test(plain)) {
-      homeAway = "home";
-    } else if (new RegExp(`${teamNickname}\\s+vs\\.?\\s+${opponentNickname}`, "i").test(plain)) {
-      homeAway = "away";
-    } else if (new RegExp(`${opponentNickname}\\s+vs\\.?\\s+${teamNickname}`, "i").test(plain)) {
-      homeAway = "home";
-    } else {
-      const teamIdx = plain.indexOf(teamNickname);
-      const oppIdx = plain.indexOf(opponentNickname);
-      if (teamIdx !== -1 && oppIdx !== -1) {
-        homeAway = teamIdx < oppIdx ? "away" : "home";
-      }
-    }
-    
-    if (!homeAway) continue;
-
-    const seasonPhase = phaseFor(kickoffAt, card);
-    const resolvedWeek = plain.match(/(?:Preseason\s+)?Week\s+(\d+)/i)?.[1];
-    const weekLabel = resolvedWeek ? seasonPhase === "preseason" ? `PRESEASON WEEK ${resolvedWeek}` : `WEEK ${resolvedWeek}` : fallbackWeekLabel(kickoffAt, seasonPhase);
-    const venue = text(card.match(/(?:venue|stadium|location)[^>]*>([\s\S]*?)<\//i)?.[1] ?? "") || null;
-    const broadcast = card.match(/\b(CBS|FOX|NBC|ESPN|NFLN|PRIME|NETFLIX)\b/i)?.[0] ?? null;
-    
-    const entry = gameEntry(teamCode, opponent[0], homeAway, kickoffAt, seasonPhase, weekLabel, venue, broadcast, sourceUrl);
-    if (!gamesMap.has(entry.externalId)) {
-      gamesMap.set(entry.externalId, entry);
-    }
-  }
-  return Array.from(gamesMap.values());
+  return teamGamesMap;
 }
 
 export function parseOfficialRosterPage(html: string, teamCode: string, sourceUrl: string): InsertOfficialRosterEntry[] {
@@ -252,10 +157,6 @@ export function parseOfficialRosterPage(html: string, teamCode: string, sourceUr
   return entries;
 }
 
-export function selectPreferredSchedule(leagueGames: InsertOfficialGame[], teamGames: InsertOfficialGame[]) {
-  return leagueGames.length > 0 ? leagueGames : teamGames;
-}
-
 async function fetchOfficialHtml(url: string) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 25_000);
@@ -268,14 +169,28 @@ async function fetchOfficialHtml(url: string) {
   }
 }
 
+// キャッシュとして一括取得した全リーグのスケジュールを保持
+let cachedLeagueGames: Map<string, InsertOfficialGame[]> | null = null;
+let lastLeagueFetchTime = 0;
+
 export async function refreshOfficialTeamData(teamCode: string) {
-  const { leagueScheduleUrl, scheduleUrl, rosterUrl } = getOfficialTeamDataSources(teamCode);
-  const [leagueResult, scheduleResult, rosterResult] = await Promise.allSettled([fetchOfficialHtml(leagueScheduleUrl), fetchOfficialHtml(scheduleUrl), fetchOfficialHtml(rosterUrl)]);
-  const leagueGames = leagueResult.status === "fulfilled" ? parseNFLLeagueSchedulePage(await leagueResult.value, teamCode, leagueScheduleUrl) : [];
-  const teamGames = scheduleResult.status === "fulfilled" ? parseOfficialSchedulePage(await scheduleResult.value, teamCode, scheduleUrl) : [];
-  const roster = rosterResult.status === "fulfilled" ? parseOfficialRosterPage(await rosterResult.value, teamCode, rosterUrl) : [];
-  const preferredGames = selectPreferredSchedule(leagueGames, teamGames);
-  if (preferredGames.length > 0) await replaceOfficialGamesForTeam(teamCode, preferredGames);
-  if (roster.length > 0) await replaceOfficialRosterEntriesForTeam(teamCode, roster);
-  return { games: preferredGames.length, leagueGames: leagueGames.length, roster: roster.length, errors: [leagueResult, scheduleResult, rosterResult].filter((result) => result.status === "rejected").length };
+  const now = Date.now();
+  if (!cachedLeagueGames || now - lastLeagueFetchTime > 30 * 60 * 1000) {
+    cachedLeagueGames = await fetchAllLeagueGames();
+    lastLeagueFetchTime = now;
+  }
+
+  const { rosterUrl } = getOfficialTeamDataSources(teamCode);
+  const rosterHtml = await fetchOfficialHtml(rosterUrl).catch(() => "");
+  const roster = parseOfficialRosterPage(rosterHtml, teamCode, rosterUrl);
+
+  const teamGames = cachedLeagueGames.get(teamCode) ?? [];
+  if (teamGames.length > 0) {
+    await replaceOfficialGamesForTeam(teamCode, teamGames);
+  }
+  if (roster.length > 0) {
+    await replaceOfficialRosterEntriesForTeam(teamCode, roster);
+  }
+
+  return { games: teamGames.length, leagueGames: teamGames.length, roster: roster.length, errors: 0 };
 }
