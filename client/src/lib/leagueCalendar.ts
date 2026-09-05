@@ -15,10 +15,28 @@ export type LeagueCalendarGame = {
   liveScoreboardFallback?: boolean;
 };
 
-/** Converts a canonical league game row into the selected team's perspective. */
-export function getFavoriteSchedule(games: LeagueCalendarGame[], favoriteCode: string) {
+/** Converts a canonical league game row into the selected team's perspective, excluding completed games. */
+export function getFavoriteSchedule(games: LeagueCalendarGame[], favoriteCode: string, now: Date = new Date()) {
+  const fiveHoursMs = 5 * 60 * 60 * 1_000;
   return games
-    .filter((game) => game.teamCode === favoriteCode || game.opponentCode === favoriteCode)
+    .filter((game) => {
+      if (game.teamCode !== favoriteCode && game.opponentCode !== favoriteCode) {
+        return false;
+      }
+      // 試合終了（FINAL）は除外
+      if (game.gameState === "FINAL") return false;
+
+      // 試合中（LIVE）は表示を維持
+      const isLive = Boolean(
+        game.liveScoreboardFallback ||
+        (game.gameState && /live|ingame|in_progress|halftime/i.test(game.gameState))
+      );
+      if (isLive) return true;
+
+      // キックオフから5時間以上経過した試合は終了とみなして除外
+      const kickoff = new Date(game.kickoffAt).getTime();
+      return kickoff + fiveHoursMs >= now.getTime();
+    })
     .map((game) => game.teamCode === favoriteCode ? game : {
       ...game,
       teamCode: favoriteCode,
