@@ -7,7 +7,7 @@ export const TEAM_DOMAINS: Record<string, string> = {
 };
 
 export const TEAM_NAMES: Record<string, string> = {
-  ARI: "Arizona Cardinals", ATL: "Atlanta Falcons", BAL: "Baltimore Ravens", BUF: "Buffalo Bills", CAR: "Carolina Panthers", CHI: "Chicago Bears", CIN: "Cincinnati Bengals", CLE: "Cleveland Browns", DAL: "Dallas Cowboys", DEN: "Denver Broncos", DET: "Detroit Lions", GB: "Green Bay Packers", HOU: "Houston Texans", IND: "Indianapolis Colts", JAX: "Jacksonville Jaguars", KC: "Kansas City Chiefs", LAC: "Los Angeles Chargers", LAR: "Los Angeles Rams", LV: "Las Vegas Raiders", MIA: "Miami Dolphins", MIN: "Minnesota Vikings", NE: "New England Patriots", NO: "New Orleans Saints", NYG: "New York Giants", NYJ: "New York Jets", PHI: "Philadelphia Eagles", PIT: "Pittsburgh Steelers", SF: "San Francisco 49ers", SEA: "Seattle Seahawks", TB: "Tampa Bay Buccaneers", TEN: "Tennessee Titans", WAS: "Commanders",
+  ARI: "Arizona Cardinals", ATL: "Atlanta Falcons", BAL: "Baltimore Ravens", BUF: "Buffalo Bills", CAR: "Carolina Panthers", CHI: "Chicago Bears", CIN: "Cincinnati Bengals", CLE: "Cleveland Browns", DAL: "Dallas Cowboys", DEN: "Denver Broncos", DET: "Detroit Lions", GB: "Green Bay Packers", HOU: "Houston Texans", IND: "Indianapolis Colts", JAX: "Jacksonville Jaguars", KC: "Kansas City Chiefs", LAC: "Los Angeles Chargers", LAR: "Los Angeles Rams", LV: "Las Vegas Raiders", MIA: "Miami Dolphins", MIN: "Minnesota Vikings", NE: "New England Patriots", NO: "New Orleans Saints", NYG: "New York Giants", NYJ: "New York Jets", PHI: "Philadelphia Eagles", PIT: "Pittsburgh Steelers", SF: "San Francisco 49ers", SEA: "Seattle Seahawks", TB: "Tampa Bay Buccaneers", TEN: "Tennessee Titans", WAS: "Washington Commanders",
 };
 
 function decodeCodePoint(value: string, radix: number) {
@@ -15,7 +15,6 @@ function decodeCodePoint(value: string, radix: number) {
   return Number.isFinite(codePoint) && codePoint >= 0 && codePoint <= 0x10ffff ? String.fromCodePoint(codePoint) : `&#${radix === 16 ? "x" : ""}${value};`;
 }
 
-/** Decode official HTML text consistently so entity-encoded player names never reach the roster cache. */
 export function normalizeOfficialText(value: string) {
   const withoutTags = value.replace(/<[^>]+>/g, " ");
   const decodeEntitiesOnce = (input: string) => input
@@ -69,7 +68,6 @@ function phaseFor(kickoffAt: Date, sourceText: string) {
   return "regular" as const;
 }
 
-/** NFL weeks begin on Thursday; this fills a label when an official league card omits its Week heading. */
 export function fallbackWeekLabel(kickoffAt: Date, seasonPhase: "preseason" | "regular" | "postseason") {
   if (seasonPhase === "postseason") return null;
   const season = kickoffAt.getUTCFullYear();
@@ -114,15 +112,75 @@ function parseLeagueKickoff(value: string) {
   return Number.isNaN(date.getTime()) || date.getUTCFullYear() < 2000 ? undefined : date;
 }
 
+function extractGamesFromJsonObj(obj: unknown, teamCode: string, sourceUrl: string, gamesMap: Map<string, InsertOfficialGame>) {
+  if (!obj || typeof obj !== "object") return;
+  const teamName = TEAM_NAMES[teamCode];
+  
+  if (Array.isArray(obj)) {
+    for (const item of obj) extractGamesFromJsonObj(item, teamCode, sourceUrl, gamesMap);
+    return;
+  }
+
+  const record = obj as Record<string, unknown>;
+  
+  // もしオブジェクトが試合情報を表している場合（ホーム/アウェイ、日付、対戦チーム等のキーを持つ）
+  const homeTeam = record.homeTeam || record.home;
+  const awayTeam = record.awayTeam || record.away;
+  const timeStr = record.gameTime || record.kickoff || record.date || record.isoTime || record.startTime;
+  
+  if ((homeTeam || awayTeam) && timeStr) {
+    // チーム名やコードが一致するか確認
+    const jsonStr = JSON.stringify(record);
+    if (jsonStr.includes(teamCode) || (teamName && jsonStr.includes(teamName))) {
+      const oppEntry = Object.entries(TEAM_NAMES).find(([code]) => code !== teamCode && jsonStr.includes(code));
+      if (oppEntry) {
+        const oppCode = oppEntry[0];
+        const kickoffAt = parseLeagueKickoff(String(timeStr));
+        if (kickoffAt) {
+          const isHome = JSON.stringify(homeTeam).includes(teamCode) || (teamName && JSON.stringify(homeTeam).includes(teamName));
+          const homeAway = isHome ? "home" : "away";
+          const seasonPhase = phaseFor(kickoffAt, jsonStr);
+          const weekNum = String(record.week || record.weekNumber || "").match(/\d+/)?.[0];
+          const weekLabel = weekNum ? (seasonPhase === "preseason" ? `PRESEASON WEEK ${weekNum}` : `WEEK ${weekNum}`) : fallbackWeekLabel(kickoffAt, seasonPhase);
+          const venue = String(record.stadium || record.venue || "") || null;
+          const broadcast = String(record.broadcast || record.network || "").match(/\b(CBS|FOX|NBC|ESPN|NFLN|PRIME|NETFLIX)\b/i)?.[0] ?? null;
+          
+          const entry = gameEntry(teamCode, oppCode, homeAway, kickoffAt, seasonPhase, weekLabel, venue, broadcast, sourceUrl);
+          gamesMap.set(entry.externalId, entry);
+        }
+      }
+    }
+  }
+
+  for (const val of Object.values(record)) {
+    if (val && typeof val === "object") {
+      extractGamesFromJsonObj(val, teamCode, sourceUrl, gamesMap);
+    }
+  }
+}
+
 export function parseNFLLeagueSchedulePage(html: string, teamCode: string, sourceUrl: string): InsertOfficialGame[] {
   const teamName = TEAM_NAMES[teamCode];
   if (!teamName) return [];
-  const games: InsertOfficialGame[] = [];
-  const weekHeaders = Array.from(html.matchAll(/<h3[^>]*>\s*Week\s+(\d+)\s*<\/h3>/gi));
-  
-  // 特定のクラス名に依存せず、<li>, <div>, <article> などのブロック単位で柔軟に分割して走査
-  const cards = html.split(/(?=<li\b|<div\b|<article\b)/i);
+  const gamesMap = new Map<string, InsertOfficialGame>();
 
+  // 1. Next.js の __NEXT_DATA__ JSON からの網羅的抽出
+  try {
+    const nextDataMatch = html.match(/<script id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/i);
+    if (nextDataMatch && nextDataMatch[1]) {
+      const jsonData = JSON.parse(nextDataMatch[1]);
+      extractGamesFromJsonObj(jsonData, teamCode, sourceUrl, gamesMap);
+    }
+  } catch {
+    // JSON解析失敗時はHTMLフォールバックへ進む
+  }
+
+  if (gamesMap.size > 0) {
+    return Array.from(gamesMap.values());
+  }
+
+  // 2. HTML テキストフォールバック抽出
+  const cards = html.split(/(?=<li\b|<div\b|<article\b)/i);
   for (const card of cards) {
     if (!card.includes(teamName)) continue;
     const kickoffValue = card.match(/(?:datetime|data-gametime|data-start-date|data-iso-time)="([^"]+)"/i)?.[1];
@@ -162,11 +220,11 @@ export function parseNFLLeagueSchedulePage(html: string, teamCode: string, sourc
     const broadcast = card.match(/\b(CBS|FOX|NBC|ESPN|NFLN|PRIME|NETFLIX)\b/i)?.[0] ?? null;
     
     const entry = gameEntry(teamCode, opponent[0], homeAway, kickoffAt, seasonPhase, weekLabel, venue, broadcast, sourceUrl);
-    if (!games.some((g) => g.externalId === entry.externalId)) {
-      games.push(entry);
+    if (!gamesMap.has(entry.externalId)) {
+      gamesMap.set(entry.externalId, entry);
     }
   }
-  return games;
+  return Array.from(gamesMap.values());
 }
 
 export function parseOfficialRosterPage(html: string, teamCode: string, sourceUrl: string): InsertOfficialRosterEntry[] {
