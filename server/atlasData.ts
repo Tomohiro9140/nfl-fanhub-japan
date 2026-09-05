@@ -564,8 +564,8 @@ export type AtlasStatColumn = { key: string; label: string; sources?: string[]; 
 const sum = (rows: CsvRow[], sources: string[]) => rows.reduce((total, row) => total + sources.reduce((rowTotal, source) => rowTotal + number(row[source]), 0), 0);
 const ratio = (rows: CsvRow[], numerator: string[], denominator: string[], percent = false) => { const divisor = sum(rows, denominator); return divisor ? Number((sum(rows, numerator) / divisor * (percent ? 100 : 1)).toFixed(percent ? 1 : 2)) : 0; };
 const weightedAverage = (rows: CsvRow[], value: string, weight: string) => { const totalWeight = sum(rows, [weight]); return totalWeight ? Number((rows.reduce((total, row) => total + number(row[value]) * number(row[weight]), 0) / totalWeight).toFixed(2)) : 0; };
-const gameCount = (rows: CsvRow[]) => rows.some((row) => row.game_id)
-  ? new Set(rows.map((row) => row.game_id || `${row.season}-${row.week}-${row.team}`)).size
+const gameCount = (rows: CsvRow[]) => rows.some((row) => row.game_id || row.week)
+  ? new Set(rows.map((row) => row.game_id || `${row.season}-${row.week}-${row.recent_team || row.team}`)).size
   : sum(rows, ["games"]);
 const maxValue = (rows: CsvRow[], sources: string[]) => Math.max(0, ...rows.flatMap((row) => sources.map((source) => number(row[source]))));
 const passerRating = (rows: CsvRow[]) => { const attempts = sum(rows, ["attempts"]); if (!attempts) return 0; const bounded = (value: number) => Math.max(0, Math.min(2.375, value)); const completions = sum(rows, ["completions"]); const yards = sum(rows, ["passing_yards"]); const touchdowns = sum(rows, ["passing_tds"]); const interceptions = sum(rows, ["passing_interceptions"]); return Number((((bounded((completions / attempts - 0.3) * 5) + bounded((yards / attempts - 3) * 0.25) + bounded(touchdowns / attempts * 20) + bounded(2.375 - interceptions / attempts * 25)) / 6) * 100).toFixed(1)); };
@@ -575,8 +575,8 @@ const gameColumn: AtlasStatColumn = { key: "games", label: "GP", calculate: game
 const statColumnsByPosition: Record<string, AtlasStatColumn[]> = {
   QB: [gameColumn, { key: "completionPct", label: "CMP%", calculate: (rows) => ratio(rows, ["completions"], ["attempts"], true) }, { key: "passingYards", label: "PASS YDS", sources: ["passing_yards"] }, { key: "yardsPerAttempt", label: "YPA", calculate: (rows) => ratio(rows, ["passing_yards"], ["attempts"]) }, { key: "passingTds", label: "TD", sources: ["passing_tds"] }, { key: "interceptions", label: "INT", sources: ["passing_interceptions"] }, { key: "passerRating", label: "RATING", calculate: passerRating }, { key: "sacks", label: "SACKED", sources: ["sacks_suffered"] }, { key: "rushingYards", label: "RUSH YDS", sources: ["rushing_yards"] }, { key: "rushingTds", label: "RUSH TD", sources: ["rushing_tds"] }, { key: "cpoe", label: "CPOE", calculate: (rows) => weightedAverage(rows, "passing_cpoe", "attempts") }],
   RB: [gameColumn, { key: "carries", label: "ATT", sources: ["carries"] }, { key: "rushingYards", label: "RUSH YDS", sources: ["rushing_yards"] }, { key: "yardsPerCarry", label: "YPC", calculate: (rows) => ratio(rows, ["rushing_yards"], ["carries"]) }, { key: "rushingTds", label: "RUSH TD", sources: ["rushing_tds"] }, { key: "receivingYards", label: "REC YDS", sources: ["receiving_yards"] }, { key: "receivingTds", label: "REC TD", sources: ["receiving_tds"] }, { key: "fumbles", label: "FUM", sources: ["rushing_fumbles", "receiving_fumbles"] }, { key: "fumblesLost", label: "LOST", sources: ["rushing_fumbles_lost", "receiving_fumbles_lost"] }],
-  WR: [gameColumn, { key: "receivingYards", label: "YDS", sources: ["receiving_yards"] }, { key: "yardsPerReception", label: "YPR", calculate: (rows) => ratio(rows, ["receiving_yards"], ["receptions"]) }, { key: "receivingTds", label: "REC TD", sources: ["receiving_tds"] }, { key: "catchPct", label: "CATCH%", calculate: (rows) => ratio(rows, ["receptions"], ["targets"], true) }, { key: "firstDowns", label: "1ST", sources: ["receiving_first_downs"] }, { key: "yac", label: "YAC", sources: ["receiving_yards_after_catch"] }],
-  TE: [gameColumn, { key: "receivingYards", label: "YDS", sources: ["receiving_yards"] }, { key: "yardsPerReception", label: "YPR", calculate: (rows) => ratio(rows, ["receiving_yards"], ["receptions"]) }, { key: "receivingTds", label: "REC TD", sources: ["receiving_tds"] }, { key: "catchPct", label: "CATCH%", calculate: (rows) => ratio(rows, ["receptions"], ["targets"], true) }, { key: "firstDowns", label: "1ST", sources: ["receiving_first_downs"] }, { key: "yac", label: "YAC", sources: ["receiving_yards_after_catch"] }],
+  WR: [gameColumn, { key: "receptions", label: "REC", sources: ["receptions"] }, { key: "receivingYards", label: "YDS", sources: ["receiving_yards"] }, { key: "yardsPerReception", label: "YPR", calculate: (rows) => ratio(rows, ["receiving_yards"], ["receptions"]) }, { key: "receivingTds", label: "REC TD", sources: ["receiving_tds"] }, { key: "catchPct", label: "CATCH%", calculate: (rows) => ratio(rows, ["receptions"], ["targets"], true) }, { key: "firstDowns", label: "1ST", sources: ["receiving_first_downs"] }, { key: "yac", label: "YAC", sources: ["receiving_yards_after_catch"] }],
+  TE: [gameColumn, { key: "receptions", label: "REC", sources: ["receptions"] }, { key: "receivingYards", label: "YDS", sources: ["receiving_yards"] }, { key: "yardsPerReception", label: "YPR", calculate: (rows) => ratio(rows, ["receiving_yards"], ["receptions"]) }, { key: "receivingTds", label: "REC TD", sources: ["receiving_tds"] }, { key: "catchPct", label: "CATCH%", calculate: (rows) => ratio(rows, ["receptions"], ["targets"], true) }, { key: "firstDowns", label: "1ST", sources: ["receiving_first_downs"] }, { key: "yac", label: "YAC", sources: ["receiving_yards_after_catch"] }],
   OL: [gameColumn, { key: "penalties", label: "PEN", sources: ["penalties"] }, { key: "penaltyYards", label: "PEN YDS", sources: ["penalty_yards"] }],
   DL: [gameColumn, { key: "solo", label: "SOLO", sources: ["def_tackles_solo"] }, { key: "assists", label: "AST", sources: ["def_tackle_assists"] }, { key: "tfl", label: "TFL", sources: ["def_tackles_for_loss"] }, { key: "sacks", label: "SACK", sources: ["def_sacks"] }, { key: "hits", label: "QB HIT", sources: ["def_qb_hits"] }, { key: "forcedFumbles", label: "FF", sources: ["def_fumbles_forced"] }],
   LB: [gameColumn, { key: "solo", label: "SOLO", sources: ["def_tackles_solo"] }, { key: "assists", label: "AST", sources: ["def_tackle_assists"] }, { key: "totalTackles", label: "TOTAL", sources: ["def_tackles_solo", "def_tackle_assists"] }, { key: "tfl", label: "TFL", sources: ["def_tackles_for_loss"] }, { key: "sacks", label: "SACK", sources: ["def_sacks"] }, { key: "hits", label: "QB HIT", sources: ["def_qb_hits"] }, { key: "interceptions", label: "INT", sources: ["def_interceptions"] }, { key: "forcedFumbles", label: "FF", sources: ["def_fumbles_forced"] }],
@@ -595,21 +595,49 @@ export function summarizeAtlasStats(rows: CsvRow[], playerId: string, position: 
   const group = statPosition(position);
   const columns = statColumnsByPosition[group];
   const bySeason = new Map<number, Map<string, CsvRow[]>>();
+
   rows.filter((row) => row.player_id === playerId && (!row.season_type || row.season_type === "REG"))
     .forEach((row) => {
       const season = number(row.season);
-      const team = row.team || row.recent_team || "FA";
+      // 週間データの場合は recent_team が実所属チーム
+      const team = teamAliases[row.recent_team || ""] || row.recent_team || teamAliases[row.team || ""] || row.team || "FA";
       if (!season) return;
       const teams = bySeason.get(season) ?? new Map<string, CsvRow[]>();
       teams.set(team, [...(teams.get(team) ?? []), row]);
       bySeason.set(season, teams);
     });
+
   const valuesFor = (seasonRows: CsvRow[]) => Object.fromEntries(columns.map((column) => [column.key, column.calculate ? column.calculate(seasonRows) : sum(seasonRows, column.sources ?? [])]));
+
   const seasons = Array.from(bySeason.entries()).sort(([left], [right]) => right - left).flatMap(([season, teams]) => {
-    const teamRows = Array.from(teams.entries()).map(([team, seasonRows]) => ({ season, team, kind: "team" as const, values: valuesFor(seasonRows) }));
-    return teamRows.length < 2 ? teamRows : [...teamRows, { season, team: "TOTAL", kind: "season-total" as const, values: valuesFor(Array.from(teams.values()).flat()) }];
+    // 該当シーズンにプレイした各チームごとの行
+    const teamRows = Array.from(teams.entries()).map(([team, seasonRows]) => ({
+      season,
+      team,
+      kind: "team" as const,
+      values: valuesFor(seasonRows),
+    }));
+
+    // 複数チームでプレイした場合は各チーム行 + TOTAL（合算）行を生成 (ESPN方式)
+    if (teamRows.length >= 2) {
+      const totalRow = {
+        season,
+        team: "TOTAL",
+        kind: "season-total" as const,
+        values: valuesFor(Array.from(teams.values()).flat()),
+      };
+      return [...teamRows, totalRow];
+    }
+
+    return teamRows;
   });
-  return { position: group, columns, seasons, total: valuesFor(Array.from(bySeason.values()).flatMap((teams) => Array.from(teams.values()).flat())) };
+
+  return {
+    position: group,
+    columns,
+    seasons,
+    total: valuesFor(Array.from(bySeason.values()).flatMap((teams) => Array.from(teams.values()).flat())),
+  };
 }
 
 async function fetchPlayerCsvRows(url: string, playerId: string): Promise<CsvRow[]> {
@@ -620,6 +648,7 @@ async function fetchPlayerCsvRows(url: string, playerId: string): Promise<CsvRow
   let buffer = "";
   let headers: string[] | null = null;
   const rows: CsvRow[] = [];
+
   const parseLine = (line: string) => {
     const cells: string[] = [];
     let value = "";
@@ -633,6 +662,7 @@ async function fetchPlayerCsvRows(url: string, playerId: string): Promise<CsvRow
     cells.push(value);
     return cells;
   };
+
   const consumeLine = (line: string) => {
     if (!line) return;
     const cells = parseLine(line);
@@ -641,6 +671,7 @@ async function fetchPlayerCsvRows(url: string, playerId: string): Promise<CsvRow
     if (idIndex < 0 || cells[idIndex] !== playerId) return;
     rows.push(Object.fromEntries(headers.map((header, index) => [header, (cells[index] ?? "").trim()])));
   };
+
   while (true) {
     const { done, value } = await reader.read();
     buffer += decoder.decode(value, { stream: !done });
@@ -661,15 +692,34 @@ async function atlasStatsUncached(playerId: string) {
   const { roster, master } = await atlasPlayerContext(playerId);
   const start = rookieSeason(master);
   const end = roster ? currentSeason : Math.max(start, number(master.last_season) || currentSeason - 1);
+
+  // player_stats/player_stats_YYYY.csv (週間データ) から取得し、複数チームの途中移籍をチーム別に分解
   const rows = await mapInBatches(Array.from({ length: end - start + 1 }, (_, index) => start + index), 8, async (season) => {
     try {
-      return await fetchPlayerCsvRows(`${NFLVERSE_RELEASES}/stats_player/stats_player_reg_${season}.csv`, playerId);
+      return await fetchPlayerCsvRows(`${NFLVERSE_RELEASES}/player_stats/player_stats_${season}.csv`, playerId);
     } catch {
-      return [];
+      // フォールバック: 過去データ等で週間データが取得できない場合はサマリーファイルを参照
+      try {
+        return await fetchPlayerCsvRows(`${NFLVERSE_RELEASES}/stats_player/stats_player_reg_${season}.csv`, playerId);
+      } catch {
+        return [];
+      }
     }
   });
+
   const rookie = number(master.rookie_season || master.entry_year || master.draft_year) || start;
-  return { ...summarizeAtlasStats(rows.flat(), playerId, roster?.position || master.position || "WR"), source: { provider: "NFLverse player statistics", updatedAt: new Date().toISOString(), throughSeason: end, seasonStatsCoverage: { availableFrom: 1999, unavailableBefore: rookie < 1999 ? { startSeason: rookie, endSeason: 1998 } : null } } };
+  return {
+    ...summarizeAtlasStats(rows.flat(), playerId, roster?.position || master.position || "WR"),
+    source: {
+      provider: "NFLverse player statistics",
+      updatedAt: new Date().toISOString(),
+      throughSeason: end,
+      seasonStatsCoverage: {
+        availableFrom: 1999,
+        unavailableBefore: rookie < 1999 ? { startSeason: rookie, endSeason: 1998 } : null,
+      },
+    },
+  };
 }
 
 function contractMoney(value: number) {
@@ -743,10 +793,6 @@ function contractNumber(value: number | undefined) {
   return typeof value === "number" && Number.isFinite(value) ? value : 0;
 }
 
-/**
- * OTCテーブルのドル文字列（例: "$16,000,000", "$811,245"）を 
- * フロントエンドUIが期待する「100万ドル単位（Million）」の数値に変換。
- */
 function cleanToMillions(val: string | undefined): number {
   if (!val) return 0;
   const match = val.match(/\$?\s*([0-9]{1,3}(?:,[0-9]{3})*(?:\.[0-9]+)?)/);
@@ -797,7 +843,6 @@ async function fetchOtcComprehensiveData(otcId: string, teamFallback: string): P
     const t0Rows = (t0.match(/<tr[^>]*>[\s\S]*?<\/tr>/gi) || []);
     const seasonHistory: ContractSeason[] = [];
 
-    // Stafford のような 2段組ヘッダー構造（Option Bonus 列が分離）の判定
     const isMultiTierBonus = t0.includes("Option") && t0.includes("Signing") && (t0Rows[1] || "").includes("Option");
 
     for (let i = 0; i < t0Rows.length; i++) {
@@ -809,21 +854,17 @@ async function fetchOtcComprehensiveData(otcId: string, teamFallback: string): P
       if (!yearMatch) continue;
       const yearStr = yearMatch[1];
 
-      // Cap % 列のインデックスを特定
       const pctIdx = cells.findIndex(c => /^\d+(\.\d+)?%$/.test(c.trim()));
 
-      // Cap Hit は Cap % の直前の列
       let capHit = 0;
       if (pctIdx > 0) {
         capHit = cleanToMillions(cells[pctIdx - 1]);
       }
 
-      // Base Salary の抽出（cells[2]）
       const baseText = cells[2] || "";
       const isVoid = baseText.toLowerCase().includes("void") || cells[0].toLowerCase().includes("void");
       const baseSalary = isVoid ? 0 : cleanToMillions(baseText);
 
-      // Prorated Bonus の抽出（cells[3]）
       const proratedBonus = cleanToMillions(cells[3]);
 
       let rosterBonus = 0;
@@ -831,12 +872,10 @@ async function fetchOtcComprehensiveData(otcId: string, teamFallback: string): P
       let guaranteed = 0;
 
       if (isMultiTierBonus) {
-        // Stafford タイプ: cells[4]=Option Bonus, cells[5]=Roster Bonus, cells[7]=Guaranteed
         optionBonus = cleanToMillions(cells[4]);
         rosterBonus = cleanToMillions(cells[5]);
         guaranteed = cleanToMillions(cells[7]);
       } else {
-        // Adams / 通常タイプ: cells[4]=Roster Bonus, cells[5]=Option Bonus (あれば)
         rosterBonus = cleanToMillions(cells[4]);
         if (pctIdx >= 7) {
           optionBonus = cleanToMillions(cells[5]);
@@ -849,12 +888,10 @@ async function fetchOtcComprehensiveData(otcId: string, teamFallback: string): P
         }
       }
 
-      // Cap Hit のフォールバック
       if (capHit === 0 && !isVoid) {
         capHit = Math.round((baseSalary + proratedBonus + rosterBonus + optionBonus) * 100) / 100;
       }
 
-      // 不要な Void 行のみスキップ
       if (isVoid && capHit === 0 && proratedBonus === 0 && optionBonus === 0) {
         continue;
       }
@@ -907,7 +944,6 @@ async function fetchOtcComprehensiveData(otcId: string, teamFallback: string): P
           };
           contractHistory.push(entry);
 
-          // 最新のアクティブ契約（または末尾の契約）を Current Contract に設定
           if (status.toLowerCase().includes("active") || !currentContract) {
             currentContract = {
               team: rowTeam,
@@ -955,7 +991,6 @@ export async function atlasContracts(playerId: string) {
       }
     }
 
-    // OTC から最新データが取得できた場合はそれを最優先で使用
     if (otcData && otcData.currentContract) {
       const years = otcData.seasonHistory.map((season) => {
         const otherBreakdown = contractOtherBreakdown(season);
@@ -969,7 +1004,6 @@ export async function atlasContracts(playerId: string) {
         };
       });
 
-      // 契約履歴を最新順（降順）に並び替えて反映
       const history = otcData.contractHistory
         .slice()
         .reverse()
@@ -996,7 +1030,6 @@ export async function atlasContracts(playerId: string) {
       };
     }
 
-    // フォールバック: active_contracts.json から読み込み
     const index = await cached("atlas:active-contract-index", CACHE_TTL.contracts, async () => {
       const filePath = path.resolve(process.cwd(), "server/data/active_contracts.json");
       const content = await fs.promises.readFile(filePath, "utf-8");
