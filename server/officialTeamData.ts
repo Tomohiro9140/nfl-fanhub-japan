@@ -179,15 +179,18 @@ export function parseNFLLeagueSchedulePage(html: string, teamCode: string, sourc
 
     const plain = text(card);
 
-    // 週番号の解決
+    // 週番号・プレシーズンの解決
     const headerMatch = weekHeaders.filter((header) => (header.index ?? -1) <= (match.index ?? -1)).at(-1);
     const inlineWeek = plain.match(/(?:Preseason\s+)?Week\s+(\d+)/i)?.[1];
     const resolvedWeekStr = headerMatch?.[2] ?? inlineWeek;
     const weekNum = resolvedWeekStr ? Number.parseInt(resolvedWeekStr, 10) : null;
+    const isPreseason = Boolean(headerMatch?.[1]) || /pre\s*season|\bPRE\b/i.test(card);
 
-    // キックオフ日時の解決（TBD救済含む）
+    // キックオフ日時の解決
     const kickoffAt = resolveCardKickoff(card, weekNum, season);
     if (!kickoffAt) continue;
+
+    const seasonPhase = isPreseason ? "preseason" : phaseFor(kickoffAt, card);
 
     // ホーム／アウェイ判定（at, vs, @, カード内出現順に対応）
     let homeAway: "home" | "away" | null = null;
@@ -209,8 +212,6 @@ export function parseNFLLeagueSchedulePage(html: string, teamCode: string, sourc
       }
     }
 
-    const seasonPhase = phaseFor(kickoffAt, card);
-    const isPreseason = Boolean(headerMatch?.[1]) || seasonPhase === "preseason";
     const weekLabel = weekNum
       ? isPreseason ? `PRESEASON WEEK ${weekNum}` : `WEEK ${weekNum}`
       : fallbackWeekLabel(kickoffAt, seasonPhase);
@@ -220,7 +221,7 @@ export function parseNFLLeagueSchedulePage(html: string, teamCode: string, sourc
 
     const entry = gameEntry(teamCode, oppCode, homeAway, kickoffAt, seasonPhase, weekLabel, venue, broadcast, sourceUrl);
 
-    // 週ごとの重複登録を防止
+    // 重複登録防止
     if (!games.some((g) => g.externalId === entry.externalId || (entry.weekLabel && g.weekLabel === entry.weekLabel))) {
       games.push(entry);
     }
