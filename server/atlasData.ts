@@ -37,7 +37,6 @@ const OTC_FETCH_HEADERS = {
   "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
 };
 const HISTORIC_ROSTER_KEY = "atlas-historic-roster-index_ccf81874.json";
-const ACTIVE_CONTRACTS_KEY = "nfl-active-contracts_42bb7ee5.json";
 const POSITION_ORDER = ["QB", "RB", "WR", "TE", "OL", "DL", "LB", "DB", "K", "P", "LS"] as const;
 
 const CACHE_TTL = {
@@ -50,16 +49,8 @@ const CACHE_TTL = {
 } as const;
 
 const teamAliases: Record<string, string> = {
-  ARZ: "ARI",
-  AZ: "ARI",
-  BLT: "BAL",
-  JAC: "JAX",
-  LA: "LAR",
-  OAK: "LV",
-  SD: "LAC",
-  STL: "LAR",
-  WFT: "WAS",
-  WSH: "WAS",
+  ARZ: "ARI", AZ: "ARI", BLT: "BAL", JAC: "JAX", LA: "LAR",
+  OAK: "LV", SD: "LAC", STL: "LAR", WFT: "WAS", WSH: "WAS",
 };
 
 const fallbackTeamNames: Record<string, string> = {
@@ -88,17 +79,13 @@ async function cached<T>(key: string, ttl: number, load: () => Promise<T>): Prom
   return request;
 }
 
-/** Parses quoted CSV fields without a runtime CSV dependency. */
 export function parseAtlasCsv(input: string): CsvRow[] {
   const rows: string[][] = [];
   let row: string[] = [];
   let field = "";
   let quoted = false;
 
-  const finishField = () => {
-    row.push(field);
-    field = "";
-  };
+  const finishField = () => { row.push(field); field = ""; };
   const finishRow = () => {
     finishField();
     if (row.some((value) => value.length > 0)) rows.push(row);
@@ -109,12 +96,7 @@ export function parseAtlasCsv(input: string): CsvRow[] {
     const character = input[index];
     const next = input[index + 1];
     if (character === '"') {
-      if (quoted && next === '"') {
-        field += '"';
-        index += 1;
-      } else {
-        quoted = !quoted;
-      }
+      if (quoted && next === '"') { field += '"'; index += 1; } else { quoted = !quoted; }
     } else if (character === "," && !quoted) {
       finishField();
     } else if ((character === "\n" || character === "\r") && !quoted) {
@@ -326,7 +308,6 @@ export async function atlasFilters(team?: string) {
   return { teams, positions, positionsByTeam, season: currentSeason };
 }
 
-/** Returns only current-roster matches so type-ahead can respond before the complete historic search finishes. */
 export async function atlasSearchSuggestions(query: string) {
   const term = normalizeAtlasText(query);
   if (term.length < 2) return { players: [] as AtlasPlayerResult[] };
@@ -363,7 +344,6 @@ function gameBookNameParts(name: string) {
   return { compact, initial: parts[0]?.[0] ?? "", surname: parts.at(-1) ?? "" };
 }
 
-/** Resolves an official Game Book abbreviation (for example, "D. LOCK") only when one Atlas player matches its team, surname, and first initial. */
 export function resolveAtlasGameBookPlayerId(abbreviatedName: string, candidates: AtlasGameBookPlayerCandidate[]) {
   const target = gameBookNameParts(abbreviatedName);
   const matches = candidates.filter((candidate) => {
@@ -490,7 +470,6 @@ async function mapInBatches<T, Result>(items: T[], size: number, mapper: (item: 
   return values;
 }
 
-/** Builds team spans from annual NFLverse roster rows without blocking the base profile. */
 export async function atlasCareer(playerId: string) {
   return cached(`atlas:career:${playerId}`, CACHE_TTL.history, () => atlasCareerUncached(playerId));
 }
@@ -710,18 +689,78 @@ type ContractSeason = {
   workoutBonus?: number;
   perGameRosterBonus?: number;
   otherBonus?: number;
+  isVoidYear?: boolean;
 };
 
-type ContractHistory = { team?: string; yearSigned?: number; years?: number; total?: number; apy?: number; guaranteed?: number; type?: string; status?: string; amountEarned?: number };
-type ActiveContract = { team?: string; yearSigned?: number; years?: number; total?: number; apy?: number; guaranteed?: number; otcId?: string; seasonHistory?: ContractSeason[]; contractHistory?: ContractHistory[] };
-type ContractIndex = { source?: string; sourceUpdatedAt?: string; contracts?: Record<string, ActiveContract> };
+type ContractHistory = {
+  team?: string;
+  yearSigned?: number;
+  years?: number;
+  total?: number;
+  apy?: number;
+  guaranteed?: number;
+  type?: string;
+  status?: string;
+  amountEarned?: number;
+};
 
-const contractBreakdownCache = new Map<string, { data: ContractSeason[]; cachedAt: number }>();
+type CurrentContractSummary = {
+  team: string;
+  yearSigned: number | null;
+  endYear: number | null;
+  years: number | null;
+  total: number;
+  apy: number;
+  guaranteed: number;
+};
 
-function contractNumber(value: number | undefined) { return typeof value === "number" && Number.isFinite(value) ? value : 0; }
+type OtcParsedData = {
+  currentContract: CurrentContractSummary | null;
+  seasonHistory: ContractSeason[];
+  contractHistory: ContractHistory[];
+};
+
+type ActiveContract = {
+  team?: string;
+  yearSigned?: number;
+  years?: number;
+  total?: number;
+  apy?: number;
+  guaranteed?: number;
+  seasonHistory?: ContractSeason[];
+  contractHistory?: ContractHistory[];
+};
+
+type ContractIndex = {
+  source?: string;
+  sourceUpdatedAt?: string;
+  contracts?: Record<string, ActiveContract>;
+};
+
+const contractDataCache = new Map<string, { data: OtcParsedData; cachedAt: number }>();
+
+function contractNumber(value: number | undefined) {
+  return typeof value === "number" && Number.isFinite(value) ? value : 0;
+}
+
+function cleanToMillions(val: string | undefined): number {
+  if (!val) return 0;
+  const cleaned = val.replace(/[^0-9.-]/g, "");
+  const num = parseFloat(cleaned);
+  return isNaN(num) ? 0 : Math.round((num / 1_000_000) * 100) / 100;
+}
+
+function cleanToInt(val: string | undefined): number {
+  if (!val) return 0;
+  const cleaned = val.replace(/[^0-9.-]/g, "");
+  const num = parseInt(cleaned, 10);
+  return isNaN(num) ? 0 : num;
+}
+
 function hasContractCharge(season: ContractSeason) {
   return [season.cashPaid, season.capHit, season.proratedBonus, season.optionBonus, season.rosterBonus, season.workoutBonus, season.perGameRosterBonus, season.otherBonus].some((value) => contractNumber(value) > 0);
 }
+
 function contractOtherBreakdown(season: ContractSeason) {
   return [
     { key: "workoutBonus", label: "ワークアウト", amount: contractNumber(season.workoutBonus) },
@@ -735,97 +774,226 @@ function contractTeamName(team: string, directory: Map<string, AtlasTeam>) {
   return Array.from(directory.values()).find((entry) => entry.name.toLowerCase() === normalized || entry.name.toLowerCase().endsWith(` ${normalized}`))?.name ?? team;
 }
 
-/** Over The Cap から選手個別の年度別内訳テーブルをオンデマンド取得 */
-async function fetchOtcSeasonBreakdownOnDemand(otcId: string): Promise<ContractSeason[]> {
+/** Over The Cap から Table [0] (Current Contract) と Table [2] (Contract History) を抽出し完全同期 */
+async function fetchOtcComprehensiveData(otcId: string, teamFallback: string): Promise<OtcParsedData | null> {
   try {
     const res = await fetch(`https://overthecap.com/player/_/${otcId}`, {
       headers: OTC_FETCH_HEADERS,
     });
-    if (!res.ok) return [];
+    if (!res.ok) return null;
     const html = await res.text();
     const tables = html.match(/<table[\s\S]*?<\/table>/gi) || [];
-    let target = tables.find((t) => t.includes("Base Salary") && t.includes("Cap Hit"));
-    if (!target && tables.length >= 5) target = tables[4];
-    if (!target) return [];
+    if (tables.length === 0) return null;
 
-    const trs = (target.match(/<tr[^>]*>([\s\S]*?)<\/tr>/gi) || []).slice(1);
-    const seasons: ContractSeason[] = [];
-    const clean = (v: string) => {
-      if (!v) return 0;
-      const n = parseFloat(String(v).replace(/[^0-9.-]/g, ""));
-      return isNaN(n) ? 0 : Math.round((n / 1000000) * 100) / 100;
-    };
+    // 1. Table [0] (Current Contract) のパース
+    const t0 = tables[0];
+    const t0Rows = (t0.match(/<tr[^>]*>[\s\S]*?<\/tr>/gi) || []);
+    const seasonHistory: ContractSeason[] = [];
 
-    for (const tr of trs) {
-      const tds = (tr.match(/<td[^>]*>([\s\S]*?)<\/td>/gi) || []).map((d) => d.replace(/<[^>]+>/g, "").trim());
-      if (tds.length >= 8 && /^\d{4}$/.test(tds[0])) {
-        seasons.push({
-          year: tds[0],
-          team: tds[1],
-          baseSalary: clean(tds[2]),
-          proratedBonus: clean(tds[3]),
-          optionBonus: clean(tds[4]),
-          rosterBonus: clean(tds[5]),
-          workoutBonus: clean(tds[6]),
-          guaranteed: clean(tds[7]),
-          capHit: clean(tds[8]),
-          cashPaid: clean(tds[10] || tds[9]),
-        });
+    for (let i = 0; i < t0Rows.length; i++) {
+      const tr = t0Rows[i];
+      const cells = (tr.match(/<t[hd][^>]*>([\s\S]*?)<\/t[hd]>/gi) || []).map(c => c.replace(/<[^>]+>/g, "").trim());
+      if (cells.length < 5) continue;
+
+      const yearMatch = cells[0].match(/\b(20\d{2})\b/);
+      if (!yearMatch) continue;
+      const yearStr = yearMatch[1];
+
+      const baseText = cells[2] || "";
+      const isVoid = baseText.toLowerCase().includes("void") || cells[0].toLowerCase().includes("void");
+      const baseSalary = isVoid ? 0 : cleanToMillions(cells[2]);
+      const proratedBonus = cleanToMillions(cells[3]);
+      const optionBonus = cleanToMillions(cells[4]);
+      const rosterBonus = cleanToMillions(cells[5]);
+      const guaranteed = cleanToMillions(cells[7]);
+      const capHit = cleanToMillions(cells[9]);
+
+      // $0 のみの未来の Void Year が無駄に並ぶのを防止
+      if (isVoid && capHit === 0 && proratedBonus === 0 && optionBonus === 0) {
+        continue;
+      }
+
+      seasonHistory.push({
+        year: yearStr,
+        team: teamFallback,
+        baseSalary,
+        proratedBonus,
+        optionBonus,
+        rosterBonus,
+        workoutBonus: 0,
+        guaranteed,
+        capHit,
+        cashPaid: baseSalary + rosterBonus,
+        isVoidYear: isVoid,
+      });
+    }
+
+    // 2. Table [2] (Contract History) のパース
+    let contractHistory: ContractHistory[] = [];
+    let currentContract: CurrentContractSummary | null = null;
+
+    const historyTable = tables.find(t => t.includes("Contract Type") && t.includes("Year Signed")) || tables[2];
+    if (historyTable) {
+      const hRows = (historyTable.match(/<tr[^>]*>[\s\S]*?<\/tr>/gi) || []).slice(1);
+      for (const tr of hRows) {
+        const cells = (tr.match(/<t[hd][^>]*>([\s\S]*?)<\/t[hd]>/gi) || []).map(c => c.replace(/<[^>]+>/g, "").trim());
+        if (cells.length >= 8) {
+          const rowTeam = cells[0] || teamFallback;
+          const contractType = cells[1] || "Contract";
+          const status = cells[2] || "";
+          const yearSigned = cleanToInt(cells[3]);
+          const years = cleanToInt(cells[4]);
+          const total = cleanToMillions(cells[5]);
+          const apy = cleanToMillions(cells[6]);
+          const guaranteed = cleanToMillions(cells[7]);
+          const amountEarned = cleanToMillions(cells[8]);
+
+          const entry: ContractHistory = {
+            team: rowTeam,
+            type: contractType,
+            status,
+            yearSigned,
+            years,
+            total,
+            apy,
+            guaranteed,
+            amountEarned,
+          };
+          contractHistory.push(entry);
+
+          // 最新のアクティブ契約（または末尾の契約）を Current Contract に設定
+          if (status.toLowerCase().includes("active") || !currentContract) {
+            currentContract = {
+              team: rowTeam,
+              yearSigned: yearSigned || null,
+              endYear: yearSigned && years ? yearSigned + years - 1 : null,
+              years: years || null,
+              total,
+              apy,
+              guaranteed,
+            };
+          }
+        }
       }
     }
-    return seasons;
-  } catch {
-    return [];
+
+    return {
+      currentContract,
+      seasonHistory,
+      contractHistory,
+    };
+  } catch (err) {
+    console.error(`[atlasContracts] Error fetching comprehensive OTC data for ${otcId}:`, err);
+    return null;
   }
 }
 
 export async function atlasContracts(playerId: string) {
   const { roster, master } = await atlasPlayerContext(playerId);
+  const { directory } = await searchUniverse();
+  const playerTeam = roster?.team || master?.latest_team || "FA";
+
   try {
+    const resolvedOtcId = master?.otc_id || (playerId === "00-0026498" ? "1060" : undefined);
+    let otcData: OtcParsedData | null = null;
+
+    if (resolvedOtcId && resolvedOtcId !== "NA") {
+      const cachedEntry = contractDataCache.get(resolvedOtcId);
+      if (cachedEntry && Date.now() - cachedEntry.cachedAt < CACHE_TTL.contracts) {
+        otcData = cachedEntry.data;
+      } else {
+        otcData = await fetchOtcComprehensiveData(resolvedOtcId, playerTeam);
+        if (otcData) {
+          contractDataCache.set(resolvedOtcId, { data: otcData, cachedAt: Date.now() });
+        }
+      }
+    }
+
+    // OTC から最新データが取得できた場合はそれを最優先で使用
+    if (otcData && otcData.currentContract) {
+      const years = otcData.seasonHistory.map((season) => {
+        const otherBreakdown = contractOtherBreakdown(season);
+        return {
+          ...season,
+          year: Number(season.year),
+          team: contractTeamName(season.team || playerTeam, directory),
+          otherTotal: otherBreakdown.reduce((total, entry) => total + entry.amount, 0),
+          otherBreakdown,
+          isVoidYear: Boolean(season.isVoidYear),
+        };
+      });
+
+      const history = otcData.contractHistory.map((entry) => ({
+        ...entry,
+        team: contractTeamName(entry.team || playerTeam, directory),
+      }));
+
+      return {
+        available: true,
+        contract: {
+          currentContract: {
+            ...otcData.currentContract,
+            team: contractTeamName(otcData.currentContract.team, directory),
+          },
+          years,
+          history,
+          noteAvailability: { incentives: false, deadMoney: false, message: "" },
+        },
+        source: {
+          provider: "Over The Cap (Live Sync)",
+          updatedAt: new Date().toISOString(),
+        },
+      };
+    }
+
+    // フォールバック: active_contracts.json から読み込み
     const index = await cached("atlas:active-contract-index", CACHE_TTL.contracts, async () => {
       const filePath = path.resolve(process.cwd(), "server/data/active_contracts.json");
       const content = await fs.promises.readFile(filePath, "utf-8");
       return JSON.parse(content) as ContractIndex;
     });
     const record = index.contracts?.[playerId];
-    if (!record) return { available: true, contract: null, source: { provider: index.source || "NFLverse / Over The Cap", updatedAt: index.sourceUpdatedAt || new Date().toISOString() } };
-
-    let rawSeasons: ContractSeason[] = record.seasonHistory ?? [];
-    if (rawSeasons.length === 0) {
-      const cachedEntry = contractBreakdownCache.get(playerId);
-      if (cachedEntry && Date.now() - cachedEntry.cachedAt < CACHE_TTL.history) {
-        rawSeasons = cachedEntry.data;
-      } else {
-        const resolvedOtcId = record.otcId || master?.otc_id || (playerId === "00-0026498" ? "1060" : undefined);
-        if (resolvedOtcId && resolvedOtcId !== "NA") {
-          rawSeasons = await fetchOtcSeasonBreakdownOnDemand(resolvedOtcId);
-          if (rawSeasons.length > 0) {
-            contractBreakdownCache.set(playerId, { data: rawSeasons, cachedAt: Date.now() });
-          }
-        }
-      }
+    if (!record) {
+      return {
+        available: true,
+        contract: null,
+        source: { provider: index.source || "NFLverse / Over The Cap", updatedAt: index.sourceUpdatedAt || new Date().toISOString() },
+      };
     }
 
-    const { directory } = await searchUniverse();
     const startYear = contractNumber(record.yearSigned) || null;
-    const seasonHistory = [...rawSeasons].filter((season) => /^\d{4}$/.test(season.year) && (!startYear || Number(season.year) >= startYear)).sort((left, right) => Number(left.year) - Number(right.year));
+    const seasonHistory = [...(record.seasonHistory ?? [])]
+      .filter((season) => /^\d{4}$/.test(season.year) && (!startYear || Number(season.year) >= startYear))
+      .sort((left, right) => Number(left.year) - Number(right.year));
     const lastCashYear = Math.max(0, ...seasonHistory.filter((season) => contractNumber(season.cashPaid) > 0).map((season) => Number(season.year)));
     const years = seasonHistory.filter((season) => Number(season.year) <= lastCashYear || hasContractCharge(season)).map((season) => {
       const otherBreakdown = contractOtherBreakdown(season);
       return {
         ...season,
         year: Number(season.year),
-        team: contractTeamName(season.team || record.team || roster?.team || "—", directory),
+        team: contractTeamName(season.team || record.team || playerTeam, directory),
         otherTotal: otherBreakdown.reduce((total, entry) => total + entry.amount, 0),
         otherBreakdown,
         isVoidYear: Boolean(lastCashYear && Number(season.year) > lastCashYear && contractNumber(season.cashPaid) === 0),
       };
     });
-    const history = [...(record.contractHistory ?? [])].filter((entry) => entry.yearSigned).sort((left, right) => contractNumber(right.yearSigned) - contractNumber(left.yearSigned) || contractNumber(right.total) - contractNumber(left.total)).map((entry) => ({ ...entry, team: contractTeamName(entry.team || record.team || "—", directory) }));
+    const history = [...(record.contractHistory ?? [])]
+      .filter((entry) => entry.yearSigned)
+      .sort((left, right) => contractNumber(right.yearSigned) - contractNumber(left.yearSigned) || contractNumber(right.total) - contractNumber(left.total))
+      .map((entry) => ({ ...entry, team: contractTeamName(entry.team || record.team || "—", directory) }));
+
     return {
       available: true,
       contract: {
-        currentContract: { team: contractTeamName(record.team || roster?.team || "—", directory), yearSigned: startYear, endYear: startYear && record.years ? startYear + record.years - 1 : null, years: record.years || null, total: contractNumber(record.total), apy: contractNumber(record.apy), guaranteed: contractNumber(record.guaranteed) },
+        currentContract: {
+          team: contractTeamName(record.team || playerTeam, directory),
+          yearSigned: startYear,
+          endYear: startYear && record.years ? startYear + record.years - 1 : null,
+          years: record.years || null,
+          total: contractNumber(record.total),
+          apy: contractNumber(record.apy),
+          guaranteed: contractNumber(record.guaranteed),
+        },
         years,
         history,
         noteAvailability: { incentives: false, deadMoney: false, message: "" },
@@ -833,7 +1001,11 @@ export async function atlasContracts(playerId: string) {
       source: { provider: index.source || "NFLverse / Over The Cap", updatedAt: index.sourceUpdatedAt || new Date().toISOString() },
     };
   } catch {
-    return { available: false, contract: null, source: { provider: "NFLverse / Over The Cap", message: "公開契約アーカイブを現在取得できません。" } };
+    return {
+      available: false,
+      contract: null,
+      source: { provider: "NFLverse / Over The Cap", message: "公開契約アーカイブを現在取得できません。" },
+    };
   }
 }
 
