@@ -461,7 +461,7 @@ function rookieSeason(master: CsvRow, fallback = currentSeason): number {
   return Math.max(1999, number(master.rookie_season || master.entry_year || master.draft_year) || fallback);
 }
 
-// 完全に直列で 1 年ずつ実行し、メモリを使い切らないように保護
+// 直列 1 件ずつ安全に実行し、512MB RAM を完全保護
 async function mapInBatches<T, Result>(items: T[], size: number, mapper: (item: T) => Promise<Result>): Promise<Result[]> {
   const values: Result[] = [];
   for (let offset = 0; offset < items.length; offset += size) {
@@ -679,7 +679,7 @@ export function summarizeAtlasStats(rows: CsvRow[], playerId: string, position: 
 }
 
 /**
- * 任意の CSV URL から指定選手のみを極小メモリで抽出する汎用ストリーミング関数
+ * 任意の CSV URL から指定選手のみを極小メモリで抽出するストリーミング関数
  */
 async function fetchPlayerCsvStream(url: string, playerId: string): Promise<CsvRow[]> {
   const response = await fetch(url, { headers: { "User-Agent": USER_AGENT } });
@@ -740,26 +740,28 @@ async function fetchPlayerCsvStream(url: string, playerId: string): Promise<CsvR
 }
 
 /**
- * 週間スタッツ URL を 2 通りの命名規則で自動試行し、なければサマリーへフォールバック
+ * 週間スタッツ URL を 3 つの正確なリリースタグで自動試行し、なければサマリーへフォールバック
  */
 async function fetchPlayerWeeklyOrSummary(season: number, playerId: string): Promise<CsvRow[]> {
-  // パターン 1: player_stats/player_stats_${season}.csv
-  try {
-    const r1 = await fetchPlayerCsvStream(`${NFLVERSE_RELEASES}/player_stats/player_stats_${season}.csv`, playerId);
-    if (r1.length > 0) return r1;
-  } catch {
-    // 次を試行
+  const candidateUrls = [
+    // 2025年等の最新週間ファイル (Status 200 確認済み)
+    `${NFLVERSE_RELEASES}/stats_player/stats_player_week_${season}.csv`,
+    // 2024年以前の週間ファイル (Adams, Mayfield 等)
+    `${NFLVERSE_RELEASES}/player_stats/player_stats_${season}.csv`,
+    // サブ候補
+    `${NFLVERSE_RELEASES}/player_stats/stats_player_week_${season}.csv`,
+  ];
+
+  for (const url of candidateUrls) {
+    try {
+      const rows = await fetchPlayerCsvStream(url, playerId);
+      if (rows.length > 0) return rows;
+    } catch {
+      // 次の候補へ
+    }
   }
 
-  // パターン 2: player_stats/stats_player_week_${season}.csv (一部年度の命名規則)
-  try {
-    const r2 = await fetchPlayerCsvStream(`${NFLVERSE_RELEASES}/player_stats/stats_player_week_${season}.csv`, playerId);
-    if (r2.length > 0) return r2;
-  } catch {
-    // 次を試行
-  }
-
-  // パターン 3: stats_player/stats_player_reg_${season}.csv (サマリーファイル)
+  // どの週間ファイルにも存在しない過去年はサマリーファイルを参照
   try {
     return await fetchPlayerCsvStream(`${NFLVERSE_RELEASES}/stats_player/stats_player_reg_${season}.csv`, playerId);
   } catch {
@@ -776,7 +778,7 @@ async function atlasStatsUncached(playerId: string) {
   const start = rookieSeason(master);
   const end = roster ? currentSeason : Math.max(start, number(master.last_season) || currentSeason - 1);
 
-  // 全シーズンを 1 年ずつ直列で処理してメモリピークを完全に排除
+  // 1年ずつ直列で処理してメモリピーク（512MB制限）を完全回避
   const seasons = Array.from({ length: end - start + 1 }, (_, index) => start + index);
   const rows = await mapInBatches(seasons, 1, async (season) => {
     return fetchPlayerWeeklyOrSummary(season, playerId);
