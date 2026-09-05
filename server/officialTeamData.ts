@@ -7,7 +7,7 @@ export const TEAM_DOMAINS: Record<string, string> = {
 };
 
 export const TEAM_NAMES: Record<string, string> = {
-  ARI: "Arizona Cardinals", ATL: "Atlanta Falcons", BAL: "Baltimore Ravens", BUF: "Buffalo Bills", CAR: "Carolina Panthers", CHI: "Chicago Bears", CIN: "Cincinnati Bengals", CLE: "Cleveland Browns", DAL: "Dallas Cowboys", DEN: "Denver Broncos", DET: "Detroit Lions", GB: "Green Bay Packers", HOU: "Houston Texans", IND: "Indianapolis Colts", JAX: "Jacksonville Jaguars", KC: "Kansas City Chiefs", LAC: "Los Angeles Chargers", LAR: "Los Angeles Rams", LV: "Las Vegas Raiders", MIA: "Miami Dolphins", MIN: "Minnesota Vikings", NE: "New England Patriots", NO: "New Orleans Saints", NYG: "New York Giants", NYJ: "New York Jets", PHI: "Philadelphia Eagles", PIT: "Pittsburgh Steelers", SF: "San Francisco 49ers", SEA: "Seattle Seahawks", TB: "Tampa Bay Buccaneers", TEN: "Tennessee Titans", WAS: "Commanders",
+  ARI: "Arizona Cardinals", ATL: "Atlanta Falcons", BAL: "Baltimore Ravens", BUF: "Buffalo Bills", CAR: "Carolina Panthers", CHI: "Chicago Bears", CIN: "Cincinnati Bengals", CLE: "Cleveland Browns", DAL: "Dallas Cowboys", DEN: "Denver Broncos", DET: "Detroit Lions", GB: "Green Bay Packers", HOU: "Houston Texans", IND: "Indianapolis Colts", JAX: "Jacksonville Jaguars", KC: "Kansas City Chiefs", LAC: "Los Angeles Chargers", LAR: "Los Angeles Rams", LV: "Las Vegas Raiders", MIA: "Miami Dolphins", MIN: "Minnesota Vikings", NE: "New England Patriots", NO: "New Orleans Saints", NYG: "New York Giants", NYJ: "New York Jets", PHI: "Philadelphia Eagles", PIT: "Pittsburgh Steelers", SF: "San Francisco 49ers", SEA: "Seattle Seahawks", TB: "Tampa Bay Buccaneers", TEN: "Tennessee Titans", WAS: "Washington Commanders",
 };
 
 export const TEAM_NICKNAMES: Record<string, string> = {
@@ -118,7 +118,6 @@ export function parseOfficialSchedulePage(html: string, teamCode: string, source
   return games;
 }
 
-/** カード内の属性、テキストの日付表記、または週番号からキックオフ日時を解決する */
 function resolveCardKickoff(card: string, weekNum: number | null, season: number): Date | undefined {
   const kickoffValue = card.match(/(?:datetime|data-gametime|data-start-date|data-iso-time)="([^"]+)"/i)?.[1];
   if (kickoffValue) {
@@ -126,7 +125,6 @@ function resolveCardKickoff(card: string, weekNum: number | null, season: number
     if (parsed) return parsed;
   }
 
-  // "Jan 10" や "Sep 13" などのテキスト日付パターン
   const dateMatch = card.match(/\b(Jan(?:uary)?|Feb(?:ruary)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\.?\s+(\d{1,2})\b/i);
   if (dateMatch) {
     const monthNames = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
@@ -138,7 +136,6 @@ function resolveCardKickoff(card: string, weekNum: number | null, season: number
     }
   }
 
-  // TBD等で日付が見当たらない場合は週番号（日曜日正午）をフォールバック
   if (weekNum && weekNum >= 1 && weekNum <= 18) {
     const week1Sunday = new Date(Date.UTC(season, 8, 13, 18, 0, 0));
     return new Date(week1Sunday.getTime() + (weekNum - 1) * 7 * 24 * 60 * 60 * 1_000);
@@ -154,20 +151,15 @@ export function parseNFLLeagueSchedulePage(html: string, teamCode: string, sourc
   const season = currentSeason();
   const games: InsertOfficialGame[] = [];
   const weekHeaders = Array.from(html.matchAll(/<h[2-4][^>]*>\s*(?:(Preseason)\s+)?Week\s+(\d+)\s*<\/h[2-4]>/gi));
-  
-  // <li> タグ全体を柔軟にマッチング
   const cardMatches = Array.from(html.matchAll(/<li\b[^>]*>([\s\S]*?)<\/li>/gi));
 
   for (const match of cardMatches) {
     const card = match[0];
-    // ヘッダーナビやスコアストリップ等のノイズを除外
     if (card.includes("score-strip") || card.includes("nfl-c-header")) continue;
     
-    // 自チームが含まれているか判定
     const hasTeam = card.includes(teamName) || card.includes(teamNickname);
     if (!hasTeam) continue;
 
-    // 対戦相手の検出（フルネームまたはニックネーム）
     const opponentEntry = Object.entries(TEAM_NAMES).find(([code, name]) => {
       if (code === teamCode) return false;
       const nick = TEAM_NICKNAMES[code];
@@ -178,21 +170,17 @@ export function parseNFLLeagueSchedulePage(html: string, teamCode: string, sourc
     const oppNickname = TEAM_NICKNAMES[oppCode] ?? oppName.split(" ").at(-1)!;
 
     const plain = text(card);
-
-    // 週番号・プレシーズンの解決
     const headerMatch = weekHeaders.filter((header) => (header.index ?? -1) <= (match.index ?? -1)).at(-1);
     const inlineWeek = plain.match(/(?:Preseason\s+)?Week\s+(\d+)/i)?.[1];
     const resolvedWeekStr = headerMatch?.[2] ?? inlineWeek;
     const weekNum = resolvedWeekStr ? Number.parseInt(resolvedWeekStr, 10) : null;
     const isPreseason = Boolean(headerMatch?.[1]) || /pre\s*season|\bPRE\b/i.test(card);
 
-    // キックオフ日時の解決
     const kickoffAt = resolveCardKickoff(card, weekNum, season);
     if (!kickoffAt) continue;
 
     const seasonPhase = isPreseason ? "preseason" : phaseFor(kickoffAt, card);
 
-    // ホーム／アウェイ判定（at, vs, @, カード内出現順に対応）
     let homeAway: "home" | "away" | null = null;
     if (new RegExp(`${teamNickname}\\s+(?:at|@)\\s+${oppNickname}`, "i").test(plain) || new RegExp(`@\\s*${oppNickname}`, "i").test(plain)) {
       homeAway = "away";
@@ -221,7 +209,6 @@ export function parseNFLLeagueSchedulePage(html: string, teamCode: string, sourc
 
     const entry = gameEntry(teamCode, oppCode, homeAway, kickoffAt, seasonPhase, weekLabel, venue, broadcast, sourceUrl);
 
-    // 重複登録防止
     if (!games.some((g) => g.externalId === entry.externalId || (entry.weekLabel && g.weekLabel === entry.weekLabel))) {
       games.push(entry);
     }
