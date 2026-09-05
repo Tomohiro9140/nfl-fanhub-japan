@@ -746,8 +746,6 @@ function contractNumber(value: number | undefined) {
 /**
  * OTCテーブルのドル文字列（例: "$16,000,000", "$811,245"）を 
  * フロントエンドUIが期待する「100万ドル単位（Million）」の数値に変換。
- * 例: $16,000,000 -> 16.0 | $811,245 -> 0.81
- * 末尾のデッドマネー等による数字結合文字列も先頭1つのみを安全に抽出。
  */
 function cleanToMillions(val: string | undefined): number {
   if (!val) return 0;
@@ -799,58 +797,64 @@ async function fetchOtcComprehensiveData(otcId: string, teamFallback: string): P
     const t0Rows = (t0.match(/<tr[^>]*>[\s\S]*?<\/tr>/gi) || []);
     const seasonHistory: ContractSeason[] = [];
 
+    // Stafford のような 2段組ヘッダー構造（Option Bonus 列が分離）の判定
+    const isMultiTierBonus = t0.includes("Option") && t0.includes("Signing") && (t0Rows[1] || "").includes("Option");
+
     for (let i = 0; i < t0Rows.length; i++) {
       const tr = t0Rows[i];
       const cells = (tr.match(/<t[hd][^>]*>([\s\S]*?)<\/t[hd]>/gi) || []).map(c => c.replace(/<[^>]+>/g, "").trim());
       if (cells.length < 3) continue;
 
-      // 最初のセルから西暦4桁を判定
       const yearMatch = cells[0].match(/\b(20\d{2})\b/);
       if (!yearMatch) continue;
       const yearStr = yearMatch[1];
 
-      // パーセンテージ列（"Cap %" 例: "15.4%", "0.4%"）の位置を特定
+      // Cap % 列のインデックスを特定
       const pctIdx = cells.findIndex(c => /^\d+(\.\d+)?%$/.test(c.trim()));
 
-      // CapNumber (Cap Hit) は必ず Cap % の直前の列に存在する
+      // Cap Hit は Cap % の直前の列
       let capHit = 0;
       if (pctIdx > 0) {
         capHit = cleanToMillions(cells[pctIdx - 1]);
       }
 
-      // Base Salary は 年齢(Age) の直後の列に存在する（cells[2]）
+      // Base Salary の抽出（cells[2]）
       const baseText = cells[2] || "";
       const isVoid = baseText.toLowerCase().includes("void") || cells[0].toLowerCase().includes("void");
       const baseSalary = isVoid ? 0 : cleanToMillions(baseText);
 
-      // Prorated Signing Bonus は Base Salary の次（cells[3]）
+      // Prorated Bonus の抽出（cells[3]）
       const proratedBonus = cleanToMillions(cells[3]);
 
-      // Roster / Option ボーナス等の抽出
       let rosterBonus = 0;
       let optionBonus = 0;
-      if (cells.length > 5 && pctIdx > 4) {
+      let guaranteed = 0;
+
+      if (isMultiTierBonus) {
+        // Stafford タイプ: cells[4]=Option Bonus, cells[5]=Roster Bonus, cells[7]=Guaranteed
+        optionBonus = cleanToMillions(cells[4]);
+        rosterBonus = cleanToMillions(cells[5]);
+        guaranteed = cleanToMillions(cells[7]);
+      } else {
+        // Adams / 通常タイプ: cells[4]=Roster Bonus, cells[5]=Option Bonus (あれば)
         rosterBonus = cleanToMillions(cells[4]);
         if (pctIdx >= 7) {
           optionBonus = cleanToMillions(cells[5]);
         }
-      }
-
-      // Guaranteed Salary の抽出（CapHit の前にある保証額セル）
-      let guaranteed = 0;
-      if (pctIdx >= 3) {
-        for (let c = 4; c < pctIdx - 1; c++) {
-          const val = cleanToMillions(cells[c]);
-          if (val > guaranteed) guaranteed = val;
+        if (pctIdx >= 3) {
+          for (let c = 4; c < pctIdx - 1; c++) {
+            const val = cleanToMillions(cells[c]);
+            if (val > guaranteed) guaranteed = val;
+          }
         }
       }
 
-      // Cap Hit が特定できなかった場合の安全な合算フォールバック
+      // Cap Hit のフォールバック
       if (capHit === 0 && !isVoid) {
         capHit = Math.round((baseSalary + proratedBonus + rosterBonus + optionBonus) * 100) / 100;
       }
 
-      // チャージのない未来の不要な Void 行のみスキップ
+      // 不要な Void 行のみスキップ
       if (isVoid && capHit === 0 && proratedBonus === 0 && optionBonus === 0) {
         continue;
       }
