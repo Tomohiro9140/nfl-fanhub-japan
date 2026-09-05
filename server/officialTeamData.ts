@@ -78,7 +78,6 @@ function phaseFor(kickoffAt: Date, sourceText: string) {
   return "regular" as const;
 }
 
-/** NFL weeks begin on Thursday; this fills a label when an official league card omits its Week heading. */
 export function fallbackWeekLabel(kickoffAt: Date, seasonPhase: "preseason" | "regular" | "postseason") {
   if (seasonPhase === "postseason") return null;
   const season = kickoffAt.getUTCFullYear();
@@ -118,26 +117,42 @@ export function parseOfficialSchedulePage(html: string, teamCode: string, source
   return games;
 }
 
-function resolveCardKickoff(card: string, weekNum: number | null, season: number): Date | undefined {
+/** カード内の属性、テキストの日付表記、または週番号からキックオフ日時を解決する */
+function resolveCardKickoff(card: string, weekNum: number | null, season: number, isPreseason: boolean): Date | undefined {
+  const isExplicitTbd = /\bTBD\b/i.test(card);
+
+  // 1. 属性値からの抽出
   const kickoffValue = card.match(/(?:datetime|data-gametime|data-start-date|data-iso-time)="([^"]+)"/i)?.[1];
   if (kickoffValue) {
     const parsed = parseLeagueKickoff(kickoffValue) ?? parseKickoff(kickoffValue);
-    if (parsed) return parsed;
+    if (parsed) {
+      if (isExplicitTbd) parsed.setUTCSeconds(59);
+      return parsed;
+    }
   }
 
-  const dateMatch = card.match(/\b(Jan(?:uary)?|Feb(?:ruary)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\.?\s+(\d{1,2})\b/i);
+  // 2. テキストの日付（Aug を含む全月に対応）
+  const dateMatch = card.match(/\b(Jan(?:uary)?|Feb(?:ruary)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\.?\s+(\d{1,2})\b/i);
   if (dateMatch) {
     const monthNames = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
     const monthIdx = monthNames.findIndex((m) => dateMatch[1].toLowerCase().startsWith(m));
     if (monthIdx !== -1) {
       const day = Number.parseInt(dateMatch[2], 10);
       const year = monthIdx < 5 ? season + 1 : season;
-      return new Date(Date.UTC(year, monthIdx, day, 18, 0, 0));
+      // 時間が未確定または TBD の場合は秒を 59 に設定
+      const sec = isExplicitTbd ? 59 : 0;
+      return new Date(Date.UTC(year, monthIdx, day, 18, 0, sec));
     }
   }
 
+  // 3. 週番号フォールバック（日付すら未定の場合、秒を 59 にして TBD 扱い）
+  if (isPreseason) {
+    const preWeek1Sunday = new Date(Date.UTC(season, 7, 9, 18, 0, 59)); // 8月第2週
+    return new Date(preWeek1Sunday.getTime() + ((weekNum ?? 1) - 1) * 7 * 24 * 60 * 60 * 1_000);
+  }
+
   if (weekNum && weekNum >= 1 && weekNum <= 18) {
-    const week1Sunday = new Date(Date.UTC(season, 8, 13, 18, 0, 0));
+    const week1Sunday = new Date(Date.UTC(season, 8, 13, 18, 0, 59)); // 9月中旬
     return new Date(week1Sunday.getTime() + (weekNum - 1) * 7 * 24 * 60 * 60 * 1_000);
   }
 
@@ -176,7 +191,7 @@ export function parseNFLLeagueSchedulePage(html: string, teamCode: string, sourc
     const weekNum = resolvedWeekStr ? Number.parseInt(resolvedWeekStr, 10) : null;
     const isPreseason = Boolean(headerMatch?.[1]) || /pre\s*season|\bPRE\b/i.test(card);
 
-    const kickoffAt = resolveCardKickoff(card, weekNum, season);
+    const kickoffAt = resolveCardKickoff(card, weekNum, season, isPreseason);
     if (!kickoffAt) continue;
 
     const seasonPhase = isPreseason ? "preseason" : phaseFor(kickoffAt, card);
