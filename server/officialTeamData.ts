@@ -29,7 +29,7 @@ export function normalizeOfficialText(value: string) {
     decodedEntities = next;
   }
   const repaired = /[ÃÂâ]/.test(decodedEntities) ? Buffer.from(decodedEntities, "latin1").toString("utf8") : decodedEntities;
-  return (repaired.includes("�") ? decodedEntities : repaired).normalize("NFC").replace(/[\u0000-\u001f\u007f]/g, " ").replace(/\s+/g, " ").trim();
+  return (repaired.includes("") ? decodedEntities : repaired).normalize("NFC").replace(/[\u0000-\u001f\u007f]/g, " ").replace(/\s+/g, " ").trim();
 }
 
 const text = normalizeOfficialText;
@@ -119,27 +119,55 @@ export function parseNFLLeagueSchedulePage(html: string, teamCode: string, sourc
   if (!teamName) return [];
   const games: InsertOfficialGame[] = [];
   const weekHeaders = Array.from(html.matchAll(/<h3[^>]*>\s*Week\s+(\d+)\s*<\/h3>/gi));
-  for (const cardMatch of Array.from(html.matchAll(/<li><div class="shadow-extended[\s\S]*?<\/li>/gi))) {
+  
+  // liタグ内の試合カード、またはdiv.shadow-extendedラッパーを柔軟にマッチ
+  const cardMatches = Array.from(html.matchAll(/<(?:li|div)[^>]*class="[^"]*(?:shadow-extended|nfl-c-matchup-strip|matchup-card)[^"]*"[\s\S]*?<\/(?:li|div)>/gi));
+  const cardsToProcess = cardMatches.length > 0 ? cardMatches : Array.from(html.matchAll(/<li>[\s\S]*?<\/li>/gi));
+
+  for (const cardMatch of cardsToProcess) {
     const card = cardMatch[0];
-    const kickoffValue = card.match(/(?:datetime|data-gametime|data-start-date)="([^"]+)"/i)?.[1];
+    const kickoffValue = card.match(/(?:datetime|data-gametime|data-start-date|data-iso-time)="([^"]+)"/i)?.[1];
     const kickoffAt = kickoffValue ? parseLeagueKickoff(kickoffValue) ?? parseKickoff(kickoffValue) : undefined;
     if (!kickoffAt || !card.includes(teamName)) continue;
+    
     const opponent = Object.entries(TEAM_NAMES).find(([code, name]) => code !== teamCode && card.includes(name));
     if (!opponent) continue;
+    
     const plain = text(card);
     const teamNickname = teamName.split(" ").at(-1)?.replace("49ers", "49ers") ?? teamName;
     const opponentNickname = opponent[1].split(" ").at(-1)?.replace("49ers", "49ers") ?? opponent[1];
-    const away = new RegExp(`${teamNickname}\\s+at\\s+${opponentNickname}`, "i").test(plain);
-    const home = new RegExp(`${opponentNickname}\\s+at\\s+${teamNickname}`, "i").test(plain);
-    if (!away && !home) continue;
+    
+    // at, vs, @, 対戦カードの記載順序に対応
+    let homeAway: "home" | "away" | null = null;
+    if (new RegExp(`${teamNickname}\\s+(?:at|@)\\s+${opponentNickname}`, "i").test(plain)) {
+      homeAway = "away";
+    } else if (new RegExp(`${opponentNickname}\\s+(?:at|@)\\s+${teamNickname}`, "i").test(plain)) {
+      homeAway = "home";
+    } else if (new RegExp(`${teamNickname}\\s+vs\\.?\\s+${opponentNickname}`, "i").test(plain)) {
+      // vs の場合は左側がアウェイ（またはビジター）
+      homeAway = "away";
+    } else if (new RegExp(`${opponentNickname}\\s+vs\\.?\\s+${teamNickname}`, "i").test(plain)) {
+      homeAway = "home";
+    } else {
+      // テキスト内の出現位置で判定（先に出てきた方をアウェイと判定）
+      const teamIdx = plain.indexOf(teamNickname);
+      const oppIdx = plain.indexOf(opponentNickname);
+      if (teamIdx !== -1 && oppIdx !== -1) {
+        homeAway = teamIdx < oppIdx ? "away" : "home";
+      }
+    }
+    
+    if (!homeAway) continue;
+
     const seasonPhase = phaseFor(kickoffAt, card);
     const headerWeek = weekHeaders.filter((header) => (header.index ?? -1) <= (cardMatch.index ?? -1)).at(-1)?.[1];
     const inlineWeek = plain.match(/(?:Preseason\s+)?Week\s+(\d+)/i)?.[1];
     const resolvedWeek = headerWeek ?? inlineWeek;
     const weekLabel = resolvedWeek ? seasonPhase === "preseason" ? `PRESEASON WEEK ${resolvedWeek}` : `WEEK ${resolvedWeek}` : fallbackWeekLabel(kickoffAt, seasonPhase);
-    const venue = text(card.match(/(?:venue|stadium)[^>]*>([\s\S]*?)<\//i)?.[1] ?? "") || null;
-    const broadcast = plain.match(/\b(CBS|FOX|NBC|ESPN|NFLN|PRIME|NETFLIX)\b/i)?.[0] ?? null;
-    games.push(gameEntry(teamCode, opponent[0], away ? "away" : "home", kickoffAt, seasonPhase, weekLabel, venue, broadcast, sourceUrl));
+    const venue = text(card.match(/(?:venue|stadium|location)[^>]*>([\s\S]*?)<\//i)?.[1] ?? "") || null;
+    const broadcast = card.match(/\b(CBS|FOX|NBC|ESPN|NFLN|PRIME|NETFLIX)\b/i)?.[0] ?? null;
+    
+    games.push(gameEntry(teamCode, opponent[0], homeAway, kickoffAt, seasonPhase, weekLabel, venue, broadcast, sourceUrl));
   }
   return games;
 }
