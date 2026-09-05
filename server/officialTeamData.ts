@@ -7,7 +7,7 @@ export const TEAM_DOMAINS: Record<string, string> = {
 };
 
 export const TEAM_NAMES: Record<string, string> = {
-  ARI: "Arizona Cardinals", ATL: "Atlanta Falcons", BAL: "Baltimore Ravens", BUF: "Buffalo Bills", CAR: "Carolina Panthers", CHI: "Chicago Bears", CIN: "Cincinnati Bengals", CLE: "Cleveland Browns", DAL: "Dallas Cowboys", DEN: "Denver Broncos", DET: "Detroit Lions", GB: "Green Bay Packers", HOU: "Houston Texans", IND: "Indianapolis Colts", JAX: "Jacksonville Jaguars", KC: "Kansas City Chiefs", LAC: "Los Angeles Chargers", LAR: "Los Angeles Rams", LV: "Las Vegas Raiders", MIA: "Miami Dolphins", MIN: "Minnesota Vikings", NE: "New England Patriots", NO: "New Orleans Saints", NYG: "New York Giants", NYJ: "New York Jets", PHI: "Philadelphia Eagles", PIT: "Pittsburgh Steelers", SF: "San Francisco 49ers", SEA: "Seattle Seahawks", TB: "Tampa Bay Buccaneers", TEN: "Tennessee Titans", WAS: "Washington Commanders",
+  ARI: "Arizona Cardinals", ATL: "Atlanta Falcons", BAL: "Baltimore Ravens", BUF: "Buffalo Bills", CAR: "Carolina Panthers", CHI: "Chicago Bears", CIN: "Cincinnati Bengals", CLE: "Cleveland Browns", DAL: "Dallas Cowboys", DEN: "Denver Broncos", DET: "Detroit Lions", GB: "Green Bay Packers", HOU: "Houston Texans", IND: "Indianapolis Colts", JAX: "Jacksonville Jaguars", KC: "Kansas City Chiefs", LAC: "Los Angeles Chargers", LAR: "Los Angeles Rams", LV: "Las Vegas Raiders", MIA: "Miami Dolphins", MIN: "Minnesota Vikings", NE: "New England Patriots", NO: "New Orleans Saints", NYG: "New York Giants", NYJ: "New York Jets", PHI: "Philadelphia Eagles", PIT: "Pittsburgh Steelers", SF: "San Francisco 49ers", SEA: "Seattle Seahawks", TB: "Tampa Bay Buccaneers", TEN: "Tennessee Titans", WAS: "Commanders",
 };
 
 function decodeCodePoint(value: string, radix: number) {
@@ -120,15 +120,14 @@ export function parseNFLLeagueSchedulePage(html: string, teamCode: string, sourc
   const games: InsertOfficialGame[] = [];
   const weekHeaders = Array.from(html.matchAll(/<h3[^>]*>\s*Week\s+(\d+)\s*<\/h3>/gi));
   
-  // liタグ内の試合カード、またはdiv.shadow-extendedラッパーを柔軟にマッチ
-  const cardMatches = Array.from(html.matchAll(/<(?:li|div)[^>]*class="[^"]*(?:shadow-extended|nfl-c-matchup-strip|matchup-card)[^"]*"[\s\S]*?<\/(?:li|div)>/gi));
-  const cardsToProcess = cardMatches.length > 0 ? cardMatches : Array.from(html.matchAll(/<li>[\s\S]*?<\/li>/gi));
+  // 特定のクラス名に依存せず、<li>, <div>, <article> などのブロック単位で柔軟に分割して走査
+  const cards = html.split(/(?=<li\b|<div\b|<article\b)/i);
 
-  for (const cardMatch of cardsToProcess) {
-    const card = cardMatch[0];
+  for (const card of cards) {
+    if (!card.includes(teamName)) continue;
     const kickoffValue = card.match(/(?:datetime|data-gametime|data-start-date|data-iso-time)="([^"]+)"/i)?.[1];
     const kickoffAt = kickoffValue ? parseLeagueKickoff(kickoffValue) ?? parseKickoff(kickoffValue) : undefined;
-    if (!kickoffAt || !card.includes(teamName)) continue;
+    if (!kickoffAt) continue;
     
     const opponent = Object.entries(TEAM_NAMES).find(([code, name]) => code !== teamCode && card.includes(name));
     if (!opponent) continue;
@@ -137,19 +136,16 @@ export function parseNFLLeagueSchedulePage(html: string, teamCode: string, sourc
     const teamNickname = teamName.split(" ").at(-1)?.replace("49ers", "49ers") ?? teamName;
     const opponentNickname = opponent[1].split(" ").at(-1)?.replace("49ers", "49ers") ?? opponent[1];
     
-    // at, vs, @, 対戦カードの記載順序に対応
     let homeAway: "home" | "away" | null = null;
     if (new RegExp(`${teamNickname}\\s+(?:at|@)\\s+${opponentNickname}`, "i").test(plain)) {
       homeAway = "away";
     } else if (new RegExp(`${opponentNickname}\\s+(?:at|@)\\s+${teamNickname}`, "i").test(plain)) {
       homeAway = "home";
     } else if (new RegExp(`${teamNickname}\\s+vs\\.?\\s+${opponentNickname}`, "i").test(plain)) {
-      // vs の場合は左側がアウェイ（またはビジター）
       homeAway = "away";
     } else if (new RegExp(`${opponentNickname}\\s+vs\\.?\\s+${teamNickname}`, "i").test(plain)) {
       homeAway = "home";
     } else {
-      // テキスト内の出現位置で判定（先に出てきた方をアウェイと判定）
       const teamIdx = plain.indexOf(teamNickname);
       const oppIdx = plain.indexOf(opponentNickname);
       if (teamIdx !== -1 && oppIdx !== -1) {
@@ -160,14 +156,15 @@ export function parseNFLLeagueSchedulePage(html: string, teamCode: string, sourc
     if (!homeAway) continue;
 
     const seasonPhase = phaseFor(kickoffAt, card);
-    const headerWeek = weekHeaders.filter((header) => (header.index ?? -1) <= (cardMatch.index ?? -1)).at(-1)?.[1];
-    const inlineWeek = plain.match(/(?:Preseason\s+)?Week\s+(\d+)/i)?.[1];
-    const resolvedWeek = headerWeek ?? inlineWeek;
+    const resolvedWeek = plain.match(/(?:Preseason\s+)?Week\s+(\d+)/i)?.[1];
     const weekLabel = resolvedWeek ? seasonPhase === "preseason" ? `PRESEASON WEEK ${resolvedWeek}` : `WEEK ${resolvedWeek}` : fallbackWeekLabel(kickoffAt, seasonPhase);
     const venue = text(card.match(/(?:venue|stadium|location)[^>]*>([\s\S]*?)<\//i)?.[1] ?? "") || null;
     const broadcast = card.match(/\b(CBS|FOX|NBC|ESPN|NFLN|PRIME|NETFLIX)\b/i)?.[0] ?? null;
     
-    games.push(gameEntry(teamCode, opponent[0], homeAway, kickoffAt, seasonPhase, weekLabel, venue, broadcast, sourceUrl));
+    const entry = gameEntry(teamCode, opponent[0], homeAway, kickoffAt, seasonPhase, weekLabel, venue, broadcast, sourceUrl);
+    if (!games.some((g) => g.externalId === entry.externalId)) {
+      games.push(entry);
+    }
   }
   return games;
 }
