@@ -239,7 +239,7 @@ async function hallOfFameYears(): Promise<Map<string, number>> {
     try {
       const response = await fetch("https://en.wikipedia.org/w/api.php?action=parse&page=List_of_Pro_Football_Hall_of_Fame_inductees&prop=wikitext&format=json&origin=*", { headers: { "User-Agent": USER_AGENT } });
       if (!response.ok) return fallback;
-      const payload = await response.json() as { parse?: { wikitext?: { "*"?: string } } };
+      const payload = await response.json() as { parse?: {指示?: string; wikitext?: { "*"?: string } } };
       const values = payload.parse?.wikitext?.["*"] ?? "";
       values.split(/\n\|-/).forEach((row) => {
         const columns = row.split("||");
@@ -483,32 +483,61 @@ async function atlasCareerUncached(playerId: string) {
   const historicSeasons = Object.entries(historicEntries).map(([season, teams]) => ({ season: number(season), teams }));
   const recentStart = Math.max(historic?.coverage.endSeason ? historic.coverage.endSeason + 1 : start, start);
   const seasons = Array.from({ length: Math.max(0, end - recentStart + 1) }, (_, index) => recentStart + index);
+
+  // ロスターCSVと週間スタッツCSVの両方から実所属チームを収集して結合
   const recentSeasons = await mapInBatches(seasons, 4, async (season) => {
     try {
-      const rosterRows = await rosterForSeason(season);
-      const teams = Array.from(new Set(rosterRows.filter((row) => row.gsis_id === playerId).map((row) => teamAliases[row.team] ?? row.team).filter(Boolean)));
-      return { season, teams };
+      const rosterRows = await rosterForSeason(season).catch(() => [] as CsvRow[]);
+      const rosterTeams = rosterRows.filter((row) => row.gsis_id === playerId).map((row) => teamAliases[row.team] ?? row.team).filter(Boolean);
+
+      // 週間スタッツから実際に試合出場したチームも取得
+      let statTeams: string[] = [];
+      try {
+        const statRows = await fetchPlayerCsvRows(`${NFLVERSE_RELEASES}/player_stats/player_stats_${season}.csv`, playerId);
+        statTeams = statRows.map((r) => teamAliases[r.recent_team || ""] || r.recent_team || teamAliases[r.team || ""] || r.team).filter(Boolean);
+      } catch {
+        // スタッツが取れない場合はロスターのみ
+      }
+
+      const mergedTeams = Array.from(new Set([...rosterTeams, ...statTeams]));
+      return { season, teams: mergedTeams };
     } catch {
       return { season, teams: [] as string[] };
     }
   });
+
   const bySeason = new Map<number, string[]>();
-  [...historicSeasons, ...recentSeasons].forEach((entry) => { if (entry.teams.length) bySeason.set(entry.season, Array.from(new Set(entry.teams))); });
+  [...historicSeasons, ...recentSeasons].forEach((entry) => {
+    if (entry.teams.length) bySeason.set(entry.season, Array.from(new Set(entry.teams)));
+  });
+
   const timeline = Array.from(bySeason.entries()).map(([season, teams]) => ({ season, teams })).sort((left, right) => right.season - left.season);
   const spans: Array<{ startSeason: number; endSeason: number; teams: AtlasTeam[] }> = [];
+
   timeline.forEach((entry) => {
     const previous = spans.at(-1);
     const normalizedTeams = entry.teams.map((team) => teamFor(team, directory));
-    if (previous && previous.teams.map((team) => team.abbreviation).join("|") === normalizedTeams.map((team) => team.abbreviation).join("|") && previous.startSeason === entry.season + 1) {
+    const normalizedKey = normalizedTeams.map((t) => t.abbreviation).sort().join("|");
+    const prevKey = previous?.teams.map((t) => t.abbreviation).sort().join("|");
+
+    if (previous && prevKey === normalizedKey && previous.startSeason === entry.season + 1) {
       previous.startSeason = entry.season;
       return;
     }
     spans.push({ startSeason: entry.season, endSeason: entry.season, teams: normalizedTeams });
   });
+
   return {
     spans,
     hallOfFameYear: await hallOfFameYear(playerName(master)),
-    source: { provider: "NFLverse roster data", updatedAt: new Date().toISOString(), teamHistoryCoverage: { availableFrom: historic?.coverage.startSeason ?? start, unavailableBefore: historic && start < historic.coverage.startSeason ? { startSeason: start, endSeason: historic.coverage.startSeason - 1 } : null } },
+    source: {
+      provider: "NFLverse roster data",
+      updatedAt: new Date().toISOString(),
+      teamHistoryCoverage: {
+        availableFrom: historic?.coverage.startSeason ?? start,
+        unavailableBefore: historic && start < historic.coverage.startSeason ? { startSeason: start, endSeason: historic.coverage.startSeason - 1 } : null,
+      },
+    },
   };
 }
 
@@ -599,7 +628,6 @@ export function summarizeAtlasStats(rows: CsvRow[], playerId: string, position: 
   rows.filter((row) => row.player_id === playerId && (!row.season_type || row.season_type === "REG"))
     .forEach((row) => {
       const season = number(row.season);
-      // 週間データの場合は recent_team が実所属チーム
       const team = teamAliases[row.recent_team || ""] || row.recent_team || teamAliases[row.team || ""] || row.team || "FA";
       if (!season) return;
       const teams = bySeason.get(season) ?? new Map<string, CsvRow[]>();
@@ -610,26 +638,42 @@ export function summarizeAtlasStats(rows: CsvRow[], playerId: string, position: 
   const valuesFor = (seasonRows: CsvRow[]) => Object.fromEntries(columns.map((column) => [column.key, column.calculate ? column.calculate(seasonRows) : sum(seasonRows, column.sources ?? [])]));
 
   const seasons = Array.from(bySeason.entries()).sort(([left], [right]) => right - left).flatMap(([season, teams]) => {
-    // 該当シーズンにプレイした各チームごとの行
-    const teamRows = Array.from(teams.entries()).map(([team, seasonRows]) => ({
-      season,
-      team,
-      kind: "team" as const,
-      values: valuesFor(seasonRows),
-    }));
+    // 該当シーズン内での出場週（minWeek）を基準に、チームを行動時系列順（早い週→遅い週）にソート
+    const teamEntries = Array.from(teams.entries()).map(([team, seasonRows]) => {
+      const minWeek = Math.min(...seasonRows.map((r) => number(r.week) || 99));
+      return { team, seasonRows, minWeek };
+    }).sort((a, b) => a.minWeek - b.minWeek);
 
-    // 複数チームでプレイした場合は各チーム行 + TOTAL（合算）行を生成 (ESPN方式)
-    if (teamRows.length >= 2) {
-      const totalRow = {
+    // 単一チーム所属の場合はその1行のみ
+    if (teamEntries.length < 2) {
+      return [{
         season,
-        team: "TOTAL",
-        kind: "season-total" as const,
-        values: valuesFor(Array.from(teams.values()).flat()),
-      };
-      return [...teamRows, totalRow];
+        team: teamEntries[0]?.team || "FA",
+        kind: "team" as const,
+        values: valuesFor(teamEntries[0]?.seasonRows || []),
+      }];
     }
 
-    return teamRows;
+    // 複数チーム所属の場合（ESPN準拠の並び順）：
+    // 上から見た時に: TOTAL -> 2番目のチーム(NYJ/LAR) -> 1番目のチーム(LV/CAR)
+    // （＝下から時系列順に読んだ時に: 1番目(LV/CAR) -> 2番目(NYJ/LAR) -> TOTAL となる構成）
+    const totalRow = {
+      season,
+      team: "TOTAL",
+      kind: "season-total" as const,
+      values: valuesFor(Array.from(teams.values()).flat()),
+    };
+
+    // teamEntries は [LV, NYJ]（昇順）なので、逆順 [NYJ, LV] にして TOTAL を先頭に置くことで
+    // 上から: TOTAL -> NYJ -> LV （下から: LV -> NYJ -> TOTAL）が完成
+    const chronologicalReversed = [...teamEntries].reverse().map((entry) => ({
+      season,
+      team: entry.team,
+      kind: "team" as const,
+      values: valuesFor(entry.seasonRows),
+    }));
+
+    return [totalRow, ...chronologicalReversed];
   });
 
   return {
@@ -693,12 +737,10 @@ async function atlasStatsUncached(playerId: string) {
   const start = rookieSeason(master);
   const end = roster ? currentSeason : Math.max(start, number(master.last_season) || currentSeason - 1);
 
-  // player_stats/player_stats_YYYY.csv (週間データ) から取得し、複数チームの途中移籍をチーム別に分解
   const rows = await mapInBatches(Array.from({ length: end - start + 1 }, (_, index) => start + index), 8, async (season) => {
     try {
       return await fetchPlayerCsvRows(`${NFLVERSE_RELEASES}/player_stats/player_stats_${season}.csv`, playerId);
     } catch {
-      // フォールバック: 過去データ等で週間データが取得できない場合はサマリーファイルを参照
       try {
         return await fetchPlayerCsvRows(`${NFLVERSE_RELEASES}/stats_player/stats_player_reg_${season}.csv`, playerId);
       } catch {
