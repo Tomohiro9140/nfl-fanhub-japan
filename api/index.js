@@ -1431,6 +1431,40 @@ var TEAM_NAMES = {
   TEN: "Tennessee Titans",
   WAS: "Washington Commanders"
 };
+var TEAM_NICKNAMES = {
+  ARI: "Cardinals",
+  ATL: "Falcons",
+  BAL: "Ravens",
+  BUF: "Bills",
+  CAR: "Panthers",
+  CHI: "Bears",
+  CIN: "Bengals",
+  CLE: "Browns",
+  DAL: "Cowboys",
+  DEN: "Broncos",
+  DET: "Lions",
+  GB: "Packers",
+  HOU: "Texans",
+  IND: "Colts",
+  JAX: "Jaguars",
+  KC: "Chiefs",
+  LAC: "Chargers",
+  LAR: "Rams",
+  LV: "Raiders",
+  MIA: "Dolphins",
+  MIN: "Vikings",
+  NE: "Patriots",
+  NO: "Saints",
+  NYG: "Giants",
+  NYJ: "Jets",
+  PHI: "Eagles",
+  PIT: "Steelers",
+  SF: "49ers",
+  SEA: "Seahawks",
+  TB: "Buccaneers",
+  TEN: "Titans",
+  WAS: "Commanders"
+};
 function decodeCodePoint(value, radix) {
   const codePoint = Number.parseInt(value, radix);
   return Number.isFinite(codePoint) && codePoint >= 0 && codePoint <= 1114111 ? String.fromCodePoint(codePoint) : `&#${radix === 16 ? "x" : ""}${value};`;
@@ -1445,7 +1479,7 @@ function normalizeOfficialText(value) {
     decodedEntities = next;
   }
   const repaired = /[ÃÂâ]/.test(decodedEntities) ? Buffer.from(decodedEntities, "latin1").toString("utf8") : decodedEntities;
-  return (repaired.includes("\uFFFD") ? decodedEntities : repaired).normalize("NFC").replace(/[\u0000-\u001f\u007f]/g, " ").replace(/\s+/g, " ").trim();
+  return (repaired.includes("") ? decodedEntities : repaired).normalize("NFC").replace(/[\u0000-\u001f\u007f]/g, " ").replace(/\s+/g, " ").trim();
 }
 var text2 = normalizeOfficialText;
 function hash(value) {
@@ -1471,6 +1505,10 @@ function parseKickoff(value) {
   if (!match) return void 0;
   const [, month, day, year, time, offset] = match;
   const date = /* @__PURE__ */ new Date(`${year}-${month}-${day}T${time}${offset}`);
+  return Number.isNaN(date.getTime()) || date.getUTCFullYear() < 2e3 ? void 0 : date;
+}
+function parseLeagueKickoff(value) {
+  const date = new Date(value);
   return Number.isNaN(date.getTime()) || date.getUTCFullYear() < 2e3 ? void 0 : date;
 }
 function phaseFor(kickoffAt, sourceText) {
@@ -1514,36 +1552,83 @@ function parseOfficialSchedulePage(html, teamCode, sourceUrl) {
   }
   return games;
 }
-function parseLeagueKickoff(value) {
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) || date.getUTCFullYear() < 2e3 ? void 0 : date;
+function resolveCardKickoff(card, weekNum, season) {
+  const kickoffValue = card.match(/(?:datetime|data-gametime|data-start-date|data-iso-time)="([^"]+)"/i)?.[1];
+  if (kickoffValue) {
+    const parsed = parseLeagueKickoff(kickoffValue) ?? parseKickoff(kickoffValue);
+    if (parsed) return parsed;
+  }
+  const dateMatch = card.match(/\b(Jan(?:uary)?|Feb(?:ruary)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\.?\s+(\d{1,2})\b/i);
+  if (dateMatch) {
+    const monthNames = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
+    const monthIdx = monthNames.findIndex((m) => dateMatch[1].toLowerCase().startsWith(m));
+    if (monthIdx !== -1) {
+      const day = Number.parseInt(dateMatch[2], 10);
+      const year = monthIdx < 5 ? season + 1 : season;
+      return new Date(Date.UTC(year, monthIdx, day, 18, 0, 0));
+    }
+  }
+  if (weekNum && weekNum >= 1 && weekNum <= 18) {
+    const week1Sunday = new Date(Date.UTC(season, 8, 13, 18, 0, 0));
+    return new Date(week1Sunday.getTime() + (weekNum - 1) * 7 * 24 * 60 * 60 * 1e3);
+  }
+  return void 0;
 }
 function parseNFLLeagueSchedulePage(html, teamCode, sourceUrl) {
   const teamName = TEAM_NAMES[teamCode];
+  const teamNickname = TEAM_NICKNAMES[teamCode] ?? teamName.split(" ").at(-1);
   if (!teamName) return [];
+  const season = currentSeason();
   const games = [];
-  const weekHeaders = Array.from(html.matchAll(/<h3[^>]*>\s*Week\s+(\d+)\s*<\/h3>/gi));
-  for (const cardMatch of Array.from(html.matchAll(/<li><div class="shadow-extended[\s\S]*?<\/li>/gi))) {
-    const card = cardMatch[0];
-    const kickoffValue = card.match(/(?:datetime|data-gametime|data-start-date)="([^"]+)"/i)?.[1];
-    const kickoffAt = kickoffValue ? parseLeagueKickoff(kickoffValue) ?? parseKickoff(kickoffValue) : void 0;
-    if (!kickoffAt || !card.includes(teamName)) continue;
-    const opponent = Object.entries(TEAM_NAMES).find(([code, name]) => code !== teamCode && card.includes(name));
-    if (!opponent) continue;
+  const weekHeaders = Array.from(html.matchAll(/<h[2-4][^>]*>\s*(?:(Preseason)\s+)?Week\s+(\d+)\s*<\/h[2-4]>/gi));
+  const cardMatches = Array.from(html.matchAll(/<li\b[^>]*>([\s\S]*?)<\/li>/gi));
+  for (const match of cardMatches) {
+    const card = match[0];
+    if (card.includes("score-strip") || card.includes("nfl-c-header")) continue;
+    const hasTeam = card.includes(teamName) || card.includes(teamNickname);
+    if (!hasTeam) continue;
+    const opponentEntry = Object.entries(TEAM_NAMES).find(([code, name]) => {
+      if (code === teamCode) return false;
+      const nick = TEAM_NICKNAMES[code];
+      return card.includes(name) || nick && card.includes(nick);
+    });
+    if (!opponentEntry) continue;
+    const [oppCode, oppName] = opponentEntry;
+    const oppNickname = TEAM_NICKNAMES[oppCode] ?? oppName.split(" ").at(-1);
     const plain = text2(card);
-    const teamNickname = teamName.split(" ").at(-1)?.replace("49ers", "49ers") ?? teamName;
-    const opponentNickname = opponent[1].split(" ").at(-1)?.replace("49ers", "49ers") ?? opponent[1];
-    const away = new RegExp(`${teamNickname}\\s+at\\s+${opponentNickname}`, "i").test(plain);
-    const home = new RegExp(`${opponentNickname}\\s+at\\s+${teamNickname}`, "i").test(plain);
-    if (!away && !home) continue;
-    const seasonPhase = phaseFor(kickoffAt, card);
-    const headerWeek = weekHeaders.filter((header) => (header.index ?? -1) <= (cardMatch.index ?? -1)).at(-1)?.[1];
+    const headerMatch = weekHeaders.filter((header) => (header.index ?? -1) <= (match.index ?? -1)).at(-1);
     const inlineWeek = plain.match(/(?:Preseason\s+)?Week\s+(\d+)/i)?.[1];
-    const resolvedWeek = headerWeek ?? inlineWeek;
-    const weekLabel = resolvedWeek ? seasonPhase === "preseason" ? `PRESEASON WEEK ${resolvedWeek}` : `WEEK ${resolvedWeek}` : fallbackWeekLabel(kickoffAt, seasonPhase);
-    const venue = text2(card.match(/(?:venue|stadium)[^>]*>([\s\S]*?)<\//i)?.[1] ?? "") || null;
+    const resolvedWeekStr = headerMatch?.[2] ?? inlineWeek;
+    const weekNum = resolvedWeekStr ? Number.parseInt(resolvedWeekStr, 10) : null;
+    const isPreseason = Boolean(headerMatch?.[1]) || /pre\s*season|\bPRE\b/i.test(card);
+    const kickoffAt = resolveCardKickoff(card, weekNum, season);
+    if (!kickoffAt) continue;
+    const seasonPhase = isPreseason ? "preseason" : phaseFor(kickoffAt, card);
+    let homeAway = null;
+    if (new RegExp(`${teamNickname}\\s+(?:at|@)\\s+${oppNickname}`, "i").test(plain) || new RegExp(`@\\s*${oppNickname}`, "i").test(plain)) {
+      homeAway = "away";
+    } else if (new RegExp(`${oppNickname}\\s+(?:at|@)\\s+${teamNickname}`, "i").test(plain) || new RegExp(`@\\s*${teamNickname}`, "i").test(plain)) {
+      homeAway = "home";
+    } else if (new RegExp(`${teamNickname}\\s+vs\\.?\\s+${oppNickname}`, "i").test(plain) || new RegExp(`vs\\.?\\s+${oppNickname}`, "i").test(plain)) {
+      homeAway = "home";
+    } else if (new RegExp(`${oppNickname}\\s+vs\\.?\\s+${teamNickname}`, "i").test(plain)) {
+      homeAway = "away";
+    } else {
+      const teamIdx = plain.indexOf(teamNickname);
+      const oppIdx = plain.indexOf(oppNickname);
+      if (teamIdx !== -1 && oppIdx !== -1) {
+        homeAway = teamIdx < oppIdx ? "away" : "home";
+      } else {
+        homeAway = "home";
+      }
+    }
+    const weekLabel = weekNum ? isPreseason ? `PRESEASON WEEK ${weekNum}` : `WEEK ${weekNum}` : fallbackWeekLabel(kickoffAt, seasonPhase);
+    const venue = text2(card.match(/(?:venue|stadium|location)[^>]*>([\s\S]*?)<\//i)?.[1] ?? "") || null;
     const broadcast = plain.match(/\b(CBS|FOX|NBC|ESPN|NFLN|PRIME|NETFLIX)\b/i)?.[0] ?? null;
-    games.push(gameEntry(teamCode, opponent[0], away ? "away" : "home", kickoffAt, seasonPhase, weekLabel, venue, broadcast, sourceUrl));
+    const entry = gameEntry(teamCode, oppCode, homeAway, kickoffAt, seasonPhase, weekLabel, venue, broadcast, sourceUrl);
+    if (!games.some((g) => g.externalId === entry.externalId || entry.weekLabel && g.weekLabel === entry.weekLabel)) {
+      games.push(entry);
+    }
   }
   return games;
 }
@@ -2734,7 +2819,7 @@ async function atlasSearchSuggestions(query) {
   const term = normalizeAtlasText(query);
   if (term.length < 2) return { players: [] };
   const { active } = await searchUniverse();
-  const players = active.filter((player) => normalizeAtlasText(player.name).includes(term)).sort((left, right) => Number(!normalizeAtlasText(left.name).startsWith(term)) - Number(!normalizeAtlasText(right.name).startsWith(term)) || left.name.localeCompare(right.name)).slice(0, 8);
+  const players = active.filter((player) => normalizeAtlasText(player.name).includes(term)).sort((left, right) => Number(!normalizeAtlasText(left.name).startsWith(term)) - Number(!normalizeAtlasText(right.name).startsWith(term)) || left.name.localeCompare(right.name));
   return { players };
 }
 async function atlasSearch(query) {
@@ -2872,11 +2957,18 @@ async function atlasCareerUncached(playerId) {
   const historicSeasons = Object.entries(historicEntries).map(([season, teams]) => ({ season: number(season), teams }));
   const recentStart = Math.max(historic?.coverage.endSeason ? historic.coverage.endSeason + 1 : start, start);
   const seasons = Array.from({ length: Math.max(0, end - recentStart + 1) }, (_, index2) => recentStart + index2);
-  const recentSeasons = await mapInBatches(seasons, 4, async (season) => {
+  const recentSeasons = await mapInBatches(seasons, 1, async (season) => {
     try {
-      const rosterRows = await rosterForSeason(season);
-      const teams = Array.from(new Set(rosterRows.filter((row) => row.gsis_id === playerId).map((row) => teamAliases2[row.team] ?? row.team).filter(Boolean)));
-      return { season, teams };
+      const rosterRows = await rosterForSeason(season).catch(() => []);
+      const rosterTeams = rosterRows.filter((row) => row.gsis_id === playerId).map((row) => teamAliases2[row.team] ?? row.team).filter(Boolean);
+      let statTeams = [];
+      try {
+        const statRows = await fetchPlayerWeeklyOrSummary(season, playerId);
+        statTeams = statRows.map((r) => teamAliases2[r.recent_team || r.posteam || ""] || r.recent_team || r.posteam || teamAliases2[r.team || ""] || r.team).filter(Boolean);
+      } catch {
+      }
+      const mergedTeams = Array.from(/* @__PURE__ */ new Set([...rosterTeams, ...statTeams]));
+      return { season, teams: mergedTeams };
     } catch {
       return { season, teams: [] };
     }
@@ -2890,7 +2982,9 @@ async function atlasCareerUncached(playerId) {
   timeline.forEach((entry) => {
     const previous = spans.at(-1);
     const normalizedTeams = entry.teams.map((team) => teamFor(team, directory));
-    if (previous && previous.teams.map((team) => team.abbreviation).join("|") === normalizedTeams.map((team) => team.abbreviation).join("|") && previous.startSeason === entry.season + 1) {
+    const normalizedKey = normalizedTeams.map((t2) => t2.abbreviation).sort().join("|");
+    const prevKey = previous?.teams.map((t2) => t2.abbreviation).sort().join("|");
+    if (previous && prevKey === normalizedKey && previous.startSeason === entry.season + 1) {
       previous.startSeason = entry.season;
       return;
     }
@@ -2899,7 +2993,14 @@ async function atlasCareerUncached(playerId) {
   return {
     spans,
     hallOfFameYear: await hallOfFameYear(playerName(master)),
-    source: { provider: "NFLverse roster data", updatedAt: (/* @__PURE__ */ new Date()).toISOString(), teamHistoryCoverage: { availableFrom: historic?.coverage.startSeason ?? start, unavailableBefore: historic && start < historic.coverage.startSeason ? { startSeason: start, endSeason: historic.coverage.startSeason - 1 } : null } }
+    source: {
+      provider: "NFLverse roster data",
+      updatedAt: (/* @__PURE__ */ new Date()).toISOString(),
+      teamHistoryCoverage: {
+        availableFrom: historic?.coverage.startSeason ?? start,
+        unavailableBefore: historic && start < historic.coverage.startSeason ? { startSeason: start, endSeason: historic.coverage.startSeason - 1 } : null
+      }
+    }
   };
 }
 function awardText(item) {
@@ -2955,7 +3056,7 @@ var weightedAverage = (rows, value, weight) => {
   const totalWeight = sum(rows, [weight]);
   return totalWeight ? Number((rows.reduce((total, row) => total + number(row[value]) * number(row[weight]), 0) / totalWeight).toFixed(2)) : 0;
 };
-var gameCount = (rows) => rows.some((row) => row.game_id) ? new Set(rows.map((row) => row.game_id || `${row.season}-${row.week}-${row.team}`)).size : sum(rows, ["games"]);
+var gameCount = (rows) => rows.some((row) => row.game_id || row.week) ? new Set(rows.map((row) => row.game_id || `${row.season}-${row.week}-${row.recent_team || row.posteam || row.team}`)).size : sum(rows, ["games"]);
 var maxValue = (rows, sources) => Math.max(0, ...rows.flatMap((row) => sources.map((source) => number(row[source]))));
 var passerRating = (rows) => {
   const attempts = sum(rows, ["attempts"]);
@@ -2976,8 +3077,8 @@ var gameColumn = { key: "games", label: "GP", calculate: gameCount };
 var statColumnsByPosition = {
   QB: [gameColumn, { key: "completionPct", label: "CMP%", calculate: (rows) => ratio(rows, ["completions"], ["attempts"], true) }, { key: "passingYards", label: "PASS YDS", sources: ["passing_yards"] }, { key: "yardsPerAttempt", label: "YPA", calculate: (rows) => ratio(rows, ["passing_yards"], ["attempts"]) }, { key: "passingTds", label: "TD", sources: ["passing_tds"] }, { key: "interceptions", label: "INT", sources: ["passing_interceptions"] }, { key: "passerRating", label: "RATING", calculate: passerRating }, { key: "sacks", label: "SACKED", sources: ["sacks_suffered"] }, { key: "rushingYards", label: "RUSH YDS", sources: ["rushing_yards"] }, { key: "rushingTds", label: "RUSH TD", sources: ["rushing_tds"] }, { key: "cpoe", label: "CPOE", calculate: (rows) => weightedAverage(rows, "passing_cpoe", "attempts") }],
   RB: [gameColumn, { key: "carries", label: "ATT", sources: ["carries"] }, { key: "rushingYards", label: "RUSH YDS", sources: ["rushing_yards"] }, { key: "yardsPerCarry", label: "YPC", calculate: (rows) => ratio(rows, ["rushing_yards"], ["carries"]) }, { key: "rushingTds", label: "RUSH TD", sources: ["rushing_tds"] }, { key: "receivingYards", label: "REC YDS", sources: ["receiving_yards"] }, { key: "receivingTds", label: "REC TD", sources: ["receiving_tds"] }, { key: "fumbles", label: "FUM", sources: ["rushing_fumbles", "receiving_fumbles"] }, { key: "fumblesLost", label: "LOST", sources: ["rushing_fumbles_lost", "receiving_fumbles_lost"] }],
-  WR: [gameColumn, { key: "receivingYards", label: "YDS", sources: ["receiving_yards"] }, { key: "yardsPerReception", label: "YPR", calculate: (rows) => ratio(rows, ["receiving_yards"], ["receptions"]) }, { key: "receivingTds", label: "REC TD", sources: ["receiving_tds"] }, { key: "catchPct", label: "CATCH%", calculate: (rows) => ratio(rows, ["receptions"], ["targets"], true) }, { key: "firstDowns", label: "1ST", sources: ["receiving_first_downs"] }, { key: "yac", label: "YAC", sources: ["receiving_yards_after_catch"] }],
-  TE: [gameColumn, { key: "receivingYards", label: "YDS", sources: ["receiving_yards"] }, { key: "yardsPerReception", label: "YPR", calculate: (rows) => ratio(rows, ["receiving_yards"], ["receptions"]) }, { key: "receivingTds", label: "REC TD", sources: ["receiving_tds"] }, { key: "catchPct", label: "CATCH%", calculate: (rows) => ratio(rows, ["receptions"], ["targets"], true) }, { key: "firstDowns", label: "1ST", sources: ["receiving_first_downs"] }, { key: "yac", label: "YAC", sources: ["receiving_yards_after_catch"] }],
+  WR: [gameColumn, { key: "receptions", label: "REC", sources: ["receptions"] }, { key: "receivingYards", label: "YDS", sources: ["receiving_yards"] }, { key: "yardsPerReception", label: "YPR", calculate: (rows) => ratio(rows, ["receiving_yards"], ["receptions"]) }, { key: "receivingTds", label: "REC TD", sources: ["receiving_tds"] }, { key: "catchPct", label: "CATCH%", calculate: (rows) => ratio(rows, ["receptions"], ["targets"], true) }, { key: "firstDowns", label: "1ST", sources: ["receiving_first_downs"] }, { key: "yac", label: "YAC", sources: ["receiving_yards_after_catch"] }],
+  TE: [gameColumn, { key: "receptions", label: "REC", sources: ["receptions"] }, { key: "receivingYards", label: "YDS", sources: ["receiving_yards"] }, { key: "yardsPerReception", label: "YPR", calculate: (rows) => ratio(rows, ["receiving_yards"], ["receptions"]) }, { key: "receivingTds", label: "REC TD", sources: ["receiving_tds"] }, { key: "catchPct", label: "CATCH%", calculate: (rows) => ratio(rows, ["receptions"], ["targets"], true) }, { key: "firstDowns", label: "1ST", sources: ["receiving_first_downs"] }, { key: "yac", label: "YAC", sources: ["receiving_yards_after_catch"] }],
   OL: [gameColumn, { key: "penalties", label: "PEN", sources: ["penalties"] }, { key: "penaltyYards", label: "PEN YDS", sources: ["penalty_yards"] }],
   DL: [gameColumn, { key: "solo", label: "SOLO", sources: ["def_tackles_solo"] }, { key: "assists", label: "AST", sources: ["def_tackle_assists"] }, { key: "tfl", label: "TFL", sources: ["def_tackles_for_loss"] }, { key: "sacks", label: "SACK", sources: ["def_sacks"] }, { key: "hits", label: "QB HIT", sources: ["def_qb_hits"] }, { key: "forcedFumbles", label: "FF", sources: ["def_fumbles_forced"] }],
   LB: [gameColumn, { key: "solo", label: "SOLO", sources: ["def_tackles_solo"] }, { key: "assists", label: "AST", sources: ["def_tackle_assists"] }, { key: "totalTackles", label: "TOTAL", sources: ["def_tackles_solo", "def_tackle_assists"] }, { key: "tfl", label: "TFL", sources: ["def_tackles_for_loss"] }, { key: "sacks", label: "SACK", sources: ["def_sacks"] }, { key: "hits", label: "QB HIT", sources: ["def_qb_hits"] }, { key: "interceptions", label: "INT", sources: ["def_interceptions"] }, { key: "forcedFumbles", label: "FF", sources: ["def_fumbles_forced"] }],
@@ -2994,9 +3095,13 @@ function summarizeAtlasStats(rows, playerId, position) {
   const group = statPosition(position);
   const columns = statColumnsByPosition[group];
   const bySeason = /* @__PURE__ */ new Map();
-  rows.filter((row) => row.player_id === playerId && (!row.season_type || row.season_type === "REG")).forEach((row) => {
+  rows.filter((row) => {
+    const matchesId = row.player_id === playerId || row.gsis_id === playerId || row.passer_player_id === playerId || row.rusher_player_id === playerId || row.receiver_player_id === playerId;
+    return matchesId && (!row.season_type || row.season_type === "REG");
+  }).forEach((row) => {
     const season = number(row.season);
-    const team = row.team || row.recent_team || "FA";
+    const rawTeam = row.recent_team || row.posteam || row.team || "FA";
+    const team = teamAliases2[rawTeam] ?? rawTeam;
     if (!season) return;
     const teams = bySeason.get(season) ?? /* @__PURE__ */ new Map();
     teams.set(team, [...teams.get(team) ?? [], row]);
@@ -3004,18 +3109,47 @@ function summarizeAtlasStats(rows, playerId, position) {
   });
   const valuesFor = (seasonRows) => Object.fromEntries(columns.map((column) => [column.key, column.calculate ? column.calculate(seasonRows) : sum(seasonRows, column.sources ?? [])]));
   const seasons = Array.from(bySeason.entries()).sort(([left], [right]) => right - left).flatMap(([season, teams]) => {
-    const teamRows = Array.from(teams.entries()).map(([team, seasonRows]) => ({ season, team, kind: "team", values: valuesFor(seasonRows) }));
-    return teamRows.length < 2 ? teamRows : [...teamRows, { season, team: "TOTAL", kind: "season-total", values: valuesFor(Array.from(teams.values()).flat()) }];
+    const teamEntries = Array.from(teams.entries()).map(([team, seasonRows]) => {
+      const minWeek = Math.min(...seasonRows.map((r) => number(r.week) || 99));
+      return { team, seasonRows, minWeek };
+    }).sort((a, b) => a.minWeek - b.minWeek);
+    if (teamEntries.length < 2) {
+      return [{
+        season,
+        team: teamEntries[0]?.team || "FA",
+        kind: "team",
+        values: valuesFor(teamEntries[0]?.seasonRows || [])
+      }];
+    }
+    const totalRow = {
+      season,
+      team: "TOTAL",
+      kind: "season-total",
+      values: valuesFor(Array.from(teams.values()).flat())
+    };
+    const chronologicalReversed = [...teamEntries].reverse().map((entry) => ({
+      season,
+      team: entry.team,
+      kind: "team",
+      values: valuesFor(entry.seasonRows)
+    }));
+    return [totalRow, ...chronologicalReversed];
   });
-  return { position: group, columns, seasons, total: valuesFor(Array.from(bySeason.values()).flatMap((teams) => Array.from(teams.values()).flat())) };
+  return {
+    position: group,
+    columns,
+    seasons,
+    total: valuesFor(Array.from(bySeason.values()).flatMap((teams) => Array.from(teams.values()).flat()))
+  };
 }
-async function fetchPlayerCsvRows(url, playerId) {
+async function fetchPlayerCsvStream(url, playerId) {
   const response = await fetch(url, { headers: { "User-Agent": USER_AGENT } });
-  if (!response.ok || !response.body) throw new Error(`ATLAS stat source returned ${response.status}`);
+  if (!response.ok || !response.body) throw new Error(`Status ${response.status}`);
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
   let headers = null;
+  let idIndices = [];
   const rows = [];
   const parseLine = (line) => {
     const cells = [];
@@ -3040,23 +3174,52 @@ async function fetchPlayerCsvRows(url, playerId) {
     if (!line) return;
     const cells = parseLine(line);
     if (!headers) {
-      headers = cells.map((header) => header.replace(/^\uFEFF/, "").trim());
+      headers = cells.map((h) => h.replace(/^\uFEFF/, "").replace(/["\r\n]/g, "").trim());
+      idIndices = [
+        headers.indexOf("player_id"),
+        headers.indexOf("gsis_id"),
+        headers.indexOf("passer_player_id"),
+        headers.indexOf("rusher_player_id"),
+        headers.indexOf("receiver_player_id")
+      ].filter((idx) => idx >= 0);
       return;
     }
-    const idIndex = headers.indexOf("player_id");
-    if (idIndex < 0 || cells[idIndex] !== playerId) return;
-    rows.push(Object.fromEntries(headers.map((header, index2) => [header, (cells[index2] ?? "").trim()])));
+    const isMatch = idIndices.some((idx) => cells[idx] === playerId);
+    if (!isMatch) return;
+    rows.push(Object.fromEntries(headers.map((h, i) => [h, (cells[i] ?? "").trim()])));
   };
   while (true) {
     const { done, value } = await reader.read();
     buffer += decoder.decode(value, { stream: !done });
     const lines = buffer.split(/\r?\n/);
     buffer = lines.pop() ?? "";
-    lines.forEach(consumeLine);
+    for (let i = 0; i < lines.length; i++) consumeLine(lines[i]);
     if (done) break;
   }
   consumeLine(buffer);
   return rows;
+}
+async function fetchPlayerWeeklyOrSummary(season, playerId) {
+  const candidateUrls = [
+    // 2025年等の最新週間ファイル (Status 200 確認済み)
+    `${NFLVERSE_RELEASES}/stats_player/stats_player_week_${season}.csv`,
+    // 2024年以前の週間ファイル (Adams, Mayfield 等)
+    `${NFLVERSE_RELEASES}/player_stats/player_stats_${season}.csv`,
+    // サブ候補
+    `${NFLVERSE_RELEASES}/player_stats/stats_player_week_${season}.csv`
+  ];
+  for (const url of candidateUrls) {
+    try {
+      const rows = await fetchPlayerCsvStream(url, playerId);
+      if (rows.length > 0) return rows;
+    } catch {
+    }
+  }
+  try {
+    return await fetchPlayerCsvStream(`${NFLVERSE_RELEASES}/stats_player/stats_player_reg_${season}.csv`, playerId);
+  } catch {
+    return [];
+  }
 }
 async function atlasStats(playerId) {
   return cached(`atlas:stats:${playerId}`, CACHE_TTL.stats, () => atlasStatsUncached(playerId));
@@ -3065,15 +3228,23 @@ async function atlasStatsUncached(playerId) {
   const { roster, master } = await atlasPlayerContext(playerId);
   const start = rookieSeason(master);
   const end = roster ? currentSeason2 : Math.max(start, number(master.last_season) || currentSeason2 - 1);
-  const rows = await mapInBatches(Array.from({ length: end - start + 1 }, (_, index2) => start + index2), 8, async (season) => {
-    try {
-      return await fetchPlayerCsvRows(`${NFLVERSE_RELEASES}/stats_player/stats_player_reg_${season}.csv`, playerId);
-    } catch {
-      return [];
-    }
+  const seasons = Array.from({ length: end - start + 1 }, (_, index2) => start + index2);
+  const rows = await mapInBatches(seasons, 1, async (season) => {
+    return fetchPlayerWeeklyOrSummary(season, playerId);
   });
   const rookie = number(master.rookie_season || master.entry_year || master.draft_year) || start;
-  return { ...summarizeAtlasStats(rows.flat(), playerId, roster?.position || master.position || "WR"), source: { provider: "NFLverse player statistics", updatedAt: (/* @__PURE__ */ new Date()).toISOString(), throughSeason: end, seasonStatsCoverage: { availableFrom: 1999, unavailableBefore: rookie < 1999 ? { startSeason: rookie, endSeason: 1998 } : null } } };
+  return {
+    ...summarizeAtlasStats(rows.flat(), playerId, roster?.position || master.position || "WR"),
+    source: {
+      provider: "NFLverse player statistics",
+      updatedAt: (/* @__PURE__ */ new Date()).toISOString(),
+      throughSeason: end,
+      seasonStatsCoverage: {
+        availableFrom: 1999,
+        unavailableBefore: rookie < 1999 ? { startSeason: rookie, endSeason: 1998 } : null
+      }
+    }
+  };
 }
 var contractDataCache = /* @__PURE__ */ new Map();
 function contractNumber(value) {
@@ -3081,14 +3252,17 @@ function contractNumber(value) {
 }
 function cleanToMillions(val) {
   if (!val) return 0;
-  const cleaned = val.replace(/[^0-9.-]/g, "");
-  const num = parseFloat(cleaned);
-  return isNaN(num) ? 0 : Math.round(num / 1e6 * 100) / 100;
+  const match = val.match(/\$?\s*([0-9]{1,3}(?:,[0-9]{3})*(?:\.[0-9]+)?)/);
+  if (!match || !match[1]) return 0;
+  const rawNum = parseFloat(match[1].replace(/,/g, ""));
+  if (isNaN(rawNum) || rawNum === 0) return 0;
+  return Math.round(rawNum / 1e6 * 100) / 100;
 }
 function cleanToInt(val) {
   if (!val) return 0;
-  const cleaned = val.replace(/[^0-9.-]/g, "");
-  const num = parseInt(cleaned, 10);
+  const match = val.match(/\b\d+\b/);
+  if (!match) return 0;
+  const num = parseInt(match[0], 10);
   return isNaN(num) ? 0 : num;
 }
 function hasContractCharge(season) {
@@ -3117,21 +3291,45 @@ async function fetchOtcComprehensiveData(otcId, teamFallback) {
     const t0 = tables[0];
     const t0Rows = t0.match(/<tr[^>]*>[\s\S]*?<\/tr>/gi) || [];
     const seasonHistory = [];
+    const isMultiTierBonus = t0.includes("Option") && t0.includes("Signing") && (t0Rows[1] || "").includes("Option");
     for (let i = 0; i < t0Rows.length; i++) {
       const tr = t0Rows[i];
       const cells = (tr.match(/<t[hd][^>]*>([\s\S]*?)<\/t[hd]>/gi) || []).map((c) => c.replace(/<[^>]+>/g, "").trim());
-      if (cells.length < 5) continue;
+      if (cells.length < 3) continue;
       const yearMatch = cells[0].match(/\b(20\d{2})\b/);
       if (!yearMatch) continue;
       const yearStr = yearMatch[1];
+      const pctIdx = cells.findIndex((c) => /^\d+(\.\d+)?%$/.test(c.trim()));
+      let capHit = 0;
+      if (pctIdx > 0) {
+        capHit = cleanToMillions(cells[pctIdx - 1]);
+      }
       const baseText = cells[2] || "";
       const isVoid = baseText.toLowerCase().includes("void") || cells[0].toLowerCase().includes("void");
-      const baseSalary = isVoid ? 0 : cleanToMillions(cells[2]);
+      const baseSalary = isVoid ? 0 : cleanToMillions(baseText);
       const proratedBonus = cleanToMillions(cells[3]);
-      const optionBonus = cleanToMillions(cells[4]);
-      const rosterBonus = cleanToMillions(cells[5]);
-      const guaranteed = cleanToMillions(cells[7]);
-      const capHit = cleanToMillions(cells[9]);
+      let rosterBonus = 0;
+      let optionBonus = 0;
+      let guaranteed = 0;
+      if (isMultiTierBonus) {
+        optionBonus = cleanToMillions(cells[4]);
+        rosterBonus = cleanToMillions(cells[5]);
+        guaranteed = cleanToMillions(cells[7]);
+      } else {
+        rosterBonus = cleanToMillions(cells[4]);
+        if (pctIdx >= 7) {
+          optionBonus = cleanToMillions(cells[5]);
+        }
+        if (pctIdx >= 3) {
+          for (let c = 4; c < pctIdx - 1; c++) {
+            const val = cleanToMillions(cells[c]);
+            if (val > guaranteed) guaranteed = val;
+          }
+        }
+      }
+      if (capHit === 0 && !isVoid) {
+        capHit = Math.round((baseSalary + proratedBonus + rosterBonus + optionBonus) * 100) / 100;
+      }
       if (isVoid && capHit === 0 && proratedBonus === 0 && optionBonus === 0) {
         continue;
       }
@@ -3145,7 +3343,7 @@ async function fetchOtcComprehensiveData(otcId, teamFallback) {
         workoutBonus: 0,
         guaranteed,
         capHit,
-        cashPaid: baseSalary + rosterBonus,
+        cashPaid: Math.round((baseSalary + rosterBonus) * 100) / 100,
         isVoidYear: isVoid
       });
     }
