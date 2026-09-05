@@ -10,7 +10,6 @@ export const TEAM_NAMES: Record<string, string> = {
   ARI: "Arizona Cardinals", ATL: "Atlanta Falcons", BAL: "Baltimore Ravens", BUF: "Buffalo Bills", CAR: "Carolina Panthers", CHI: "Chicago Bears", CIN: "Cincinnati Bengals", CLE: "Cleveland Browns", DAL: "Dallas Cowboys", DEN: "Denver Broncos", DET: "Detroit Lions", GB: "Green Bay Packers", HOU: "Houston Texans", IND: "Indianapolis Colts", JAX: "Jacksonville Jaguars", KC: "Kansas City Chiefs", LAC: "Los Angeles Chargers", LAR: "Los Angeles Rams", LV: "Las Vegas Raiders", MIA: "Miami Dolphins", MIN: "Minnesota Vikings", NE: "New England Patriots", NO: "New Orleans Saints", NYG: "New York Giants", NYJ: "New York Jets", PHI: "Philadelphia Eagles", PIT: "Pittsburgh Steelers", SF: "San Francisco 49ers", SEA: "Seattle Seahawks", TB: "Tampa Bay Buccaneers", TEN: "Tennessee Titans", WAS: "Washington Commanders",
 };
 
-// ESPN API上のチームIDマッピング
 const ESPN_TEAM_IDS: Record<string, string> = {
   ARI: "22", ATL: "1", BAL: "33", BUF: "2", CAR: "29", CHI: "3", CIN: "4", CLE: "5",
   DAL: "6", DEN: "7", DET: "8", GB: "9", HOU: "34", IND: "11", JAX: "30", KC: "12",
@@ -61,12 +60,12 @@ function gameEntry(teamCode: string, opponentCode: string, homeAway: "home" | "a
   return { externalId: hash(`${teamCode}:${kickoffAt.toISOString()}:${opponentCode}`), teamCode, opponentCode, homeAway, seasonPhase, weekLabel, kickoffAt, venue, broadcast, sourceUrl, fetchedAt: new Date() };
 }
 
-// ESPN APIから指定チームの全スケジュールを取得
 async function fetchEspnTeamGames(teamCode: string): Promise<InsertOfficialGame[]> {
   const espnId = ESPN_TEAM_IDS[teamCode];
   if (!espnId) return [];
   const season = currentSeason();
-  const url = `https://site.api.espn.com/apis/site/v2/sports/football/nfl/teams/${espnId}/schedule?season=${season}`;
+  // limit=100 を指定して全スケジュールを取得
+  const url = `https://site.api.espn.com/apis/site/v2/sports/football/nfl/teams/${espnId}/schedule?season=${season}&limit=100`;
 
   try {
     const res = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0" } });
