@@ -314,8 +314,7 @@ export async function atlasSearchSuggestions(query: string) {
   const { active } = await searchUniverse();
   const players = active
     .filter((player) => normalizeAtlasText(player.name).includes(term))
-    .sort((left, right) => Number(!normalizeAtlasText(left.name).startsWith(term)) - Number(!normalizeAtlasText(right.name).startsWith(term)) || left.name.localeCompare(right.name))
-    .slice(0, 8);
+    .sort((left, right) => Number(!normalizeAtlasText(left.name).startsWith(term)) - Number(!normalizeAtlasText(right.name).startsWith(term)) || left.name.localeCompare(right.name));
   return { players };
 }
 
@@ -462,7 +461,7 @@ function rookieSeason(master: CsvRow, fallback = currentSeason): number {
   return Math.max(1999, number(master.rookie_season || master.entry_year || master.draft_year) || fallback);
 }
 
-// 直列またはごく少数の並列で安全に実行するヘルパー（省メモリ化）
+// 完全に直列で 1 年ずつ実行し、メモリを使い切らないように保護
 async function mapInBatches<T, Result>(items: T[], size: number, mapper: (item: T) => Promise<Result>): Promise<Result[]> {
   const values: Result[] = [];
   for (let offset = 0; offset < items.length; offset += size) {
@@ -485,16 +484,14 @@ async function atlasCareerUncached(playerId: string) {
   const recentStart = Math.max(historic?.coverage.endSeason ? historic.coverage.endSeason + 1 : start, start);
   const seasons = Array.from({ length: Math.max(0, end - recentStart + 1) }, (_, index) => recentStart + index);
 
-  // メモリ保護のためバッチサイズは 2 で実行
-  const recentSeasons = await mapInBatches(seasons, 2, async (season) => {
+  const recentSeasons = await mapInBatches(seasons, 1, async (season) => {
     try {
       const rosterRows = await rosterForSeason(season).catch(() => [] as CsvRow[]);
       const rosterTeams = rosterRows.filter((row) => row.gsis_id === playerId).map((row) => teamAliases[row.team] ?? row.team).filter(Boolean);
 
-      // 直近シーズンや移籍発生シーズンのみ実所属を補完
       let statTeams: string[] = [];
       try {
-        const statRows = await fetchPlayerCsvRows(season, playerId);
+        const statRows = await fetchPlayerWeeklyOrSummary(season, playerId);
         statTeams = statRows.map((r) => teamAliases[r.recent_team || r.posteam || ""] || r.recent_team || r.posteam || teamAliases[r.team || ""] || r.team).filter(Boolean);
       } catch {
         // ロスターのみ利用
@@ -682,10 +679,9 @@ export function summarizeAtlasStats(rows: CsvRow[], playerId: string, position: 
 }
 
 /**
- * 週間スタッツ CSV から指定選手の行のみを極小メモリで抽出するストリーミングパーサー
+ * 任意の CSV URL から指定選手のみを極小メモリで抽出する汎用ストリーミング関数
  */
-async function fetchPlayerWeeklyRows(season: number, playerId: string): Promise<CsvRow[]> {
-  const url = `${NFLVERSE_RELEASES}/player_stats/player_stats_${season}.csv`;
+async function fetchPlayerCsvStream(url: string, playerId: string): Promise<CsvRow[]> {
   const response = await fetch(url, { headers: { "User-Agent": USER_AGENT } });
   if (!response.ok || !response.body) throw new Error(`Status ${response.status}`);
 
@@ -725,7 +721,6 @@ async function fetchPlayerWeeklyRows(season: number, playerId: string): Promise<
       return;
     }
 
-    // 該当選手の行以外はメモリに保持せず即座に無視
     const isMatch = idIndices.some((idx) => cells[idx] === playerId);
     if (!isMatch) return;
 
@@ -745,81 +740,28 @@ async function fetchPlayerWeeklyRows(season: number, playerId: string): Promise<
 }
 
 /**
- * 年間サマリー CSV から指定選手の行を高速抽出
+ * 週間スタッツ URL を 2 通りの命名規則で自動試行し、なければサマリーへフォールバック
  */
-async function fetchPlayerSummaryRows(season: number, playerId: string): Promise<CsvRow[]> {
-  const url = `${NFLVERSE_RELEASES}/stats_player/stats_player_reg_${season}.csv`;
-  const response = await fetch(url, { headers: { "User-Agent": USER_AGENT } });
-  if (!response.ok || !response.body) throw new Error(`Status ${response.status}`);
-
-  const reader = response.body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = "";
-  let headers: string[] | null = null;
-  let idIndices: number[] = [];
-  const rows: CsvRow[] = [];
-
-  const parseLine = (line: string): string[] => {
-    const cells: string[] = [];
-    let value = "";
-    let quoted = false;
-    for (let index = 0; index < line.length; index += 1) {
-      const character = line[index];
-      if (character === '"') {
-        if (quoted && line[index + 1] === '"') { value += '"'; index += 1; } else quoted = !quoted;
-      } else if (character === "," && !quoted) { cells.push(value); value = ""; } else value += character;
-    }
-    cells.push(value);
-    return cells;
-  };
-
-  const consumeLine = (line: string) => {
-    if (!line) return;
-    const cells = parseLine(line);
-    if (!headers) {
-      headers = cells.map((h) => h.replace(/^\uFEFF/, "").replace(/["\r\n]/g, "").trim());
-      idIndices = [
-        headers.indexOf("player_id"),
-        headers.indexOf("gsis_id"),
-      ].filter((idx) => idx >= 0);
-      return;
-    }
-
-    const isMatch = idIndices.some((idx) => cells[idx] === playerId);
-    if (!isMatch) return;
-
-    rows.push(Object.fromEntries(headers.map((h, i) => [h, (cells[i] ?? "").trim()])));
-  };
-
-  while (true) {
-    const { done, value } = await reader.read();
-    buffer += decoder.decode(value, { stream: !done });
-    const lines = buffer.split(/\r?\n/);
-    buffer = lines.pop() ?? "";
-    for (let i = 0; i < lines.length; i++) consumeLine(lines[i]);
-    if (done) break;
-  }
-  consumeLine(buffer);
-  return rows;
-}
-
-/**
- * 直近数年間（途中移籍の可能性がある年）は週間データを優先し、
- * それ以前の古い年次は軽量なサマリーデータを使用することで 512MB RAM を完全保護
- */
-async function fetchPlayerCsvRows(season: number, playerId: string): Promise<CsvRow[]> {
-  // 直近4年間はトレード・途中移籍の分割表示のために週間スタッツをパース
-  if (season >= currentSeason - 3) {
-    try {
-      const weeklyRows = await fetchPlayerWeeklyRows(season, playerId);
-      if (weeklyRows.length > 0) return weeklyRows;
-    } catch {
-      // 失敗時はサマリーへフォールバック
-    }
-  }
-
+async function fetchPlayerWeeklyOrSummary(season: number, playerId: string): Promise<CsvRow[]> {
+  // パターン 1: player_stats/player_stats_${season}.csv
   try {
-    return await fetchPlayerSummaryRows(season, playerId);
+    const r1 = await fetchPlayerCsvStream(`${NFLVERSE_RELEASES}/player_stats/player_stats_${season}.csv`, playerId);
+    if (r1.length > 0) return r1;
+  } catch {
+    // 次を試行
+  }
+
+  // パターン 2: player_stats/stats_player_week_${season}.csv (一部年度の命名規則)
+  try {
+    const r2 = await fetchPlayerCsvStream(`${NFLVERSE_RELEASES}/player_stats/stats_player_week_${season}.csv`, playerId);
+    if (r2.length > 0) return r2;
+  } catch {
+    // 次を試行
+  }
+
+  // パターン 3: stats_player/stats_player_reg_${season}.csv (サマリーファイル)
+  try {
+    return await fetchPlayerCsvStream(`${NFLVERSE_RELEASES}/stats_player/stats_player_reg_${season}.csv`, playerId);
   } catch {
     return [];
   }
@@ -834,10 +776,10 @@ async function atlasStatsUncached(playerId: string) {
   const start = rookieSeason(master);
   const end = roster ? currentSeason : Math.max(start, number(master.last_season) || currentSeason - 1);
 
-  // 18年以上のベテランでも 512MB を超えないよう、バッチサイズ 2 で安全に順次フェッチ
+  // 全シーズンを 1 年ずつ直列で処理してメモリピークを完全に排除
   const seasons = Array.from({ length: end - start + 1 }, (_, index) => start + index);
-  const rows = await mapInBatches(seasons, 2, async (season) => {
-    return fetchPlayerCsvRows(season, playerId);
+  const rows = await mapInBatches(seasons, 1, async (season) => {
+    return fetchPlayerWeeklyOrSummary(season, playerId);
   });
 
   const rookie = number(master.rookie_season || master.entry_year || master.draft_year) || start;
@@ -1221,10 +1163,6 @@ export async function atlasContracts(playerId: string) {
     };
   }
 }
-
-// ==========================================
-// メモリキャッシュの自動クリーンアップ & 起動時ウォームアップ
-// ==========================================
 
 function cleanupExpiredCaches(): void {
   const now = Date.now();
