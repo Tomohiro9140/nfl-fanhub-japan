@@ -40,7 +40,7 @@ const HISTORIC_ROSTER_KEY = "atlas-historic-roster-index_ccf81874.json";
 const POSITION_ORDER = ["QB", "RB", "WR", "TE", "OL", "DL", "LB", "DB", "K", "P", "LS"] as const;
 
 const CACHE_TTL = {
-  roster: 20 * 60 * 1000,
+  roster: 12 * 60 * 60 * 1000,
   players: 12 * 60 * 60 * 1000,
   teams: 6 * 60 * 60 * 1000,
   history: 7 * 24 * 60 * 60 * 1000,
@@ -284,7 +284,7 @@ function searchResult(master: CsvRow, roster: CsvRow | undefined, directory: Map
 }
 
 async function searchUniverse() {
-  return cached("atlas:search-universe", CACHE_TTL.roster, async () => {
+  return cached("atlas:search-universe", CACHE_TTL.players, async () => {
     const [masters, rosterRows, directory] = await Promise.all([masterPlayers(), currentRoster(), teamDirectory()]);
     const current = latestRosterByPlayer(rosterRows);
     const masterById = new Map(masters.filter((row) => row.gsis_id).map((row) => [row.gsis_id, row]));
@@ -774,7 +774,6 @@ function contractTeamName(team: string, directory: Map<string, AtlasTeam>) {
   return Array.from(directory.values()).find((entry) => entry.name.toLowerCase() === normalized || entry.name.toLowerCase().endsWith(` ${normalized}`))?.name ?? team;
 }
 
-/** Over The Cap から Table [0] (Current Contract) と Table [2] (Contract History) を抽出し完全同期 */
 async function fetchOtcComprehensiveData(otcId: string, teamFallback: string): Promise<OtcParsedData | null> {
   try {
     const res = await fetch(`https://overthecap.com/player/_/${otcId}`, {
@@ -785,7 +784,6 @@ async function fetchOtcComprehensiveData(otcId: string, teamFallback: string): P
     const tables = html.match(/<table[\s\S]*?<\/table>/gi) || [];
     if (tables.length === 0) return null;
 
-    // 1. Table [0] (Current Contract) のパース
     const t0 = tables[0];
     const t0Rows = (t0.match(/<tr[^>]*>[\s\S]*?<\/tr>/gi) || []);
     const seasonHistory: ContractSeason[] = [];
@@ -808,7 +806,6 @@ async function fetchOtcComprehensiveData(otcId: string, teamFallback: string): P
       const guaranteed = cleanToMillions(cells[7]);
       const capHit = cleanToMillions(cells[9]);
 
-      // $0 のみの未来の Void Year が無駄に並ぶのを防止
       if (isVoid && capHit === 0 && proratedBonus === 0 && optionBonus === 0) {
         continue;
       }
@@ -828,7 +825,6 @@ async function fetchOtcComprehensiveData(otcId: string, teamFallback: string): P
       });
     }
 
-    // 2. Table [2] (Contract History) のパース
     let contractHistory: ContractHistory[] = [];
     let currentContract: CurrentContractSummary | null = null;
 
@@ -861,7 +857,6 @@ async function fetchOtcComprehensiveData(otcId: string, teamFallback: string): P
           };
           contractHistory.push(entry);
 
-          // 最新のアクティブ契約（または末尾の契約）を Current Contract に設定
           if (status.toLowerCase().includes("active") || !currentContract) {
             currentContract = {
               team: rowTeam,
@@ -909,7 +904,6 @@ export async function atlasContracts(playerId: string) {
       }
     }
 
-    // OTC から最新データが取得できた場合はそれを最優先で使用
     if (otcData && otcData.currentContract) {
       const years = otcData.seasonHistory.map((season) => {
         const otherBreakdown = contractOtherBreakdown(season);
@@ -923,7 +917,6 @@ export async function atlasContracts(playerId: string) {
         };
       });
 
-      // 契約履歴を最新順（降順）に並び替えて反映
       const history = otcData.contractHistory
         .slice()
         .reverse()
@@ -950,7 +943,6 @@ export async function atlasContracts(playerId: string) {
       };
     }
 
-    // フォールバック: active_contracts.json から読み込み
     const index = await cached("atlas:active-contract-index", CACHE_TTL.contracts, async () => {
       const filePath = path.resolve(process.cwd(), "server/data/active_contracts.json");
       const content = await fs.promises.readFile(filePath, "utf-8");
@@ -1014,3 +1006,8 @@ export async function atlasContracts(playerId: string) {
 }
 
 export { contractMoney };
+
+// サーバー起動時にバックグラウンドで事前ロード（ユーザー初回アクセスの待機を解消）
+searchUniverse().catch((err) => {
+  console.warn("[ATLAS] Pre-warmup notice:", err.message);
+});
