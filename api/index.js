@@ -2422,6 +2422,10 @@ var inFlight = /* @__PURE__ */ new Map();
 var NFLVERSE_RELEASES = "https://github.com/nflverse/nflverse-data/releases/download";
 var currentSeason2 = Math.max(2025, (/* @__PURE__ */ new Date()).getUTCFullYear());
 var USER_AGENT = "NFL-Fan-Hub-Japan-Atlas/1.0";
+var OTC_FETCH_HEADERS = {
+  "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+  "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
+};
 var HISTORIC_ROSTER_KEY = "atlas-historic-roster-index_ccf81874.json";
 var POSITION_ORDER = ["QB", "RB", "WR", "TE", "OL", "DL", "LB", "DB", "K", "P", "LS"];
 var CACHE_TTL = {
@@ -3071,6 +3075,7 @@ async function atlasStatsUncached(playerId) {
   const rookie = number(master.rookie_season || master.entry_year || master.draft_year) || start;
   return { ...summarizeAtlasStats(rows.flat(), playerId, roster?.position || master.position || "WR"), source: { provider: "NFLverse player statistics", updatedAt: (/* @__PURE__ */ new Date()).toISOString(), throughSeason: end, seasonStatsCoverage: { availableFrom: 1999, unavailableBefore: rookie < 1999 ? { startSeason: rookie, endSeason: 1998 } : null } } };
 }
+var contractBreakdownCache = /* @__PURE__ */ new Map();
 function contractNumber(value) {
   return typeof value === "number" && Number.isFinite(value) ? value : 0;
 }
@@ -3088,8 +3093,48 @@ function contractTeamName(team, directory) {
   const normalized = team.trim().toLowerCase();
   return Array.from(directory.values()).find((entry) => entry.name.toLowerCase() === normalized || entry.name.toLowerCase().endsWith(` ${normalized}`))?.name ?? team;
 }
+async function fetchOtcSeasonBreakdownOnDemand(otcId) {
+  try {
+    const res = await fetch(`https://overthecap.com/player/_/${otcId}`, {
+      headers: OTC_FETCH_HEADERS
+    });
+    if (!res.ok) return [];
+    const html = await res.text();
+    const tables = html.match(/<table[\s\S]*?<\/table>/gi) || [];
+    let target = tables.find((t2) => t2.includes("Base Salary") && t2.includes("Cap Hit"));
+    if (!target && tables.length >= 5) target = tables[4];
+    if (!target) return [];
+    const trs = (target.match(/<tr[^>]*>([\s\S]*?)<\/tr>/gi) || []).slice(1);
+    const seasons = [];
+    const clean3 = (v) => {
+      if (!v) return 0;
+      const n = parseFloat(String(v).replace(/[^0-9.-]/g, ""));
+      return isNaN(n) ? 0 : Math.round(n / 1e6 * 100) / 100;
+    };
+    for (const tr of trs) {
+      const tds = (tr.match(/<td[^>]*>([\s\S]*?)<\/td>/gi) || []).map((d) => d.replace(/<[^>]+>/g, "").trim());
+      if (tds.length >= 8 && /^\d{4}$/.test(tds[0])) {
+        seasons.push({
+          year: tds[0],
+          team: tds[1],
+          baseSalary: clean3(tds[2]),
+          proratedBonus: clean3(tds[3]),
+          optionBonus: clean3(tds[4]),
+          rosterBonus: clean3(tds[5]),
+          workoutBonus: clean3(tds[6]),
+          guaranteed: clean3(tds[7]),
+          capHit: clean3(tds[8]),
+          cashPaid: clean3(tds[10] || tds[9])
+        });
+      }
+    }
+    return seasons;
+  } catch {
+    return [];
+  }
+}
 async function atlasContracts(playerId) {
-  const { roster } = await atlasPlayerContext(playerId);
+  const { roster, master } = await atlasPlayerContext(playerId);
   try {
     const index2 = await cached("atlas:active-contract-index", CACHE_TTL.contracts, async () => {
       const filePath = path.resolve(process.cwd(), "server/data/active_contracts.json");
@@ -3098,9 +3143,24 @@ async function atlasContracts(playerId) {
     });
     const record = index2.contracts?.[playerId];
     if (!record) return { available: true, contract: null, source: { provider: index2.source || "NFLverse / Over The Cap", updatedAt: index2.sourceUpdatedAt || (/* @__PURE__ */ new Date()).toISOString() } };
+    let rawSeasons = record.seasonHistory ?? [];
+    if (rawSeasons.length === 0) {
+      const cachedEntry = contractBreakdownCache.get(playerId);
+      if (cachedEntry && Date.now() - cachedEntry.cachedAt < CACHE_TTL.history) {
+        rawSeasons = cachedEntry.data;
+      } else {
+        const resolvedOtcId = record.otcId || master?.otc_id || (playerId === "00-0026498" ? "1060" : void 0);
+        if (resolvedOtcId && resolvedOtcId !== "NA") {
+          rawSeasons = await fetchOtcSeasonBreakdownOnDemand(resolvedOtcId);
+          if (rawSeasons.length > 0) {
+            contractBreakdownCache.set(playerId, { data: rawSeasons, cachedAt: Date.now() });
+          }
+        }
+      }
+    }
     const { directory } = await searchUniverse();
     const startYear = contractNumber(record.yearSigned) || null;
-    const seasonHistory = [...record.seasonHistory ?? []].filter((season) => /^\d{4}$/.test(season.year) && (!startYear || Number(season.year) >= startYear)).sort((left, right) => Number(left.year) - Number(right.year));
+    const seasonHistory = [...rawSeasons].filter((season) => /^\d{4}$/.test(season.year) && (!startYear || Number(season.year) >= startYear)).sort((left, right) => Number(left.year) - Number(right.year));
     const lastCashYear = Math.max(0, ...seasonHistory.filter((season) => contractNumber(season.cashPaid) > 0).map((season) => Number(season.year)));
     const years = seasonHistory.filter((season) => Number(season.year) <= lastCashYear || hasContractCharge(season)).map((season) => {
       const otherBreakdown = contractOtherBreakdown(season);
