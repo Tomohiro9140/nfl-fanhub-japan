@@ -743,17 +743,23 @@ function contractNumber(value: number | undefined) {
   return typeof value === "number" && Number.isFinite(value) ? value : 0;
 }
 
-function cleanToMillions(val: string | undefined): number {
+/** 
+ * OTCテーブルの文字列（例: "$8,000,000", "$61,245"）を純粋な数値に変換。
+ * 結合ゴミ文字列（例: "$14,000,000$10,000,000..."）が含まれる場合は先頭の金額だけを正しく抽出。
+ */
+function cleanDollar(val: string | undefined): number {
   if (!val) return 0;
-  const cleaned = val.replace(/[^0-9.-]/g, "");
-  const num = parseFloat(cleaned);
-  return isNaN(num) ? 0 : Math.round((num / 1_000_000) * 100) / 100;
+  const match = val.match(/\$?\s*([0-9]{1,3}(?:,[0-9]{3})*(?:\.[0-9]+)?)/);
+  if (!match || !match[1]) return 0;
+  const num = parseFloat(match[1].replace(/,/g, ""));
+  return isNaN(num) ? 0 : num;
 }
 
 function cleanToInt(val: string | undefined): number {
   if (!val) return 0;
-  const cleaned = val.replace(/[^0-9.-]/g, "");
-  const num = parseInt(cleaned, 10);
+  const match = val.match(/\b\d+\b/);
+  if (!match) return 0;
+  const num = parseInt(match[0], 10);
   return isNaN(num) ? 0 : num;
 }
 
@@ -785,30 +791,67 @@ async function fetchOtcComprehensiveData(otcId: string, teamFallback: string): P
     const tables = html.match(/<table[\s\S]*?<\/table>/gi) || [];
     if (tables.length === 0) return null;
 
-    // 1. Table [0] (Current Contract) のパース
+    // 1. Table [0] (Current Contract) の動的パース
     const t0 = tables[0];
     const t0Rows = (t0.match(/<tr[^>]*>[\s\S]*?<\/tr>/gi) || []);
     const seasonHistory: ContractSeason[] = [];
 
-    for (let i = 0; i < t0Rows.length; i++) {
+    // ヘッダー行 (Row 0) から各カラムのインデックスを動的に検出
+    let idxYear = 0;
+    let idxBase = -1;
+    let idxProrated = -1;
+    let idxOption = -1;
+    let idxRoster = -1;
+    let idxGuaranteed = -1;
+    let idxCapHit = -1;
+
+    if (t0Rows.length > 0) {
+      const headerCells = (t0Rows[0].match(/<t[hd][^>]*>([\s\S]*?)<\/t[hd]>/gi) || [])
+        .map(c => c.replace(/<[^>]+>/g, "").trim().toLowerCase());
+
+      headerCells.forEach((h, i) => {
+        if (h.includes("year")) idxYear = i;
+        else if (h.includes("base salary")) idxBase = i;
+        else if (h.includes("prorated")) idxProrated = i;
+        else if (h.includes("option bonus") || h === "option") idxOption = i;
+        else if (h.includes("roster bonus") || h === "roster") idxRoster = i;
+        else if (h.includes("guaranteed")) idxGuaranteed = i;
+        else if (h.includes("capnumber") || h.includes("cap hit") || h.includes("cap number")) idxCapHit = i;
+      });
+    }
+
+    // 2段組ヘッダーの場合の補正 (Row 1 が Signing/Option などの場合)
+    if (t0Rows.length > 1) {
+      const subHeaderCells = (t0Rows[1].match(/<t[hd][^>]*>([\s\S]*?)<\/t[hd]>/gi) || [])
+        .map(c => c.replace(/<[^>]+>/g, "").trim().toLowerCase());
+      if (subHeaderCells.some(s => s.includes("option"))) {
+        // Staffordのような多段構造のケース
+        if (idxOption === -1) idxOption = 4;
+      }
+    }
+
+    // 各行を動的インデックスに基づいてパース
+    for (let i = 1; i < t0Rows.length; i++) {
       const tr = t0Rows[i];
       const cells = (tr.match(/<t[hd][^>]*>([\s\S]*?)<\/t[hd]>/gi) || []).map(c => c.replace(/<[^>]+>/g, "").trim());
-      if (cells.length < 5) continue;
+      if (cells.length < 3) continue;
 
-      const yearMatch = cells[0].match(/\b(20\d{2})\b/);
-      if (!yearMatch) continue;
+      const yearCell = cells[idxYear] || cells[0] || "";
+      const yearMatch = yearCell.match(/\b(20\d{2})\b/);
+      if (!yearMatch) continue; // "Total" 等の集計行はスキップ
       const yearStr = yearMatch[1];
 
-      const baseText = cells[2] || "";
-      const isVoid = baseText.toLowerCase().includes("void") || cells[0].toLowerCase().includes("void");
-      const baseSalary = isVoid ? 0 : cleanToMillions(cells[2]);
-      const proratedBonus = cleanToMillions(cells[3]);
-      const optionBonus = cleanToMillions(cells[4]);
-      const rosterBonus = cleanToMillions(cells[5]);
-      const guaranteed = cleanToMillions(cells[7]);
-      const capHit = cleanToMillions(cells[9]);
+      const baseText = idxBase >= 0 ? (cells[idxBase] || "") : "";
+      const isVoid = baseText.toLowerCase().includes("void") || yearCell.toLowerCase().includes("void");
 
-      // $0 のみの未来の Void Year が無駄に並ぶのを防止
+      const baseSalary = isVoid ? 0 : cleanDollar(baseText);
+      const proratedBonus = idxProrated >= 0 ? cleanDollar(cells[idxProrated]) : 0;
+      const optionBonus = idxOption >= 0 ? cleanDollar(cells[idxOption]) : 0;
+      const rosterBonus = idxRoster >= 0 ? cleanDollar(cells[idxRoster]) : 0;
+      const guaranteed = idxGuaranteed >= 0 ? cleanDollar(cells[idxGuaranteed]) : 0;
+      const capHit = idxCapHit >= 0 ? cleanDollar(cells[idxCapHit]) : (baseSalary + proratedBonus + optionBonus + rosterBonus);
+
+      // 実質的なキャップチャージが全くない遠い未来のVoid行のみ除外
       if (isVoid && capHit === 0 && proratedBonus === 0 && optionBonus === 0) {
         continue;
       }
@@ -843,10 +886,10 @@ async function fetchOtcComprehensiveData(otcId: string, teamFallback: string): P
           const status = cells[2] || "";
           const yearSigned = cleanToInt(cells[3]);
           const years = cleanToInt(cells[4]);
-          const total = cleanToMillions(cells[5]);
-          const apy = cleanToMillions(cells[6]);
-          const guaranteed = cleanToMillions(cells[7]);
-          const amountEarned = cleanToMillions(cells[8]);
+          const total = cleanDollar(cells[5]);
+          const apy = cleanDollar(cells[6]);
+          const guaranteed = cleanDollar(cells[7]);
+          const amountEarned = cleanDollar(cells[8]);
 
           const entry: ContractHistory = {
             team: rowTeam,
@@ -1017,13 +1060,11 @@ export async function atlasContracts(playerId: string) {
 // メモリキャッシュの自動クリーンアップ & 起動時ウォームアップ
 // ==========================================
 
-/** 1時間ごとに期限切れとなったキャッシュキーを削除してメモリを解放 */
 function cleanupExpiredCaches(): void {
   const now = Date.now();
   let clearedGeneral = 0;
   let clearedContracts = 0;
 
-  // 1. 一般データキャッシュのお掃除
   for (const [key, entry] of cache.entries()) {
     if (entry.expiresAt <= now) {
       cache.delete(key);
@@ -1031,7 +1072,6 @@ function cleanupExpiredCaches(): void {
     }
   }
 
-  // 2. 契約データキャッシュのお掃除
   for (const [key, entry] of contractDataCache.entries()) {
     if (now - entry.cachedAt >= CACHE_TTL.contracts) {
       contractDataCache.delete(key);
@@ -1044,13 +1084,11 @@ function cleanupExpiredCaches(): void {
   }
 }
 
-// 1時間 (3,600,000 ms) ごとに定期実行
 const cleanupInterval = setInterval(cleanupExpiredCaches, 60 * 60 * 1000);
 if (cleanupInterval.unref) {
   cleanupInterval.unref();
 }
 
-// サーバー起動時にバックグラウンドで事前ロードを開始（ユーザーの初回アクセスを高速化）
 searchUniverse().catch((err) => {
   console.warn("[ATLAS Warmup] Background preload failed:", err?.message || err);
 });
