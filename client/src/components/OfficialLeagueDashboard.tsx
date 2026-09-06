@@ -20,6 +20,7 @@ function calendarDate(value: Date) {
   const d = new Date(value);
   const dateStr = new Intl.DateTimeFormat("ja-JP", { month: "numeric", day: "numeric", weekday: "short", timeZone: "Asia/Tokyo" }).format(d);
   
+  // 秒が 59（TBDフラグ）の場合は時間を非表示にし "TBD" と表記
   if (d.getSeconds() === 59) {
     return `${dateStr} TBD`;
   }
@@ -83,6 +84,8 @@ export function OfficialLatestResults({ favorite, dashboard, loading, spoilerMod
                   <div className="relative min-w-[106px] self-center text-right">
                     <div className="absolute bottom-full right-0 mb-1.5 w-[164px] text-right">
                       {gameDate ? <p className="font-mono text-[8px] font-bold leading-[10px] tracking-[.08em] text-[#526173]">{hasExactKickoff ? "GAME DATE" : "OFFICIAL DATE"} · {gameDate}{hasExactKickoff ? " JST" : ""}</p> : null}
+                      {/* Week番号のみを表示（Venueや試合結果ステータスは除外） */}
+                      <p className="font-mono text-[8px] font-bold leading-[10px] tracking-[.08em] text-[#64748b]">{game.weekLabel ?? "OFFICIAL"}</p>
                     </div>
                     <p className="relative font-mono text-[26px] font-black leading-[.85] tracking-[-.06em]"><span className={spoilerMode ? "invisible" : undefined}><span className={awayWon ? "text-[#a84420]" : undefined}>{game.awayScore ?? "—"}</span><span> - </span><span className={homeWon ? "text-[#a84420]" : undefined}>{game.homeScore ?? "—"}</span></span>{spoilerMode ? <span aria-label="スコア非表示" className="absolute inset-0 grid place-items-center">—</span> : null}</p>
                     {game.gameState === "FINAL" && onOpenGameStats ? <div className="relative mt-2 h-3">{!spoilerMode ? <button type="button" onClick={() => onOpenGameStats(game.gameUrl)} onPointerEnter={() => onWarmGameStats?.(game.gameUrl)} onPointerDown={() => onWarmGameStats?.(game.gameUrl)} onFocus={() => onWarmGameStats?.(game.gameUrl)} className="absolute right-0 inline-flex h-3 items-center gap-1 font-mono text-[8px] font-black tracking-[.06em] text-[#a84420] underline decoration-[#e85d2a] decoration-2 underline-offset-2"><BarChart3 className="h-3 w-3" /> GAME STATS</button> : <span aria-hidden="true" className="block h-3" />}</div> : null}
