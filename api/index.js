@@ -1552,24 +1552,33 @@ function parseOfficialSchedulePage(html, teamCode, sourceUrl) {
   }
   return games;
 }
-function resolveCardKickoff(card, weekNum, season) {
+function resolveCardKickoff(card, weekNum, season, isPreseason) {
+  const isExplicitTbd = /\bTBD\b/i.test(card);
   const kickoffValue = card.match(/(?:datetime|data-gametime|data-start-date|data-iso-time)="([^"]+)"/i)?.[1];
   if (kickoffValue) {
     const parsed = parseLeagueKickoff(kickoffValue) ?? parseKickoff(kickoffValue);
-    if (parsed) return parsed;
+    if (parsed) {
+      if (isExplicitTbd) parsed.setUTCSeconds(59);
+      return parsed;
+    }
   }
-  const dateMatch = card.match(/\b(Jan(?:uary)?|Feb(?:ruary)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\.?\s+(\d{1,2})\b/i);
+  const dateMatch = card.match(/\b(Jan(?:uary)?|Feb(?:ruary)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\.?\s+(\d{1,2})\b/i);
   if (dateMatch) {
     const monthNames = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
     const monthIdx = monthNames.findIndex((m) => dateMatch[1].toLowerCase().startsWith(m));
     if (monthIdx !== -1) {
       const day = Number.parseInt(dateMatch[2], 10);
       const year = monthIdx < 5 ? season + 1 : season;
-      return new Date(Date.UTC(year, monthIdx, day, 18, 0, 0));
+      const sec = isExplicitTbd ? 59 : 0;
+      return new Date(Date.UTC(year, monthIdx, day, 18, 0, sec));
     }
   }
+  if (isPreseason) {
+    const preWeek1Sunday = new Date(Date.UTC(season, 7, 9, 18, 0, 59));
+    return new Date(preWeek1Sunday.getTime() + ((weekNum ?? 1) - 1) * 7 * 24 * 60 * 60 * 1e3);
+  }
   if (weekNum && weekNum >= 1 && weekNum <= 18) {
-    const week1Sunday = new Date(Date.UTC(season, 8, 13, 18, 0, 0));
+    const week1Sunday = new Date(Date.UTC(season, 8, 13, 18, 0, 59));
     return new Date(week1Sunday.getTime() + (weekNum - 1) * 7 * 24 * 60 * 60 * 1e3);
   }
   return void 0;
@@ -1601,7 +1610,7 @@ function parseNFLLeagueSchedulePage(html, teamCode, sourceUrl) {
     const resolvedWeekStr = headerMatch?.[2] ?? inlineWeek;
     const weekNum = resolvedWeekStr ? Number.parseInt(resolvedWeekStr, 10) : null;
     const isPreseason = Boolean(headerMatch?.[1]) || /pre\s*season|\bPRE\b/i.test(card);
-    const kickoffAt = resolveCardKickoff(card, weekNum, season);
+    const kickoffAt = resolveCardKickoff(card, weekNum, season, isPreseason);
     if (!kickoffAt) continue;
     const seasonPhase = isPreseason ? "preseason" : phaseFor(kickoffAt, card);
     let homeAway = null;
