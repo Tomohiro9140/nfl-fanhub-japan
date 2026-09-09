@@ -4,7 +4,7 @@ import { getOfficialFeedItems, upsertOfficialFeedItems } from "./db";
 import { refreshOfficialTeamData, TEAM_NAMES } from "./officialTeamData";
 
 const NFL_OFFICIAL_INJURY_URL = "https://www.nfl.com/injuries/";
-const NFL_OFFICIAL_INACTIVES_URL = "https://www.nfl.com/inactives/";
+const NFL_OFFICIAL_INACTIVES_URL = "https://www.nfl.com/injuries/";
 const refreshWindowMs = 15 * 60 * 1000;
 const nflInjuryMaxAgeMs = 45 * 24 * 60 * 60 * 1000;
 
@@ -193,22 +193,44 @@ export function parseOfficialNflInjuryPage(html: string, teamCode: string, sourc
   return results.slice(0, 3);
 }
 
-/** Reads a team section from the NFL's official Inactives page after reports are published. */
+/** Reads team injury section from the NFL's official Injuries page and extracts OUT status players. */
 export function parseOfficialNflInactivesPage(html: string, teamCode: string, now = new Date()): InsertOfficialFeedItem[] {
-  if (/please check back soon for nfl inactive reports/i.test(html)) return [];
-  const teamName = TEAM_NAMES[teamCode];
-  if (!teamName || !/nfl inactive reports/i.test(html)) return [];
-  const lowerHtml = html.toLowerCase();
-  const start = lowerHtml.indexOf(teamName.toLowerCase());
-  if (start < 0) return [];
-  const otherTeamStarts = Object.entries(TEAM_NAMES)
-    .filter(([code]) => code !== teamCode)
-    .map(([, name]) => lowerHtml.indexOf(name.toLowerCase(), start + teamName.length))
-    .filter((index) => index >= 0);
-  const end = otherTeamStarts.length ? Math.min(...otherTeamStarts) : Math.min(html.length, start + 6_000);
-  const section = stripMarkup(html.slice(start, end));
-  const details = section.slice(teamName.length).trim();
-  if (!details) return [];
+  const candidateNames = [
+    TEAM_NAMES[teamCode],
+    ...(teamAliases[teamCode] ?? []),
+  ].filter((name): name is string => Boolean(name));
+  if (candidateNames.length === 0) return [];
+
+  // チーム名見出しタグをピンポイントで検索: <div class="d3-o-section-sub-title"><span>Patriots</span></div>
+  const pattern = candidateNames.map((name) => name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|");
+  const headerRegex = new RegExp(`<div[^>]*class="[^"]*d3-o-section-sub-title[^"]*"[^>]*>\\s*<span[^>]*>\\s*(?:${pattern})\\s*<\\/span>`, "i");
+  const match = headerRegex.exec(html);
+  if (!match) return [];
+
+  // 見出し直後の </table> までを切り出す（他チームの混入を完全防止）
+  const tableEnd = html.indexOf("</table>", match.index);
+  const tableHtml = html.slice(match.index, tableEnd !== -1 ? tableEnd : match.index + 8000);
+
+  const rows = tableHtml.match(/<tr[\s\S]*?<\/tr>/gi) || [];
+  const outPlayers: string[] = [];
+
+  for (const row of rows) {
+    // Game Status 列が "Out" の行のみ対象
+    if (/<td[^>]*>\s*Out\s*<\/td>/i.test(row)) {
+      const nameMatch = row.match(/<a[^>]*class="[^"]*nfl-o-cta--link[^"]*"[^>]*>([\s\S]*?)<\/a>/i)
+        || row.match(/<td[^>]*scope="row"[^>]*>([\s\S]*?)<\/td>/i);
+      if (nameMatch) {
+        const cleanName = stripMarkup(nameMatch[1]);
+        if (cleanName && !outPlayers.includes(cleanName)) {
+          outPlayers.push(cleanName);
+        }
+      }
+    }
+  }
+
+  if (outPlayers.length === 0) return [];
+
+  const summary = outPlayers.join(", ");
   return [{
     externalId: createHash("sha256").update(`nfl-inactives:${teamCode}:${now.toISOString().slice(0, 10)}`).digest("hex"),
     teamCode,
@@ -216,7 +238,7 @@ export function parseOfficialNflInactivesPage(html: string, teamCode: string, no
     sourceName: "NFL Official Inactives",
     sourceUrl: NFL_OFFICIAL_INACTIVES_URL,
     title: `NFL Official Inactives · ${teamCode}`,
-    summary: details.slice(0, 560),
+    summary: summary.slice(0, 560),
     category: "injury",
     publishedAt: now,
     fetchedAt: now,
@@ -280,7 +302,13 @@ async function fetchOfficialHtml(url: string) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 12_000);
   try {
-    const response = await fetch(url, { signal: controller.signal, headers: { Accept: "text/html", "User-Agent": "Mozilla/5.0 NFLFanHubJapan/1.0" } });
+    const response = await fetch(url, {
+      signal: controller.signal,
+      headers: {
+        Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+      },
+    });
     if (!response.ok) throw new Error(`Official page request failed: ${response.status}`);
     return await response.text();
   } finally {
