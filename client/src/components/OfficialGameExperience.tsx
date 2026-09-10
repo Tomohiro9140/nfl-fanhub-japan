@@ -99,7 +99,30 @@ export function OfficialGameTicket({ favorite, snapshot, loading, spoilerMode = 
         {game.broadcast ? <p className="mt-2 font-mono text-[9px] tracking-[.08em] text-[#d9e3f3]">{game.broadcast}</p> : null}
         <div className="border-t border-white/15 pt-2 font-mono text-[9px]">
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1"><span className="font-bold tracking-[.1em] text-[#a5b3c9]">GAME STATUS</span><span className={`rounded px-1.5 py-0.5 font-bold ${gameStatus.label === "LIVE" ? "bg-[#e85d2a] text-white" : gameStatus.label === "FINAL" ? "bg-white text-[#10213a]" : "bg-[#315272] text-white"}`}>{gameStatus.label}</span>{(isRevealedFinal ? "OFFICIAL SCORE CONFIRMED" : gameStatus.score ? `OFFICIAL SCORE ${gameStatus.score}` : gameStatus.detail) ? <span className="text-[#d9e3f3]">{isRevealedFinal ? "OFFICIAL SCORE CONFIRMED" : gameStatus.score ? `OFFICIAL SCORE ${gameStatus.score}` : gameStatus.detail}</span> : null}</div>
-          {isGameDay || gameStatus.label === "FINAL" ? <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1"><span className="font-bold tracking-[.1em] text-[#a5b3c9]">INJURIES</span>{snapshot?.inactiveReport ? <a href={snapshot.inactiveReport.sourceUrl} target="_blank" rel="noreferrer" className="max-w-full truncate font-bold text-[#ffc1a7] underline underline-offset-2" title={snapshot.inactiveReport.title}>REPORTED · {snapshot.inactiveReport.summary || snapshot.inactiveReport.title} <ArrowUpRight className="inline h-3 w-3" /></a> : <span className="font-bold text-[#d9e3f3]">NONE REPORTED</span>}</div> : null}
+          {isGameDay || gameStatus.label === "FINAL" ? (
+            <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
+              <span className="font-bold tracking-[.1em] text-[#a5b3c9]">INJURIES</span>
+              {snapshot?.inactiveReport ? (
+                spoilerMode ? (
+                  <span className="max-w-full truncate font-bold text-[#ffc1a7]" title={snapshot.inactiveReport.title}>
+                    REPORTED · {snapshot.inactiveReport.summary || snapshot.inactiveReport.title}
+                  </span>
+                ) : (
+                  <a
+                    href={snapshot.inactiveReport.sourceUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="max-w-full truncate font-bold text-[#ffc1a7] underline underline-offset-2"
+                    title={snapshot.inactiveReport.title}
+                  >
+                    REPORTED · {snapshot.inactiveReport.summary || snapshot.inactiveReport.title} <ArrowUpRight className="inline h-3 w-3" />
+                  </a>
+                )
+              ) : (
+                <span className="font-bold text-[#d9e3f3]">NONE REPORTED</span>
+              )}
+            </div>
+          ) : null}
         </div>
       </> : <div className="mt-4"><EmptyOfficial label="OFFICIAL SCHEDULE PENDING" copy="NFL公式リーグ日程とチーム公式Scheduleを確認後に表示します。" /></div>}
     </div>
