@@ -1687,7 +1687,7 @@ async function refreshOfficialTeamData(teamCode) {
 
 // server/officialFeeds.ts
 var NFL_OFFICIAL_INJURY_URL = "https://www.nfl.com/injuries/";
-var NFL_OFFICIAL_INACTIVES_URL = "https://www.nfl.com/inactives/";
+var NFL_OFFICIAL_INACTIVES_URL = "https://www.nfl.com/injuries/";
 var refreshWindowMs = 15 * 60 * 1e3;
 var nflInjuryMaxAgeMs = 45 * 24 * 60 * 60 * 1e3;
 var teamDomains = {
@@ -1880,17 +1880,32 @@ function parseOfficialNflInjuryPage(html, teamCode, source) {
   return results.slice(0, 3);
 }
 function parseOfficialNflInactivesPage(html, teamCode, now = /* @__PURE__ */ new Date()) {
-  if (/please check back soon for nfl inactive reports/i.test(html)) return [];
-  const teamName = TEAM_NAMES[teamCode];
-  if (!teamName || !/nfl inactive reports/i.test(html)) return [];
-  const lowerHtml = html.toLowerCase();
-  const start = lowerHtml.indexOf(teamName.toLowerCase());
-  if (start < 0) return [];
-  const otherTeamStarts = Object.entries(TEAM_NAMES).filter(([code]) => code !== teamCode).map(([, name]) => lowerHtml.indexOf(name.toLowerCase(), start + teamName.length)).filter((index2) => index2 >= 0);
-  const end = otherTeamStarts.length ? Math.min(...otherTeamStarts) : Math.min(html.length, start + 6e3);
-  const section = stripMarkup(html.slice(start, end));
-  const details = section.slice(teamName.length).trim();
-  if (!details) return [];
+  const candidateNames = [
+    TEAM_NAMES[teamCode],
+    ...teamAliases[teamCode] ?? []
+  ].filter((name) => Boolean(name));
+  if (candidateNames.length === 0) return [];
+  const pattern = candidateNames.map((name) => name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|");
+  const headerRegex = new RegExp(`<div[^>]*class="[^"]*d3-o-section-sub-title[^"]*"[^>]*>\\s*<span[^>]*>\\s*(?:${pattern})\\s*<\\/span>`, "i");
+  const match = headerRegex.exec(html);
+  if (!match) return [];
+  const tableEnd = html.indexOf("</table>", match.index);
+  const tableHtml = html.slice(match.index, tableEnd !== -1 ? tableEnd : match.index + 8e3);
+  const rows = tableHtml.match(/<tr[\s\S]*?<\/tr>/gi) || [];
+  const outPlayers = [];
+  for (const row of rows) {
+    if (/<td[^>]*>\s*Out\s*<\/td>/i.test(row)) {
+      const nameMatch = row.match(/<a[^>]*class="[^"]*nfl-o-cta--link[^"]*"[^>]*>([\s\S]*?)<\/a>/i) || row.match(/<td[^>]*scope="row"[^>]*>([\s\S]*?)<\/td>/i);
+      if (nameMatch) {
+        const cleanName = stripMarkup(nameMatch[1]);
+        if (cleanName && !outPlayers.includes(cleanName)) {
+          outPlayers.push(cleanName);
+        }
+      }
+    }
+  }
+  if (outPlayers.length === 0) return [];
+  const summary = outPlayers.join(", ");
   return [{
     externalId: createHash2("sha256").update(`nfl-inactives:${teamCode}:${now.toISOString().slice(0, 10)}`).digest("hex"),
     teamCode,
@@ -1898,7 +1913,7 @@ function parseOfficialNflInactivesPage(html, teamCode, now = /* @__PURE__ */ new
     sourceName: "NFL Official Inactives",
     sourceUrl: NFL_OFFICIAL_INACTIVES_URL,
     title: `NFL Official Inactives \xB7 ${teamCode}`,
-    summary: details.slice(0, 560),
+    summary: summary.slice(0, 560),
     category: "injury",
     publishedAt: now,
     fetchedAt: now
@@ -1954,7 +1969,13 @@ async function fetchOfficialHtml2(url) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 12e3);
   try {
-    const response = await fetch(url, { signal: controller.signal, headers: { Accept: "text/html", "User-Agent": "Mozilla/5.0 NFLFanHubJapan/1.0" } });
+    const response = await fetch(url, {
+      signal: controller.signal,
+      headers: {
+        Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+      }
+    });
     if (!response.ok) throw new Error(`Official page request failed: ${response.status}`);
     return await response.text();
   } finally {
