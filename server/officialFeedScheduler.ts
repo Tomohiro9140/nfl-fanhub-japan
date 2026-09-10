@@ -31,9 +31,24 @@ export async function refreshOfficialFeedHandler(req: Request, res: Response) {
     if (!user.isCron || !user.taskUid) return res.status(403).json({ error: "cron-only" });
     const hour = new Date().getUTCHours();
     const payload = heartbeatPayload.parse(req.body ?? {});
-    if (payload.forceGroupIndex === undefined && ![0, 6, 12, 18].includes(hour)) return res.json({ ok: true, skipped: "outside-utc-window", hour });
-    const groupIndex = payload.forceGroupIndex ?? hour / 6;
-    const [results, league, dazn, pft, externalNews] = await Promise.all([refreshOfficialTeamFeedGroup(groupIndex), refreshOfficialLeagueDashboard(), refreshDaznGameLinks(), refreshPftAvailabilityInsights(), refreshExternalTeamNews(scheduledTeamGroups[groupIndex])]);
+    
+    // 3時間ごと（UTC 0, 3, 6, 9, 12, 15, 18, 21時 = JST 9, 12, 15, 18, 21, 0, 3, 6時）に実行
+    const scheduledHours = [0, 3, 6, 9, 12, 15, 18, 21];
+    if (payload.forceGroupIndex === undefined && !scheduledHours.includes(hour)) {
+      return res.json({ ok: true, skipped: "outside-utc-window", hour });
+    }
+
+    // 4グループ（全32チーム）を3時間ごとに順繰りに巡回（各グループ1日2回更新）
+    const groupIndex = payload.forceGroupIndex ?? (Math.floor(hour / 3) % 4);
+    
+    const [results, league, dazn, pft, externalNews] = await Promise.all([
+      refreshOfficialTeamFeedGroup(groupIndex),
+      refreshOfficialLeagueDashboard(),
+      refreshDaznGameLinks(),
+      refreshPftAvailabilityInsights(),
+      refreshExternalTeamNews(scheduledTeamGroups[groupIndex])
+    ]);
+    
     const stored = results.filter((result) => result.ok).reduce((sum, result) => sum + result.count, 0);
     res.json({ ok: true, groupIndex, forced: payload.forceGroupIndex !== undefined, processed: results.length, stored, results, league, dazn, pft, externalNews, timestamp: new Date().toISOString() });
   } catch (error) {
