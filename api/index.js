@@ -160,7 +160,7 @@ function dedupeOfficialFeedItems(items, limit) {
 }
 
 // server/db.ts
-import { isNull, or } from "drizzle-orm";
+import { or } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 
 // drizzle/schema.ts
@@ -648,7 +648,7 @@ async function getOfficialTeamSnapshot(teamCode, skipGameUrl, forceLastGame = fa
   const [activeGameRows, recentlyFinishedGames, scheduledGameRows, completedScoreboardRows, roster, injuryRows, rosterMoveRows, newsRows, externalInsights, inactiveAnnouncements] = await Promise.all([
     db.select().from(officialGames).where(and(eq(officialGames.teamCode, teamCode), gte(officialGames.kickoffAt, activeWindowStart), lt(officialGames.kickoffAt, now))).orderBy(desc(officialGames.kickoffAt)).limit(1),
     db.select().from(officialGames).where(and(eq(officialGames.teamCode, teamCode), lt(officialGames.kickoffAt, now))).orderBy(desc(officialGames.kickoffAt)).limit(4),
-    db.select().from(officialGames).where(and(eq(officialGames.teamCode, teamCode), gt(officialGames.kickoffAt, now))).orderBy(asc(officialGames.kickoffAt)).limit(1),
+    db.select().from(officialGames).where(and(eq(officialGames.teamCode, teamCode), gt(officialGames.kickoffAt, now))).orderBy(asc(officialGames.kickoffAt)).limit(6),
     db.select({ externalId: officialScoreboardGames.externalId, seasonPhase: officialScoreboardGames.seasonPhase, weekLabel: officialScoreboardGames.weekLabel, awayTeamCode: officialScoreboardGames.awayTeamCode, homeTeamCode: officialScoreboardGames.homeTeamCode, awayScore: officialScoreboardGames.awayScore, homeScore: officialScoreboardGames.homeScore, gameState: officialScoreboardGames.gameState, gameDate: officialScoreboardGames.gameDate, kickoffAt: officialScoreboardGames.kickoffAt, finalRecordedAt: officialScoreboardGames.finalRecordedAt, gameUrl: officialScoreboardGames.gameUrl, nflHighlightUrl: officialScoreboardGames.nflHighlightUrl, fetchedAt: officialScoreboardGames.fetchedAt }).from(officialScoreboardGames).orderBy(desc(officialScoreboardGames.finalRecordedAt), desc(officialScoreboardGames.fetchedAt)).limit(80),
     includeRoster ? db.select({ id: officialRosterEntries.id, playerName: officialRosterEntries.playerName, jerseyNumber: officialRosterEntries.jerseyNumber, position: officialRosterEntries.position, rosterStatus: officialRosterEntries.rosterStatus, sourceUrl: officialRosterEntries.sourceUrl, fetchedAt: officialRosterEntries.fetchedAt }).from(officialRosterEntries).where(eq(officialRosterEntries.teamCode, teamCode)).orderBy(asc(officialRosterEntries.rosterStatus), asc(officialRosterEntries.position), asc(officialRosterEntries.playerName)).limit(160) : Promise.resolve([]),
     db.select({ id: officialFeedItems.id, title: officialFeedItems.title, sourceName: officialFeedItems.sourceName, sourceKind: officialFeedItems.sourceKind, sourceUrl: officialFeedItems.sourceUrl, publishedAt: officialFeedItems.publishedAt, category: officialFeedItems.category, fetchedAt: officialFeedItems.fetchedAt }).from(officialFeedItems).where(and(eq(officialFeedItems.teamCode, teamCode), eq(officialFeedItems.category, "injury"), gte(officialFeedItems.publishedAt, officialInjuryWindowStart))).orderBy(sql`case when ${officialFeedItems.sourceKind} = 'team_official' then 0 else 1 end`, desc(officialFeedItems.publishedAt)).limit(24),
@@ -662,7 +662,25 @@ async function getOfficialTeamSnapshot(teamCode, skipGameUrl, forceLastGame = fa
   const injuryArticleKeys = new Set(injuries.map((item) => `${item.sourceUrl}|${item.title}`));
   const news = dedupeOfficialFeedItems(newsRows).filter((item) => !injuryArticleKeys.has(`${item.sourceUrl}|${item.title}`)).slice(0, 2);
   const activeGame = activeGameRows[0];
-  const scheduledGame = scheduledGameRows[0];
+  const isGameCompleted = (game) => {
+    return completedScoreboardRows.some((score) => {
+      if (!isOfficialFinal(score)) return false;
+      const isTeamMatch = score.awayTeamCode === teamCode && score.homeTeamCode === game.opponentCode || score.homeTeamCode === teamCode && score.awayTeamCode === game.opponentCode;
+      if (!isTeamMatch) return false;
+      if (score.weekLabel && game.weekLabel) {
+        const sWeek = score.weekLabel.toLowerCase().replace(/[^a-z0-9]/g, "");
+        const gWeek = game.weekLabel.toLowerCase().replace(/[^a-z0-9]/g, "");
+        if (sWeek === gWeek) return true;
+      }
+      const scoreTime = score.kickoffAt ? score.kickoffAt.getTime() : score.gameDate ? new Date(score.gameDate).getTime() : 0;
+      const gameTime = game.kickoffAt ? game.kickoffAt.getTime() : 0;
+      if (scoreTime && gameTime && Math.abs(scoreTime - gameTime) < 5 * 24 * 60 * 60 * 1e3) {
+        return true;
+      }
+      return false;
+    });
+  };
+  const scheduledGame = scheduledGameRows.find((game) => !isGameCompleted(game)) ?? scheduledGameRows[0];
   const scoreFor = async (game) => {
     if (!game) return void 0;
     const scoreboard = await db.select().from(officialScoreboardGames).where(and(eq(officialScoreboardGames.awayTeamCode, game.homeAway === "away" ? teamCode : game.opponentCode), eq(officialScoreboardGames.homeTeamCode, game.homeAway === "away" ? game.opponentCode : teamCode))).orderBy(desc(officialScoreboardGames.fetchedAt)).limit(1);
@@ -721,7 +739,14 @@ async function getOfficialTeamSnapshot(teamCode, skipGameUrl, forceLastGame = fa
   const completedScheduleCandidates = recentWithScores.filter((game) => Boolean(game) && isOfficialFinal(game));
   const latestCompletedGame = [...completedScheduleCandidates, ...scoreboardCompletedCandidates].sort((left, right) => right.kickoffAt.getTime() - left.kickoffAt.getTime())[0];
   const canRestoreLastGame = Boolean(latestCompletedGame && isWithinJstReplayWindow(latestCompletedGame, now));
-  const nextGame = activeScoreboardCandidates[0] ?? selectGameTicketGame({ now, activeGame: activeWithScore, latestCompletedGame, scheduledGame: scheduledWithScore, skipReplayWindow: Boolean(skipGameUrl && latestCompletedGame?.sourceUrl === skipGameUrl), forceLastGame });
+  const nextGame = activeScoreboardCandidates[0] ?? selectGameTicketGame({
+    now,
+    activeGame: activeWithScore,
+    latestCompletedGame,
+    scheduledGame: scheduledWithScore,
+    skipReplayWindow: Boolean(skipGameUrl && (latestCompletedGame?.sourceUrl === skipGameUrl || latestCompletedGame?.sourceUrl && skipGameUrl.includes(latestCompletedGame.sourceUrl))),
+    forceLastGame
+  });
   const byeWeek = getRegularSeasonByeWeek({ now, scheduledGame: scheduledWithScore, latestCompletedGame });
   const rosterCounts = Array.from(roster.reduce((counts, entry) => {
     counts.set(entry.rosterStatus, (counts.get(entry.rosterStatus) ?? 0) + 1);
@@ -789,7 +814,8 @@ async function getOfficialScoreboardKickoffTimes(season, externalIds) {
 async function getOfficialScoreboardGamesForHighlightMatching() {
   const db = await getDb();
   if (!db) return [];
-  return db.select().from(officialScoreboardGames).where(and(eq(officialScoreboardGames.gameState, "FINAL"), isNull(officialScoreboardGames.nflHighlightUrl)));
+  const games = await db.select().from(officialScoreboardGames).where(eq(officialScoreboardGames.gameState, "FINAL"));
+  return games.filter((game) => !game.nflHighlightUrl || !game.nflHighlightUrl.includes("youtube.com"));
 }
 async function upsertOfficialScoreboardHighlights(links) {
   if (!links.length) return;
@@ -4457,16 +4483,17 @@ async function refreshExternalTeamNews(teamCodes) {
 import { createHash as createHash5 } from "node:crypto";
 
 // server/nflGameHighlights.ts
-var nflHighlightSourceUrl = "https://www.nfl.com/videos/channel/game-highlights-vc";
-function teamVideoSlug(teamCode) {
+var nflHighlightsSourceUrl = "https://www.nfl.com/videos/channel/game-highlights-vc";
+var NFL_YOUTUBE_RSS_URL = "https://www.youtube.com/feeds/videos.xml?channel_id=UCDVYQ4Zhbm3S2dlz7P1GBDg";
+function teamVideosSlug(teamCode) {
   return TEAM_NAMES[teamCode]?.toLowerCase().split(" ").at(-1);
 }
 function weekNumber(weekLabel) {
   return weekLabel?.match(/(\d+)/)?.[1];
 }
 function nflHighlightUrlForGame(game) {
-  const away = teamVideoSlug(game.awayTeamCode);
-  const home = teamVideoSlug(game.homeTeamCode);
+  const away = teamVideosSlug(game.awayTeamCode);
+  const home = teamVideosSlug(game.homeTeamCode);
   const week = weekNumber(game.weekLabel);
   if (!away || !home || !week || game.seasonPhase === "postseason") return null;
   const phase = game.seasonPhase === "preseason" ? "preseason" : "week";
@@ -4474,8 +4501,8 @@ function nflHighlightUrlForGame(game) {
 }
 function nflHighlightUrlCandidatesForGame(game) {
   const primary = nflHighlightUrlForGame(game);
-  const away = teamVideoSlug(game.awayTeamCode);
-  const home = teamVideoSlug(game.homeTeamCode);
+  const away = teamVideosSlug(game.awayTeamCode);
+  const home = teamVideosSlug(game.homeTeamCode);
   const week = weekNumber(game.weekLabel);
   if (!primary || !away || !home || !week || game.seasonPhase !== "preseason") return primary ? [primary] : [];
   return [primary, `https://www.nfl.com/videos/${away}-vs-${home}-preseason-week-${week}`];
@@ -4501,18 +4528,117 @@ async function fetchOfficialHighlightPage(url) {
     clearTimeout(timeout);
   }
 }
+async function fetchYouTubeHighlightsFeed() {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 12e3);
+  try {
+    const res = await fetch(NFL_YOUTUBE_RSS_URL, {
+      signal: controller.signal,
+      headers: { "User-Agent": "Mozilla/5.0 NFLFanHubJapan/1.0" }
+    });
+    if (!res.ok) return [];
+    const xml = await res.text();
+    const entries = xml.match(/<entry>[\s\S]*?<\/entry>/gi) ?? [];
+    return entries.map((entry) => {
+      const title = entry.match(/<title>([\s\S]*?)<\/title>/)?.[1] ?? "";
+      const url = entry.match(/<link[^>]*href="([^"]*)"/)?.[1] ?? "";
+      return { title, url };
+    }).filter((item) => item.title && item.url);
+  } catch {
+    return [];
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+async function fetchNflDotComHighlightsList() {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 15e3);
+  try {
+    const res = await fetch(nflHighlightsSourceUrl, {
+      signal: controller.signal,
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+      }
+    });
+    if (!res.ok) return [];
+    const html = await res.text();
+    const matches = Array.from(html.matchAll(/href="(\/videos\/[^"]*highlights[^"]*)"/gi)).map((m) => m[1]);
+    return matches;
+  } catch {
+    return [];
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+function matchYouTubeHighlight(videos, game) {
+  const awaySlug = teamVideosSlug(game.awayTeamCode);
+  const homeSlug = teamVideosSlug(game.homeTeamCode);
+  if (!awaySlug || !homeSlug) return null;
+  for (const video of videos) {
+    const lower = video.title.toLowerCase();
+    if (!lower.includes("highlights")) continue;
+    if (lower.includes(awaySlug) && lower.includes(homeSlug)) {
+      return video.url;
+    }
+  }
+  return null;
+}
+function matchNflDotComHighlight(hrefs, game) {
+  const awaySlug = teamVideosSlug(game.awayTeamCode);
+  const homeSlug = teamVideosSlug(game.homeTeamCode);
+  if (!awaySlug || !homeSlug) return null;
+  for (const href of hrefs) {
+    const lower = href.toLowerCase();
+    if (lower.includes(awaySlug) && lower.includes(homeSlug)) {
+      return href.startsWith("http") ? href : `https://www.nfl.com${href}`;
+    }
+  }
+  return null;
+}
 async function refreshOfficialGameHighlights() {
   const games = await getOfficialScoreboardGamesForHighlightMatching();
-  const verified = await Promise.all(games.map(async (game) => {
-    for (const nflHighlightUrl of nflHighlightUrlCandidatesForGame(game)) {
-      const html = await fetchOfficialHighlightPage(nflHighlightUrl);
-      if (html && isVerifiedNflHighlightPage(html, game)) return { externalId: game.externalId, nflHighlightUrl, sourceUrl: nflHighlightSourceUrl };
+  if (!games.length) return { candidates: 0, linked: 0, sourceUrl: nflHighlightsSourceUrl };
+  const [ytVideos, nflHrefs] = await Promise.all([
+    fetchYouTubeHighlightsFeed(),
+    fetchNflDotComHighlightsList()
+  ]);
+  const links = [];
+  for (const game of games) {
+    const isCurrentlyYouTube = Boolean(game.nflHighlightUrl && game.nflHighlightUrl.includes("youtube.com"));
+    if (isCurrentlyYouTube) continue;
+    const ytUrl = matchYouTubeHighlight(ytVideos, game);
+    if (ytUrl) {
+      links.push({
+        externalId: game.externalId,
+        nflHighlightUrl: ytUrl,
+        sourceUrl: ytUrl
+      });
+      continue;
     }
-    return null;
-  }));
-  const links = verified.filter((link) => Boolean(link));
+    if (game.nflHighlightUrl) continue;
+    const nflUrl = matchNflDotComHighlight(nflHrefs, game);
+    if (nflUrl) {
+      links.push({
+        externalId: game.externalId,
+        nflHighlightUrl: nflUrl,
+        sourceUrl: nflHighlightsSourceUrl
+      });
+      continue;
+    }
+    for (const candidateUrl of nflHighlightUrlCandidatesForGame(game)) {
+      const html = await fetchOfficialHighlightPage(candidateUrl);
+      if (html && isVerifiedNflHighlightPage(html, game)) {
+        links.push({
+          externalId: game.externalId,
+          nflHighlightUrl: candidateUrl,
+          sourceUrl: nflHighlightsSourceUrl
+        });
+        break;
+      }
+    }
+  }
   await upsertOfficialScoreboardHighlights(links);
-  return { candidates: games.length, linked: links.length, sourceUrl: nflHighlightSourceUrl };
+  return { candidates: games.length, linked: links.length, sourceUrl: nflHighlightsSourceUrl };
 }
 
 // server/officialLeagueData.ts
@@ -4839,9 +4965,18 @@ async function refreshOfficialFeedHandler(req, res) {
     if (!user.isCron || !user.taskUid) return res.status(403).json({ error: "cron-only" });
     const hour = (/* @__PURE__ */ new Date()).getUTCHours();
     const payload = heartbeatPayload.parse(req.body ?? {});
-    if (payload.forceGroupIndex === void 0 && ![0, 6, 12, 18].includes(hour)) return res.json({ ok: true, skipped: "outside-utc-window", hour });
-    const groupIndex = payload.forceGroupIndex ?? hour / 6;
-    const [results, league, dazn, pft, externalNews] = await Promise.all([refreshOfficialTeamFeedGroup(groupIndex), refreshOfficialLeagueDashboard(), refreshDaznGameLinks(), refreshPftAvailabilityInsights(), refreshExternalTeamNews(scheduledTeamGroups[groupIndex])]);
+    const scheduledHours = [0, 3, 6, 9, 12, 15, 18, 21];
+    if (payload.forceGroupIndex === void 0 && !scheduledHours.includes(hour)) {
+      return res.json({ ok: true, skipped: "outside-utc-window", hour });
+    }
+    const groupIndex = payload.forceGroupIndex ?? Math.floor(hour / 3) % 4;
+    const [results, league, dazn, pft, externalNews] = await Promise.all([
+      refreshOfficialTeamFeedGroup(groupIndex),
+      refreshOfficialLeagueDashboard(),
+      refreshDaznGameLinks(),
+      refreshPftAvailabilityInsights(),
+      refreshExternalTeamNews(scheduledTeamGroups[groupIndex])
+    ]);
     const stored = results.filter((result) => result.ok).reduce((sum2, result) => sum2 + result.count, 0);
     res.json({ ok: true, groupIndex, forced: payload.forceGroupIndex !== void 0, processed: results.length, stored, results, league, dazn, pft, externalNews, timestamp: (/* @__PURE__ */ new Date()).toISOString() });
   } catch (error) {
