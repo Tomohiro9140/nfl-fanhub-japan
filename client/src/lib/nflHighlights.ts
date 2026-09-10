@@ -3,8 +3,7 @@ export const nflGameHighlightsUrl = "https://www.nfl.com/videos/channel/game-hig
 
 export function officialHighlightsHref(individualHighlightUrl?: string | null) {
   if (!individualHighlightUrl) return nflGameHighlightsUrl;
-  
-  // NFL公式動画またはYouTube（公式）のURLを許可
+
   const isValidUrl =
     /^https:\/\/www\.nfl\.com\/videos\//.test(individualHighlightUrl) ||
     /^https:\/\/(www\.)?(youtube\.com\/watch\?v=|youtu\.be\/)/.test(individualHighlightUrl);
