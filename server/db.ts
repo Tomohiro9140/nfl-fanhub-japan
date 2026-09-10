@@ -280,7 +280,7 @@ export async function getOfficialTeamSnapshot(teamCode: string, skipGameUrl?: st
   const [activeGameRows, recentlyFinishedGames, scheduledGameRows, completedScoreboardRows, roster, injuryRows, rosterMoveRows, newsRows, externalInsights, inactiveAnnouncements] = await Promise.all([
     db.select().from(officialGames).where(and(eq(officialGames.teamCode, teamCode), gte(officialGames.kickoffAt, activeWindowStart), lt(officialGames.kickoffAt, now))).orderBy(desc(officialGames.kickoffAt)).limit(1),
     db.select().from(officialGames).where(and(eq(officialGames.teamCode, teamCode), lt(officialGames.kickoffAt, now))).orderBy(desc(officialGames.kickoffAt)).limit(4),
-    db.select().from(officialGames).where(and(eq(officialGames.teamCode, teamCode), gt(officialGames.kickoffAt, now))).orderBy(asc(officialGames.kickoffAt)).limit(1),
+    db.select().from(officialGames).where(and(eq(officialGames.teamCode, teamCode), gt(officialGames.kickoffAt, now))).orderBy(asc(officialGames.kickoffAt)).limit(6),
     db.select({ externalId: officialScoreboardGames.externalId, seasonPhase: officialScoreboardGames.seasonPhase, weekLabel: officialScoreboardGames.weekLabel, awayTeamCode: officialScoreboardGames.awayTeamCode, homeTeamCode: officialScoreboardGames.homeTeamCode, awayScore: officialScoreboardGames.awayScore, homeScore: officialScoreboardGames.homeScore, gameState: officialScoreboardGames.gameState, gameDate: officialScoreboardGames.gameDate, kickoffAt: officialScoreboardGames.kickoffAt, finalRecordedAt: officialScoreboardGames.finalRecordedAt, gameUrl: officialScoreboardGames.gameUrl, nflHighlightUrl: officialScoreboardGames.nflHighlightUrl, fetchedAt: officialScoreboardGames.fetchedAt }).from(officialScoreboardGames).orderBy(desc(officialScoreboardGames.finalRecordedAt), desc(officialScoreboardGames.fetchedAt)).limit(80),
     includeRoster
       ? db.select({ id: officialRosterEntries.id, playerName: officialRosterEntries.playerName, jerseyNumber: officialRosterEntries.jerseyNumber, position: officialRosterEntries.position, rosterStatus: officialRosterEntries.rosterStatus, sourceUrl: officialRosterEntries.sourceUrl, fetchedAt: officialRosterEntries.fetchedAt }).from(officialRosterEntries).where(eq(officialRosterEntries.teamCode, teamCode)).orderBy(asc(officialRosterEntries.rosterStatus), asc(officialRosterEntries.position), asc(officialRosterEntries.playerName)).limit(160)
@@ -297,8 +297,35 @@ export async function getOfficialTeamSnapshot(teamCode: string, skipGameUrl?: st
   const news = dedupeOfficialFeedItems(newsRows)
     .filter((item) => !injuryArticleKeys.has(`${item.sourceUrl}|${item.title}`))
     .slice(0, 2);
+
   const activeGame = activeGameRows[0];
-  const scheduledGame = scheduledGameRows[0];
+
+  // すでにスコアボードで FINAL が記録されている試合は、日程が未来であっても次の未消化試合（scheduledGame）から除外する
+  const isGameCompleted = (game: typeof officialGames.$inferSelect) => {
+    return completedScoreboardRows.some((score) => {
+      if (!isOfficialFinal(score)) return false;
+      const isTeamMatch =
+        (score.awayTeamCode === teamCode && score.homeTeamCode === game.opponentCode) ||
+        (score.homeTeamCode === teamCode && score.awayTeamCode === game.opponentCode);
+      if (!isTeamMatch) return false;
+
+      if (score.weekLabel && game.weekLabel) {
+        const sWeek = score.weekLabel.toLowerCase().replace(/[^a-z0-9]/g, "");
+        const gWeek = game.weekLabel.toLowerCase().replace(/[^a-z0-9]/g, "");
+        if (sWeek === gWeek) return true;
+      }
+
+      const scoreTime = score.kickoffAt ? score.kickoffAt.getTime() : (score.gameDate ? new Date(score.gameDate).getTime() : 0);
+      const gameTime = game.kickoffAt ? game.kickoffAt.getTime() : 0;
+      if (scoreTime && gameTime && Math.abs(scoreTime - gameTime) < 5 * 24 * 60 * 60 * 1000) {
+        return true;
+      }
+      return false;
+    });
+  };
+
+  const scheduledGame = scheduledGameRows.find((game) => !isGameCompleted(game)) ?? scheduledGameRows[0];
+
   const scoreFor = async (game: typeof officialGames.$inferSelect | undefined) => {
     if (!game) return undefined;
     const scoreboard = await db.select().from(officialScoreboardGames)
@@ -364,7 +391,14 @@ export async function getOfficialTeamSnapshot(teamCode: string, skipGameUrl?: st
   const latestCompletedGame = [...completedScheduleCandidates, ...scoreboardCompletedCandidates]
     .sort((left, right) => right.kickoffAt.getTime() - left.kickoffAt.getTime())[0];
   const canRestoreLastGame = Boolean(latestCompletedGame && isWithinJstReplayWindow(latestCompletedGame, now));
-  const nextGame = activeScoreboardCandidates[0] ?? selectGameTicketGame({ now, activeGame: activeWithScore, latestCompletedGame, scheduledGame: scheduledWithScore, skipReplayWindow: Boolean(skipGameUrl && latestCompletedGame?.sourceUrl === skipGameUrl), forceLastGame });
+  const nextGame = activeScoreboardCandidates[0] ?? selectGameTicketGame({
+    now,
+    activeGame: activeWithScore,
+    latestCompletedGame,
+    scheduledGame: scheduledWithScore,
+    skipReplayWindow: Boolean(skipGameUrl && (latestCompletedGame?.sourceUrl === skipGameUrl || (latestCompletedGame?.sourceUrl && skipGameUrl.includes(latestCompletedGame.sourceUrl)))),
+    forceLastGame
+  });
   const byeWeek = getRegularSeasonByeWeek({ now, scheduledGame: scheduledWithScore, latestCompletedGame });
   const rosterCounts = Array.from(roster.reduce((counts, entry) => {
     counts.set(entry.rosterStatus, (counts.get(entry.rosterStatus) ?? 0) + 1);
@@ -446,7 +480,8 @@ export async function getOfficialScoreboardKickoffTimes(season: number, external
 export async function getOfficialScoreboardGamesForHighlightMatching() {
   const db = await getDb();
   if (!db) return [];
-  return db.select().from(officialScoreboardGames).where(and(eq(officialScoreboardGames.gameState, "FINAL"), isNull(officialScoreboardGames.nflHighlightUrl)));
+  const games = await db.select().from(officialScoreboardGames).where(eq(officialScoreboardGames.gameState, "FINAL"));
+  return games.filter((game) => !game.nflHighlightUrl || !game.nflHighlightUrl.includes("youtube.com"));
 }
 
 export async function upsertOfficialScoreboardHighlights(links: Array<{ externalId: string; nflHighlightUrl: string; sourceUrl: string }>) {
