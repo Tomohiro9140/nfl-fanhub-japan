@@ -2,11 +2,8 @@ name: NFL Data Auto Update
 
 on:
   schedule:
-    - cron: '0 0 * * *'
-    - cron: '0 6 * * *'
-    - cron: '0 12 * * *'
-    - cron: '0 18 * * *'
-    - cron: '0 21 * * 2' # 毎週水曜 06:00 JST (火曜 21:00 UTC) FIELDLINE週次更新用
+    - cron: '0 */3 * * *' # 3時間ごと（JST 0:00, 3:00, 6:00, 9:00, 12:00, 15:00, 18:00, 21:00）
+    - cron: '0 21 * * 2'  # 毎週水曜 06:00 JST (火曜 21:00 UTC) FIELDLINE週次更新用
   workflow_dispatch:
 
 permissions:
@@ -53,7 +50,7 @@ jobs:
           # 2. リーグ順位・最新スコア・ハイライト更新
           npx tsx -e 'import("./scripts/refreshOfficialLeagueDashboard.mjs").then(() => process.exit(0)).catch(e => { console.error(e); process.exit(1); })'
 
-          # 3. 8チームごとの公式ロスター更新
+          # 3. 8チームごとの公式ロスター更新（3時間ごとにローテーションし各チーム1日2回更新）
           npx tsx -e '
             import("./server/officialTeamData.ts").then(async m => {
               const groups = [
@@ -62,7 +59,7 @@ jobs:
                 ["LV","LAC","LAR","MIA","MIN","NE","NO","NYG"],
                 ["NYJ","PHI","PIT","SF","SEA","TB","TEN","WAS"]
               ];
-              const slot = Math.floor(new Date().getUTCHours() / 6) % 4;
+              const slot = Math.floor(new Date().getUTCHours() / 3) % 4;
               const teams = groups[slot];
               console.log("Updating Rosters for Group " + (slot + 1) + ":", teams);
               for (const t of teams) {
@@ -72,7 +69,7 @@ jobs:
             }).catch(e => { console.error(e); process.exit(1); });
           '
 
-          # 4. 8チームごとの公式ニュース・RSS・負傷情報更新
+          # 4. 8チームごとの公式ニュース・RSS・負傷情報更新（3時間ごとにローテーションし各チーム1日2回更新）
           npx tsx -e '
             import("./server/officialFeeds.ts").then(async m => {
               const groups = [
@@ -81,7 +78,7 @@ jobs:
                 ["LV","LAC","LAR","MIA","MIN","NE","NO","NYG"],
                 ["NYJ","PHI","PIT","SF","SEA","TB","TEN","WAS"]
               ];
-              const slot = Math.floor(new Date().getUTCHours() / 6) % 4;
+              const slot = Math.floor(new Date().getUTCHours() / 3) % 4;
               const teams = groups[slot];
               console.log("Updating Feeds for Group " + (slot + 1) + ":", teams);
               for (const t of teams) {
