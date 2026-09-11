@@ -53,11 +53,36 @@ export function parseNFLStandingsPage(html: string, season: number, sourceUrl: s
     const entry = Object.entries(TEAM_NAMES).find(([, name]) => row.includes(name));
     if (!entry) return [];
     const [teamCode, teamName] = entry;
-    const rowText = text(row).replace(teamName, " ");
-    const values = Array.from(rowText.matchAll(/(?<![A-Za-z])\d+(?:\.\d+)?/g), (value) => value[0]);
+
+    // <td> セル単位で抽出し、チーム名セル（先頭列）を除外して勝敗数値を安全にパース
+    const cells = Array.from(row.matchAll(/<td[^>]*>([\s\S]*?)<\/td>/gi)).map((m) => text(m[1]).trim());
+    let values: string[] = [];
+    if (cells.length >= 5) {
+      values = cells.slice(1).flatMap((c) => Array.from(c.matchAll(/\b\d+(?:\.\d+)?\b/g), (v) => v[0]));
+    }
+    // セル抽出フォールバック（49ers などの英字付き数字やチーム名を明示的に除去）
+    if (values.length < 4) {
+      const sanitizedRow = text(row)
+        .replace(/49ers/gi, " ")
+        .replace(new RegExp(teamName, "gi"), " ");
+      values = Array.from(sanitizedRow.matchAll(/\b\d+(?:\.\d+)?\b(?![A-Za-z])/g), (v) => v[0]);
+    }
     if (values.length < 4) return [];
     const [wins, losses, ties, pct, pointsFor, pointsAgainst] = values;
-    return [{ externalId: hash(`${season}:reg:${teamCode}`), season, seasonType: "regular", teamCode, wins: Number(wins), losses: Number(losses), ties: Number(ties), pct, pointsFor: pointsFor ? Number(pointsFor) : null, pointsAgainst: pointsAgainst ? Number(pointsAgainst) : null, sourceUrl, fetchedAt: new Date() }];
+    return [{
+      externalId: hash(`${season}:reg:${teamCode}`),
+      season,
+      seasonType: "regular",
+      teamCode,
+      wins: Number(wins),
+      losses: Number(losses),
+      ties: Number(ties),
+      pct,
+      pointsFor: pointsFor ? Number(pointsFor) : null,
+      pointsAgainst: pointsAgainst ? Number(pointsAgainst) : null,
+      sourceUrl,
+      fetchedAt: new Date(),
+    }];
   });
 }
 
