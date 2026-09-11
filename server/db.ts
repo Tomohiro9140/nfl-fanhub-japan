@@ -289,7 +289,13 @@ export async function getOfficialTeamSnapshot(teamCode: string, skipGameUrl?: st
     db.select({ id: officialFeedItems.id, title: officialFeedItems.title, sourceName: officialFeedItems.sourceName, sourceKind: officialFeedItems.sourceKind, sourceUrl: officialFeedItems.sourceUrl, publishedAt: officialFeedItems.publishedAt, category: officialFeedItems.category, fetchedAt: officialFeedItems.fetchedAt }).from(officialFeedItems).where(and(eq(officialFeedItems.teamCode, teamCode), eq(officialFeedItems.category, "transaction"), gte(officialFeedItems.publishedAt, rosterMoveWindowStart))).orderBy(sql`case when ${officialFeedItems.sourceKind} = 'team_official' then 0 else 1 end`, desc(officialFeedItems.publishedAt)).limit(24),
     db.select({ id: officialFeedItems.id, title: officialFeedItems.title, summary: officialFeedItems.summary, sourceName: officialFeedItems.sourceName, sourceKind: officialFeedItems.sourceKind, sourceUrl: officialFeedItems.sourceUrl, publishedAt: officialFeedItems.publishedAt, fetchedAt: officialFeedItems.fetchedAt }).from(officialFeedItems).where(and(eq(officialFeedItems.teamCode, teamCode), eq(officialFeedItems.category, "news"))).orderBy(sql`case when ${officialFeedItems.sourceKind} = 'team_official' then 0 else 1 end`, desc(officialFeedItems.publishedAt)).limit(24),
     db.select({ id: externalAvailabilityInsights.id, playerName: externalAvailabilityInsights.playerName, statusLabel: externalAvailabilityInsights.statusLabel, headline: externalAvailabilityInsights.headline, sourceName: externalAvailabilityInsights.sourceName, sourceUrl: externalAvailabilityInsights.sourceUrl, publishedAt: externalAvailabilityInsights.publishedAt, fetchedAt: externalAvailabilityInsights.fetchedAt }).from(externalAvailabilityInsights).where(and(eq(externalAvailabilityInsights.teamCode, teamCode), gte(externalAvailabilityInsights.publishedAt, externalInsightWindowStart))).orderBy(desc(externalAvailabilityInsights.publishedAt)).limit(3),
-    db.select({ title: officialFeedItems.title, summary: officialFeedItems.summary, sourceUrl: officialFeedItems.sourceUrl, publishedAt: officialFeedItems.publishedAt }).from(officialFeedItems).where(and(eq(officialFeedItems.teamCode, teamCode), gte(officialFeedItems.publishedAt, new Date(now.getTime() - 2 * 24 * 60 * 60 * 1_000)), sql`lower(${officialFeedItems.title}) like '%inactive%'`)).orderBy(desc(officialFeedItems.publishedAt)).limit(1),
+    // Game Ticket INJURIES用：nfl.com/injuries/ 由来の公式データのみに限定
+    db.select({ title: officialFeedItems.title, summary: officialFeedItems.summary, sourceUrl: officialFeedItems.sourceUrl, publishedAt: officialFeedItems.publishedAt }).from(officialFeedItems).where(and(
+      eq(officialFeedItems.teamCode, teamCode),
+      eq(officialFeedItems.sourceKind, "nfl_official"),
+      sql`${officialFeedItems.sourceUrl} like 'https://www.nfl.com/injuries%'`,
+      gte(officialFeedItems.publishedAt, new Date(now.getTime() - 7 * 24 * 60 * 60 * 1_000))
+    )).orderBy(desc(officialFeedItems.publishedAt)).limit(1),
   ]);
   const injuries = dedupeOfficialFeedItems(injuryRows, 3);
   const rosterMoves = dedupeOfficialFeedItems(rosterMoveRows, 3);
@@ -346,7 +352,6 @@ export async function getOfficialTeamSnapshot(teamCode: string, skipGameUrl?: st
       homeAway: score.homeTeamCode === teamCode ? "home" as const : "away" as const,
       seasonPhase: score.seasonPhase,
       weekLabel: score.weekLabel,
-      // A live score without a published kickoff must still win over a future fixture. Its timestamp is explicitly marked as estimated for the UI.
       kickoffAt: score.kickoffAt ?? score.fetchedAt,
       kickoffAtEstimated: !score.kickoffAt,
       gameDate: score.gameDate,
@@ -371,7 +376,6 @@ export async function getOfficialTeamSnapshot(teamCode: string, skipGameUrl?: st
     homeAway: score.homeTeamCode === teamCode ? "home" as const : "away" as const,
     seasonPhase: score.seasonPhase,
     weekLabel: score.weekLabel,
-    // Prefer the exact official kickoff. The date-only fallback is for historical rows that have no published kickoff.
     kickoffAt: score.kickoffAt ?? (score.gameDate ? new Date(`${score.gameDate}T12:00:00.000Z`) : score.fetchedAt),
     gameDate: score.gameDate,
     venue: null,
@@ -436,7 +440,6 @@ export async function hasOfficialScorePulseWindow(now = new Date()) {
   if (!db) return false;
   const jst = new Date(now.getTime() + 9 * 60 * 60 * 1_000);
   const japanDayStart = new Date(Date.UTC(jst.getUTCFullYear(), jst.getUTCMonth(), jst.getUTCDate()) - 9 * 60 * 60 * 1_000);
-  // Retain the whole Japan game day and a small prior-day buffer for US evening kickoffs.
   const windowStart = new Date(japanDayStart.getTime() - 6 * 60 * 60 * 1_000);
   const windowEnd = new Date(japanDayStart.getTime() + 24 * 60 * 60 * 1_000);
   const games = await db.select({ id: officialGames.id }).from(officialGames)
@@ -529,7 +532,6 @@ export async function getOfficialLeagueDashboardSummary() {
   return { standings, results, lastUpdatedAt };
 }
 
-/** Returns only the selected club's newest official result for the above-fold LATEST RESULTS card. */
 export async function getOfficialLatestResult(teamCode: string) {
   const db = await getDb();
   if (!db) return { results: [], lastUpdatedAt: undefined };
