@@ -655,7 +655,13 @@ async function getOfficialTeamSnapshot(teamCode, skipGameUrl, forceLastGame = fa
     db.select({ id: officialFeedItems.id, title: officialFeedItems.title, sourceName: officialFeedItems.sourceName, sourceKind: officialFeedItems.sourceKind, sourceUrl: officialFeedItems.sourceUrl, publishedAt: officialFeedItems.publishedAt, category: officialFeedItems.category, fetchedAt: officialFeedItems.fetchedAt }).from(officialFeedItems).where(and(eq(officialFeedItems.teamCode, teamCode), eq(officialFeedItems.category, "transaction"), gte(officialFeedItems.publishedAt, rosterMoveWindowStart))).orderBy(sql`case when ${officialFeedItems.sourceKind} = 'team_official' then 0 else 1 end`, desc(officialFeedItems.publishedAt)).limit(24),
     db.select({ id: officialFeedItems.id, title: officialFeedItems.title, summary: officialFeedItems.summary, sourceName: officialFeedItems.sourceName, sourceKind: officialFeedItems.sourceKind, sourceUrl: officialFeedItems.sourceUrl, publishedAt: officialFeedItems.publishedAt, fetchedAt: officialFeedItems.fetchedAt }).from(officialFeedItems).where(and(eq(officialFeedItems.teamCode, teamCode), eq(officialFeedItems.category, "news"))).orderBy(sql`case when ${officialFeedItems.sourceKind} = 'team_official' then 0 else 1 end`, desc(officialFeedItems.publishedAt)).limit(24),
     db.select({ id: externalAvailabilityInsights.id, playerName: externalAvailabilityInsights.playerName, statusLabel: externalAvailabilityInsights.statusLabel, headline: externalAvailabilityInsights.headline, sourceName: externalAvailabilityInsights.sourceName, sourceUrl: externalAvailabilityInsights.sourceUrl, publishedAt: externalAvailabilityInsights.publishedAt, fetchedAt: externalAvailabilityInsights.fetchedAt }).from(externalAvailabilityInsights).where(and(eq(externalAvailabilityInsights.teamCode, teamCode), gte(externalAvailabilityInsights.publishedAt, externalInsightWindowStart))).orderBy(desc(externalAvailabilityInsights.publishedAt)).limit(3),
-    db.select({ title: officialFeedItems.title, summary: officialFeedItems.summary, sourceUrl: officialFeedItems.sourceUrl, publishedAt: officialFeedItems.publishedAt }).from(officialFeedItems).where(and(eq(officialFeedItems.teamCode, teamCode), gte(officialFeedItems.publishedAt, new Date(now.getTime() - 2 * 24 * 60 * 60 * 1e3)), sql`lower(${officialFeedItems.title}) like '%inactive%'`)).orderBy(desc(officialFeedItems.publishedAt)).limit(1)
+    // Game Ticket INJURIES用：nfl.com/injuries/ 由来の公式データのみに限定
+    db.select({ title: officialFeedItems.title, summary: officialFeedItems.summary, sourceUrl: officialFeedItems.sourceUrl, publishedAt: officialFeedItems.publishedAt }).from(officialFeedItems).where(and(
+      eq(officialFeedItems.teamCode, teamCode),
+      eq(officialFeedItems.sourceKind, "nfl_official"),
+      sql`${officialFeedItems.sourceUrl} like 'https://www.nfl.com/injuries%'`,
+      gte(officialFeedItems.publishedAt, new Date(now.getTime() - 7 * 24 * 60 * 60 * 1e3))
+    )).orderBy(desc(officialFeedItems.publishedAt)).limit(1)
   ]);
   const injuries = dedupeOfficialFeedItems(injuryRows, 3);
   const rosterMoves = dedupeOfficialFeedItems(rosterMoveRows, 3);
@@ -696,7 +702,6 @@ async function getOfficialTeamSnapshot(teamCode, skipGameUrl, forceLastGame = fa
     homeAway: score.homeTeamCode === teamCode ? "home" : "away",
     seasonPhase: score.seasonPhase,
     weekLabel: score.weekLabel,
-    // A live score without a published kickoff must still win over a future fixture. Its timestamp is explicitly marked as estimated for the UI.
     kickoffAt: score.kickoffAt ?? score.fetchedAt,
     kickoffAtEstimated: !score.kickoffAt,
     gameDate: score.gameDate,
@@ -720,7 +725,6 @@ async function getOfficialTeamSnapshot(teamCode, skipGameUrl, forceLastGame = fa
     homeAway: score.homeTeamCode === teamCode ? "home" : "away",
     seasonPhase: score.seasonPhase,
     weekLabel: score.weekLabel,
-    // Prefer the exact official kickoff. The date-only fallback is for historical rows that have no published kickoff.
     kickoffAt: score.kickoffAt ?? (score.gameDate ? /* @__PURE__ */ new Date(`${score.gameDate}T12:00:00.000Z`) : score.fetchedAt),
     gameDate: score.gameDate,
     venue: null,
@@ -4681,11 +4685,31 @@ function parseNFLStandingsPage(html, season, sourceUrl) {
     const entry = Object.entries(TEAM_NAMES).find(([, name]) => row.includes(name));
     if (!entry) return [];
     const [teamCode, teamName] = entry;
-    const rowText = text3(row).replace(teamName, " ");
-    const values = Array.from(rowText.matchAll(/(?<![A-Za-z])\d+(?:\.\d+)?/g), (value) => value[0]);
+    const cells = Array.from(row.matchAll(/<td[^>]*>([\s\S]*?)<\/td>/gi)).map((m) => text3(m[1]).trim());
+    let values = [];
+    if (cells.length >= 5) {
+      values = cells.slice(1).flatMap((c) => Array.from(c.matchAll(/\b\d+(?:\.\d+)?\b/g), (v) => v[0]));
+    }
+    if (values.length < 4) {
+      const sanitizedRow = text3(row).replace(/49ers/gi, " ").replace(new RegExp(teamName, "gi"), " ");
+      values = Array.from(sanitizedRow.matchAll(/\b\d+(?:\.\d+)?\b(?![A-Za-z])/g), (v) => v[0]);
+    }
     if (values.length < 4) return [];
     const [wins, losses, ties, pct, pointsFor, pointsAgainst] = values;
-    return [{ externalId: hash3(`${season}:reg:${teamCode}`), season, seasonType: "regular", teamCode, wins: Number(wins), losses: Number(losses), ties: Number(ties), pct, pointsFor: pointsFor ? Number(pointsFor) : null, pointsAgainst: pointsAgainst ? Number(pointsAgainst) : null, sourceUrl, fetchedAt: /* @__PURE__ */ new Date() }];
+    return [{
+      externalId: hash3(`${season}:reg:${teamCode}`),
+      season,
+      seasonType: "regular",
+      teamCode,
+      wins: Number(wins),
+      losses: Number(losses),
+      ties: Number(ties),
+      pct,
+      pointsFor: pointsFor ? Number(pointsFor) : null,
+      pointsAgainst: pointsAgainst ? Number(pointsAgainst) : null,
+      sourceUrl,
+      fetchedAt: /* @__PURE__ */ new Date()
+    }];
   });
 }
 function phaseAndWeek(html, gamePath) {
