@@ -40,6 +40,26 @@ function sourceTime(value?: Date) {
   return value ? new Intl.DateTimeFormat("ja-JP", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit", timeZone: "Asia/Tokyo" }).format(new Date(value)) : "—";
 }
 
+function formatInactiveDisplay(title: string, summary?: string | null): string {
+  const isGenericSummary = !summary || /^(?:here is a|the following|a look at|check out|take a look|see the full)\b/i.test(summary.trim());
+
+  // 1. タイトルから試合前置詞 (vs., ahead of, for #...) より前の選手名・ステータスを抽出
+  const head = title.split(/\s+(?:vs\.?|ahead of|for\s+#|;|\/\/|\|)\s+/i)[0]?.trim();
+  if (head && /\b(?:OUT|QUESTIONABLE|DOUBTFUL|ACTIVE|INACTIVE|IR)\b/i.test(head)) {
+    return head.replace(/\s+and\s+/gi, ", ");
+  }
+
+  // 2. コロン以降に選手名が列挙されている形式 ("Inactives: Player A, Player B")
+  const afterColon = title.split(/:\s+/)[1]?.trim();
+  if (afterColon) {
+    const listPart = afterColon.split(/\s+(?:vs\.?|ahead of|;|\/\/|\|)\s+/i)[0]?.trim();
+    if (listPart) return listPart.replace(/\s+and\s+/gi, ", ");
+  }
+
+  // 3. サマリーが定型文でなければサマリー、定型文ならタイトルを表示
+  return !isGenericSummary && summary ? summary : title;
+}
+
 function EmptyOfficial({ label, copy }: { label: string; copy: string }) {
   return <div className="border border-dashed border-white/30 bg-white/5 p-3 text-[12px] leading-5 text-[#d9e3f3]"><CircleAlert className="mr-1 inline h-3.5 w-3.5 text-[#ffc1a7]" /> <strong>{label}</strong><br />{copy}</div>;
 }
@@ -60,6 +80,11 @@ export function OfficialGameTicket({ favorite, snapshot, loading, spoilerMode = 
   const isFinalTicket = gameStatus.label === "FINAL";
   const canOpenGameStats = isFinalTicket && Boolean(game?.sourceUrl.includes("/games/")) && Boolean(onOpenGameStats);
   const finalTeamRowClass = isFinalTicket ? "min-h-[84px] sm:min-h-[88px]" : "";
+
+  const inactiveDisplayText = snapshot?.inactiveReport
+    ? formatInactiveDisplay(snapshot.inactiveReport.title, snapshot.inactiveReport.summary)
+    : "";
+
   return <section data-layout-scope="hero" data-game-ticket-state={gameStatus.label} className="ticket-cut ticket-paper relative overflow-hidden rounded-[18px] bg-[#0a1931] text-[#fffaf0] shadow-[0_24px_50px_rgba(10,25,49,0.2)]">
     <div className="absolute inset-0 bg-[radial-gradient(circle_at_92%_5%,rgba(56,189,248,.19),transparent_30%),linear-gradient(115deg,#0a1931,#112a4b)]" />
       <div className="relative flex flex-col p-4 sm:p-5">
@@ -105,7 +130,7 @@ export function OfficialGameTicket({ favorite, snapshot, loading, spoilerMode = 
               {snapshot?.inactiveReport ? (
                 spoilerMode ? (
                   <span className="max-w-full truncate font-bold text-[#ffc1a7]" title={snapshot.inactiveReport.title}>
-                    REPORTED · {snapshot.inactiveReport.summary || snapshot.inactiveReport.title}
+                    REPORTED · {inactiveDisplayText}
                   </span>
                 ) : (
                   <a
@@ -115,7 +140,7 @@ export function OfficialGameTicket({ favorite, snapshot, loading, spoilerMode = 
                     className="max-w-full truncate font-bold text-[#ffc1a7] underline underline-offset-2"
                     title={snapshot.inactiveReport.title}
                   >
-                    REPORTED · {snapshot.inactiveReport.summary || snapshot.inactiveReport.title} <ArrowUpRight className="inline h-3 w-3" />
+                    REPORTED · {inactiveDisplayText} <ArrowUpRight className="inline h-3 w-3" />
                   </a>
                 )
               ) : (
