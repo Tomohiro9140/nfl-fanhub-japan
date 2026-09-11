@@ -39,6 +39,20 @@ function fieldValue(player: Player, field: string) {
   if (field === "RTG") return player.values.RATING ?? "—";
   if (field === "CAR") return player.values.ATT ?? "—";
   if (field === "TOT / SOLO") return `${player.values.TOT ?? "—"} / ${player.values.SOLO ?? "—"}`;
+  if (field === "AVG") {
+    if (player.values.AVG) return player.values.AVG;
+    if (player.values["Y/R"]) return player.values["Y/R"];
+    const yds = Number.parseFloat(player.values.YDS ?? "");
+    const rec = Number.parseFloat(player.values.REC ?? "");
+    if (Number.isFinite(yds) && Number.isFinite(rec) && rec > 0) {
+      return (yds / rec).toFixed(1);
+    }
+    const att = Number.parseFloat(player.values.ATT ?? "");
+    if (Number.isFinite(yds) && Number.isFinite(att) && att > 0) {
+      return (yds / att).toFixed(1);
+    }
+    return "—";
+  }
   return player.values[field] ?? "—";
 }
 
