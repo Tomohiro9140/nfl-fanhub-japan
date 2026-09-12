@@ -11,7 +11,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 type VenueFilter = "all" | "home" | "away";
 type Selection = { season: number; team: string; weeks: number[]; venue: VenueFilter };
-type AvailableWeek = { week: number; opponent: string; isHome: boolean | null; isBye: boolean };
+type AvailableWeek = { week: number; opponent: string; isHome: boolean | null; isBye: boolean; hasStats?: boolean };
 type MetricKey = "pointsPerGame" | "yardsPerGame" | "epaPerPlay" | "passYardsPerGame" | "rushYardsPerGame" | "passerRating" | "thirdDownPct" | "redZoneTdPct" | "sacksAllowed" | "pointsAllowedPerGame" | "yardsAllowedPerGame" | "opponentEpaPerPlay" | "passYardsAllowedPerGame" | "rushYardsAllowedPerGame" | "opponentThirdDownPct" | "opponentRedZoneTdPct" | "sacksDefense" | "interceptionsDefense" | "turnovers" | "fieldGoalPct" | "extraPointPct" | "puntInside20Pct" | "penalties";
 
 const metricGroups: { title: string; metrics: { key: MetricKey; label: string; format: "number" | "decimal" | "percent" | "epa" }[] }[] = [
@@ -52,11 +52,65 @@ const venueLabel = (venue: VenueFilter) => venue === "home" ? "ホーム" : venu
 
 function SelectPanel({ title, side, value, onChange, onVenueChange, onDatasetChange, teams, seasons, availableWeeks, weeksLoading }: { title: string; side: "left" | "right"; value: Selection; onChange: (value: Selection) => void; onVenueChange: (venue: VenueFilter) => void; onDatasetChange: () => void; teams: { code: string; name: string }[]; seasons: number[]; availableWeeks: AvailableWeek[]; weeksLoading: boolean }) {
   const update = (key: "season" | "team" | "venue", raw: string) => { if (key === "venue") return onVenueChange(raw as VenueFilter); onDatasetChange(); onChange({ ...value, [key]: key === "season" ? Number(raw) : raw, weeks: [] } as Selection); };
-  const selectableWeeks = new Set(availableWeeks.map(item => item.week));
-  const toggleWeek = (week: number) => onChange({ ...value, weeks: value.weeks.includes(week) ? value.weeks.filter(item => item !== week) : [...value.weeks, week].sort((a, b) => a - b) });
+  const toggleWeek = (week: number) => {
+    const info = availableWeeks.find(item => item.week === week);
+    if (!info || (!info.hasStats && !info.isBye)) return;
+    onChange({ ...value, weeks: value.weeks.includes(week) ? value.weeks.filter(item => item !== week) : [...value.weeks, week].sort((a, b) => a - b) });
+  };
   const brand = fieldlineTeamBrand[value.team];
   const team = teams.find(item => item.code === value.team);
-  return <section className="rounded-[1.6rem] p-px shadow-[0_18px_45px_rgba(14,19,31,0.16)]" style={{ backgroundImage: `linear-gradient(135deg, ${brand?.primary ?? "#1f2e50"}, ${brand?.accent ?? "#e85d2a"})` }}><div className="rounded-[1.55rem] bg-white/[.97] p-5 sm:p-6"><div className="mb-5 flex items-start"><div className="flex items-center gap-3"><MemoTeamMark code={value.team} /><div><p className="text-[10px] font-bold tracking-[.18em] text-slate-500">{title}</p><p className="mt-1 text-xs text-slate-400">{team?.name ?? "独立した比較条件"}</p></div></div></div><div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4"><div className="space-y-2"><Label>シーズン</Label><Select value={String(value.season)} onValueChange={item => update("season", item)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent className="bg-white z-50 border border-slate-200 shadow-xl">{seasons.map(year => <SelectItem key={year} value={String(year)}>{year} Season</SelectItem>)}</SelectContent></Select></div><div className="space-y-2 sm:col-span-2"><Label>チーム</Label><Select value={value.team} onValueChange={item => update("team", item)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent className="bg-white z-50 border border-slate-200 shadow-xl">{teams.map(item => <SelectItem key={item.code} value={item.code}><span className="flex items-center gap-2"><MemoTeamMark code={item.code} size="sm" /><span>{item.name}</span></span></SelectItem>)}</SelectContent></Select></div><div className="space-y-2"><Label>開催地</Label><div className="flex rounded-lg border border-slate-200 bg-slate-50 p-1" role="group" aria-label="開催地フィルター">{(["all", "home", "away"] as VenueFilter[]).map(venue => <Button key={venue} type="button" size="sm" variant={value.venue === venue ? "default" : "ghost"} className={value.venue === venue ? "flex-1 bg-[#e85d2a] px-2 text-xs text-white shadow-sm hover:bg-[#c84b21]" : "flex-1 px-2 text-xs hover:bg-[#fff1e8] hover:text-[#a84420]"} onClick={() => update("venue", venue)}>{venueLabel(venue)}</Button>)}</div></div><div className="space-y-2 sm:col-span-2 xl:col-span-4"><div className="flex items-center justify-between gap-3"><Label>比較するWeek</Label><span className="text-xs font-medium text-slate-500">{value.weeks.length} Week選択中</span></div>{weeksLoading ? <div className="h-20 rounded-lg border border-slate-200 bg-slate-50" /> : availableWeeks.length ? <><div className="mt-2 flex gap-2"><Button type="button" size="sm" variant="outline" onClick={() => onChange({ ...value, weeks: availableWeeks.map(item => item.week) })}>全選択</Button><Button type="button" size="sm" variant="ghost" onClick={() => onChange({ ...value, weeks: [] })}>クリア</Button></div><div className="mt-3 flex flex-wrap gap-2">{Array.from({ length: 18 }, (_, index) => index + 1).map(week => { const info = availableWeeks.find(item => item.week === week); const selectable = selectableWeeks.has(week); const selected = value.weeks.includes(week); const bye = info?.isBye === true; return <Button key={week} type="button" size="sm" variant={selected ? "default" : "outline"} disabled={!selectable} aria-pressed={selected} title={bye ? `Week ${week} · Bye（試合なし）` : selectable ? `Week ${week}` : "開催地条件に一致する試合なし"} className={selected ? "min-w-11 bg-[#e85d2a] text-white shadow-sm hover:bg-[#c84b21]" : bye ? "min-w-11 border-dashed border-slate-400 text-slate-500 hover:border-[#e85d2a] hover:bg-[#fff1e8]" : "min-w-11 hover:border-[#e85d2a] hover:bg-[#fff1e8] hover:text-[#a84420]"} onClick={() => toggleWeek(week)}>{bye ? <><span>W{week}</span><span className="ml-1 text-[9px] opacity-75">Bye</span></> : `W${week}`}</Button>; })}</div></> : <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50 px-3 py-2.5 text-sm text-slate-500">選択可能なWeekはありません</div>}</div></div></div></section>;
+  const selectableList = availableWeeks.filter(item => item.hasStats || item.isBye);
+
+  return <section className="rounded-[1.6rem] p-px shadow-[0_18px_45px_rgba(14,19,31,0.16)]" style={{ backgroundImage: `linear-gradient(135deg, ${brand?.primary ?? "#1f2e50"}, ${brand?.accent ?? "#e85d2a"})` }}><div className="rounded-[1.55rem] bg-white/[.97] p-5 sm:p-6"><div className="mb-5 flex items-start"><div className="flex items-center gap-3"><MemoTeamMark code={value.team} /><div><p className="text-[10px] font-bold tracking-[.18em] text-slate-500">{title}</p><p className="mt-1 text-xs text-slate-400">{team?.name ?? "独立した比較条件"}</p></div></div></div><div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4"><div className="space-y-2"><Label>シーズン</Label><Select value={String(value.season)} onValueChange={item => update("season", item)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent className="bg-white z-50 border border-slate-200 shadow-xl">{seasons.map(year => <SelectItem key={year} value={String(year)}>{year} Season</SelectItem>)}</SelectContent></Select></div><div className="space-y-2 sm:col-span-2"><Label>チーム</Label><Select value={value.team} onValueChange={item => update("team", item)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent className="bg-white z-50 border border-slate-200 shadow-xl">{teams.map(item => <SelectItem key={item.code} value={item.code}><span className="flex items-center gap-2"><MemoTeamMark code={item.code} size="sm" /><span>{item.name}</span></span></SelectItem>)}</SelectContent></Select></div><div className="space-y-2"><Label>開催地</Label><div className="flex rounded-lg border border-slate-200 bg-slate-50 p-1" role="group" aria-label="開催地フィルター">{(["all", "home", "away"] as VenueFilter[]).map(venue => <Button key={venue} type="button" size="sm" variant={value.venue === venue ? "default" : "ghost"} className={value.venue === venue ? "flex-1 bg-[#e85d2a] px-2 text-xs text-white shadow-sm hover:bg-[#c84b21]" : "flex-1 px-2 text-xs hover:bg-[#fff1e8] hover:text-[#a84420]"} onClick={() => update("venue", venue)}>{venueLabel(venue)}</Button>)}</div></div><div className="space-y-2 sm:col-span-2 xl:col-span-4"><div className="flex items-center justify-between gap-3"><Label>比較するWeek</Label><span className="text-xs font-medium text-slate-500">{value.weeks.length} Week選択中</span></div>{weeksLoading ? <div className="h-20 rounded-lg border border-slate-200 bg-slate-50" /> : availableWeeks.length ? <><div className="mt-2 flex gap-2"><Button type="button" size="sm" variant="outline" onClick={() => onChange({ ...value, weeks: selectableList.map(item => item.week) })}>全選択</Button><Button type="button" size="sm" variant="ghost" onClick={() => onChange({ ...value, weeks: [] })}>クリア</Button></div><div className="mt-3 flex flex-wrap gap-2">{Array.from({ length: 18 }, (_, index) => index + 1).map(week => {
+    const info = availableWeeks.find(item => item.week === week);
+    const isBye = info?.isBye === true;
+    const hasStats = info?.hasStats ?? false;
+    const selectable = Boolean(info && (hasStats || isBye));
+    const selected = value.weeks.includes(week);
+
+    let titleText = `Week ${week}`;
+    if (!info) {
+      titleText = "開催地条件に一致する試合なし";
+    } else if (isBye) {
+      titleText = `Week ${week} · Bye（試合なし）`;
+    } else if (!hasStats) {
+      titleText = `Week ${week} · 試合未終了（未開催）`;
+    }
+
+    let buttonClass = "min-w-11 ";
+    if (selected) {
+      buttonClass += "bg-[#e85d2a] text-white shadow-sm hover:bg-[#c84b21]";
+    } else if (isBye) {
+      buttonClass += "border-dashed border-slate-400 text-slate-500 hover:border-[#e85d2a] hover:bg-[#fff1e8]";
+    } else if (!selectable) {
+      buttonClass += "opacity-40 cursor-not-allowed bg-slate-100 text-slate-400 border-slate-200";
+    } else {
+      buttonClass += "hover:border-[#e85d2a] hover:bg-[#fff1e8] hover:text-[#a84420]";
+    }
+
+    return (
+      <Button
+        key={week}
+        type="button"
+        size="sm"
+        variant={selected ? "default" : "outline"}
+        disabled={!selectable}
+        aria-pressed={selected}
+        title={titleText}
+        className={buttonClass}
+        onClick={() => toggleWeek(week)}
+      >
+        {isBye ? (
+          <>
+            <span>W{week}</span>
+            <span className="ml-1 text-[9px] opacity-75">Bye</span>
+          </>
+        ) : (
+          `W${week}`
+        )}
+      </Button>
+    );
+  })}</div></> : <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50 px-3 py-2.5 text-sm text-slate-500">選択可能なWeekはありません</div>}</div></div></div></section>;
 }
 const MemoSelectPanel = memo(SelectPanel);
 
@@ -72,9 +126,9 @@ export default function Fieldline() {
   const utils = trpc.useUtils();
   const { data: teams = [] } = trpc.fieldline.teams.useQuery(undefined, staticQueryOptions);
   const { data: imports = [], isLoading: seasonsLoading } = trpc.fieldline.seasons.useQuery(undefined, staticQueryOptions);
-  const seasons = useMemo(() => { const currentYear = Math.max(2025, new Date().getFullYear()); const selectableYears = Array.from({ length: currentYear - 2024 }, (_, index) => 2025 + index); return Array.from(new Set([...selectableYears, ...imports.map(item => item.season)])).sort((a, b) => b - a); }, [imports]);
-  const [left, setLeft] = useState<Selection>(() => ({ season: 2025, team: getStoredTeam("left", "NE"), weeks: [], venue: "all" }));
-  const [right, setRight] = useState<Selection>(() => ({ season: 2025, team: getStoredTeam("right", "BUF"), weeks: [], venue: "all" }));
+  const seasons = useMemo(() => { const currentYear = Math.max(2026, new Date().getFullYear()); const selectableYears = Array.from({ length: currentYear - 2024 }, (_, index) => 2025 + index); return Array.from(new Set([...selectableYears, ...imports.map(item => item.season)])).sort((a, b) => b - a); }, [imports]);
+  const [left, setLeft] = useState<Selection>(() => ({ season: 2026, team: getStoredTeam("left", "DAL"), weeks: [], venue: "all" }));
+  const [right, setRight] = useState<Selection>(() => ({ season: 2026, team: getStoredTeam("right", "SEA"), weeks: [], venue: "all" }));
   const freshnessInput = useMemo(() => ({ seasons: [left.season] }), [left.season]);
   const freshness = trpc.fieldline.freshness.useQuery(freshnessInput, { ...weekQueryOptions, refetchInterval: 5 * 60_000 });
   const leftWeekInput = useMemo(() => ({ season: left.season, team: left.team, venue: left.venue }), [left.season, left.team, left.venue]);
@@ -83,10 +137,49 @@ export default function Fieldline() {
   const leftWeeks = leftWeeksQuery.data ?? []; const rightWeeks = rightWeeksQuery.data ?? [];
   const leftInitialWeeks = useRef(true); const rightInitialWeeks = useRef(true); const leftVenueChange = useRef(false); const rightVenueChange = useRef(false); const prefetched = useRef(false);
   useEffect(() => { try { window.localStorage.setItem(storageKey, JSON.stringify({ leftTeam: left.team, rightTeam: right.team })); } catch { /* storage is optional */ } }, [left.team, right.team]);
-  useEffect(() => { if (!seasons.includes(left.season)) setLeft(item => ({ ...item, season: seasons[0] ?? 2025 })); if (!seasons.includes(right.season)) setRight(item => ({ ...item, season: seasons[0] ?? 2025 })); }, [seasons, left.season, right.season]);
-  useEffect(() => { if (!leftWeeksQuery.isFetching && leftWeeks.length) { const playable = new Set(leftWeeks.map(item => item.week)); let weeks = left.weeks.filter(week => playable.has(week)); if (leftInitialWeeks.current) { weeks = leftWeeks.map(item => item.week); leftInitialWeeks.current = false; } else if (!weeks.length && leftVenueChange.current) weeks = [leftWeeks.find(item => !item.isBye)?.week ?? leftWeeks[0]!.week]; if (weeks.join(",") !== left.weeks.join(",")) setLeft(item => ({ ...item, weeks })); leftVenueChange.current = false; } }, [leftWeeks, leftWeeksQuery.isFetching, left.weeks]);
-  useEffect(() => { if (!rightWeeksQuery.isFetching && rightWeeks.length) { const playable = new Set(rightWeeks.map(item => item.week)); let weeks = right.weeks.filter(week => playable.has(week)); if (rightInitialWeeks.current) { weeks = rightWeeks.map(item => item.week); rightInitialWeeks.current = false; } else if (!weeks.length && rightVenueChange.current) weeks = [rightWeeks.find(item => !item.isBye)?.week ?? rightWeeks[0]!.week]; if (weeks.join(",") !== right.weeks.join(",")) setRight(item => ({ ...item, weeks })); rightVenueChange.current = false; } }, [rightWeeks, rightWeeksQuery.isFetching, right.weeks]);
-  useEffect(() => { if (prefetched.current || !leftWeeks.length || !rightWeeks.length) return; prefetched.current = true; void utils.fieldline.compare.prefetch({ left: { ...left, weeks: left.weeks.length ? left.weeks : leftWeeks.map(item => item.week) }, right: { ...right, weeks: right.weeks.length ? right.weeks : rightWeeks.map(item => item.week) } }); }, [left, leftWeeks, right, rightWeeks, utils.fieldline.compare]);
+  useEffect(() => { if (!seasons.includes(left.season)) setLeft(item => ({ ...item, season: seasons[0] ?? 2026 })); if (!seasons.includes(right.season)) setRight(item => ({ ...item, season: seasons[0] ?? 2026 })); }, [seasons, left.season, right.season]);
+  useEffect(() => {
+    if (!leftWeeksQuery.isFetching && leftWeeks.length) {
+      const selectableList = leftWeeks.filter(item => item.hasStats || item.isBye);
+      const playable = new Set(selectableList.map(item => item.week));
+      let weeks = left.weeks.filter(week => playable.has(week));
+      if (leftInitialWeeks.current) {
+        const playedWeeks = leftWeeks.filter(item => item.hasStats).map(item => item.week);
+        weeks = playedWeeks.length ? playedWeeks : selectableList.map(item => item.week);
+        leftInitialWeeks.current = false;
+      } else if (!weeks.length && leftVenueChange.current) {
+        weeks = [leftWeeks.find(item => item.hasStats)?.week ?? leftWeeks.find(item => !item.isBye)?.week ?? leftWeeks[0]!.week];
+      }
+      if (weeks.join(",") !== left.weeks.join(",")) setLeft(item => ({ ...item, weeks }));
+      leftVenueChange.current = false;
+    }
+  }, [leftWeeks, leftWeeksQuery.isFetching, left.weeks]);
+  useEffect(() => {
+    if (!rightWeeksQuery.isFetching && rightWeeks.length) {
+      const selectableList = rightWeeks.filter(item => item.hasStats || item.isBye);
+      const playable = new Set(selectableList.map(item => item.week));
+      let weeks = right.weeks.filter(week => playable.has(week));
+      if (rightInitialWeeks.current) {
+        const playedWeeks = rightWeeks.filter(item => item.hasStats).map(item => item.week);
+        weeks = playedWeeks.length ? playedWeeks : selectableList.map(item => item.week);
+        rightInitialWeeks.current = false;
+      } else if (!weeks.length && rightVenueChange.current) {
+        weeks = [rightWeeks.find(item => item.hasStats)?.week ?? rightWeeks.find(item => !item.isBye)?.week ?? rightWeeks[0]!.week];
+      }
+      if (weeks.join(",") !== right.weeks.join(",")) setRight(item => ({ ...item, weeks }));
+      rightVenueChange.current = false;
+    }
+  }, [rightWeeks, rightWeeksQuery.isFetching, right.weeks]);
+  useEffect(() => {
+    if (prefetched.current || !leftWeeks.length || !rightWeeks.length) return;
+    prefetched.current = true;
+    const leftPlayable = leftWeeks.filter(item => item.hasStats).map(item => item.week);
+    const rightPlayable = rightWeeks.filter(item => item.hasStats).map(item => item.week);
+    void utils.fieldline.compare.prefetch({
+      left: { ...left, weeks: left.weeks.length ? left.weeks : (leftPlayable.length ? leftPlayable : leftWeeks.map(item => item.week)) },
+      right: { ...right, weeks: right.weeks.length ? right.weeks : (rightPlayable.length ? rightPlayable : rightWeeks.map(item => item.week)) }
+    });
+  }, [left, leftWeeks, right, rightWeeks, utils.fieldline.compare]);
   const deferredLeft = useDebouncedSelection(left); const deferredRight = useDebouncedSelection(right);
   const compareInput = useMemo(() => ({ left: deferredLeft, right: deferredRight }), [deferredLeft, deferredRight]);
   const missingWeeks = !left.weeks.length || !right.weeks.length; const selectionsInSync = deferredLeft === left && deferredRight === right; const leftReady = !leftWeeksQuery.isFetching && left.weeks.every(week => leftWeeks.some(item => item.week === week)); const rightReady = !rightWeeksQuery.isFetching && right.weeks.every(week => rightWeeks.some(item => item.week === week));
@@ -96,5 +189,6 @@ export default function Fieldline() {
   const onLeftVenue = useCallback((venue: VenueFilter) => { leftVenueChange.current = true; setLeft(item => ({ ...item, venue, weeks: [] })); }, []);
   const onRightVenue = useCallback((venue: VenueFilter) => { rightVenueChange.current = true; setRight(item => ({ ...item, venue, weeks: [] })); }, []);
   const lastUpdated = freshness.data?.[0]?.lastUpdatedAt;
+
   return <div className="fieldline-hub-surface min-h-screen text-slate-900"><EmbeddedAppNav current="FIELDLINE" /><header className="border-b border-white/10 bg-[#101827] text-white"><div className="container flex min-h-20 items-center justify-center"><div className="flex items-center gap-3"><div className="grid h-10 w-10 place-items-center rounded-xl bg-gradient-to-br from-[#f2bc62] to-[#e85d2a] shadow-lg"><Trophy className="h-5 w-5 text-[#101827]" /></div><div><h1 className="font-display text-xl tracking-tight">Fieldline</h1><p className="text-[10px] font-medium tracking-[.18em] text-slate-400">NFL TEAM COMPARATOR</p></div></div></div></header>{formatLastUpdatedAt(lastUpdated) && <div className="container flex h-6 items-center justify-end"><p className="text-right text-[10px] text-slate-400">最終更新: <time dateTime={new Date(lastUpdated!).toISOString()}>{formatLastUpdatedAt(lastUpdated)}</time></p></div>}<main className="container mx-auto max-w-6xl px-4 pt-1 pb-6 sm:px-6 sm:pt-2 sm:pb-8">{seasonsLoading ? <Card><CardContent className="py-8 text-center text-sm text-slate-500">シーズン情報を読み込んでいます。</CardContent></Card> : <><div className="mb-5 rounded-2xl border border-[#e5dcc8] bg-[#fffdf7] px-5 py-3 text-sm text-slate-600"><CalendarRange className="mr-2 inline h-4 w-4 text-[#9a7530]" />Week 1〜18から任意の複数Weekと開催地を選ぶと、条件に合う試合だけを合算して比較します。Bye Weekも選択できますが、試合数・勝敗数・ゲーム平均の分母には含めません。</div><div className="space-y-3"><MemoSelectPanel title="LEFT COMPARISON" side="left" value={left} onChange={setLeft} onVenueChange={onLeftVenue} onDatasetChange={() => { leftInitialWeeks.current = true; }} teams={teams} seasons={seasons} availableWeeks={leftWeeks} weeksLoading={leftWeeksQuery.isLoading} /><div className="flex items-center gap-3 px-2"><Separator className="flex-1" /><span className="grid h-9 w-9 place-items-center rounded-full border border-slate-200 bg-white shadow-sm"><ArrowLeftRight className="h-4 w-4 text-slate-500" /></span><Separator className="flex-1" /></div><MemoSelectPanel title="RIGHT COMPARISON" side="right" value={right} onChange={setRight} onVenueChange={onRightVenue} onDatasetChange={() => { rightInitialWeeks.current = true; }} teams={teams} seasons={seasons} availableWeeks={rightWeeks} weeksLoading={rightWeeksQuery.isLoading} /></div></>}<section className="mt-8"><div className="mb-3 flex justify-end">{comparison.data?.left.available && comparison.data?.right.available && <p className="text-xs text-slate-400">{comparison.data.left.summary.games} games <span className="mx-1">/</span> {comparison.data.right.summary.games}</p>}</div>{noWeeks ? <Card className="border-dashed border-slate-300 bg-slate-50/75"><CardContent className="py-12 text-center"><p className="text-sm font-semibold text-slate-700">選択した年には、比較可能なレギュラーシーズンWeekがまだありません。</p><p className="mt-2 text-sm text-slate-500">試合データの公開・取込後に、Week選択肢が自動的に表示されます。</p></CardContent></Card> : missingWeeks ? <Card className="border-dashed border-slate-300 bg-slate-50/75"><CardContent className="py-12 text-center text-sm text-slate-500">左右それぞれで比較するWeekを1つ以上選択してください。</CardContent></Card> : pending ? <ComparisonSkeleton /> : <ComparisonTable data={comparison.data} />}</section></main></div>;
 }
