@@ -3898,12 +3898,82 @@ async function getFieldlineWeeks(season, team, venue = "all") {
   return weekCache.getOrCreate(key, async () => {
     const db = await getDb();
     if (!db) return [];
-    const rows = await db.select({ week: teamWeekStats.week, games: teamWeekStats.games, opponent: teamWeekMatchups.opponent, isHome: teamWeekMatchups.isHome }).from(teamWeekStats).leftJoin(teamWeekMatchups, and2(
-      eq2(teamWeekMatchups.season, teamWeekStats.season),
-      eq2(teamWeekMatchups.team, teamWeekStats.team),
-      eq2(teamWeekMatchups.week, teamWeekStats.week)
-    )).where(and2(eq2(teamWeekStats.season, season), eq2(teamWeekStats.team, normalizedTeamCode)));
-    return rows.filter((row) => row.games === 0 || venue === "all" || row.isHome === (venue === "home")).map((row) => ({ week: row.week, opponent: row.opponent ?? "", isHome: row.isHome ?? null, isBye: row.games === 0 })).sort((a, b) => a.week - b.week);
+    const scheduledGames = await db.select({
+      weekLabel: officialGames.weekLabel,
+      opponentCode: officialGames.opponentCode,
+      homeAway: officialGames.homeAway
+    }).from(officialGames).where(and2(
+      eq2(officialGames.teamCode, normalizedTeamCode),
+      eq2(officialGames.seasonPhase, "regular")
+    ));
+    const scheduleByWeek = /* @__PURE__ */ new Map();
+    for (const game of scheduledGames) {
+      const match = game.weekLabel?.match(/WEEK\s*(\d+)/i);
+      if (match) {
+        const weekNum = Number.parseInt(match[1], 10);
+        if (weekNum >= 1 && weekNum <= 18) {
+          scheduleByWeek.set(weekNum, {
+            opponent: game.opponentCode ?? "",
+            isHome: game.homeAway === "home"
+          });
+        }
+      }
+    }
+    const statsRows = await db.select({
+      week: teamWeekStats.week,
+      games: teamWeekStats.games
+    }).from(teamWeekStats).where(and2(
+      eq2(teamWeekStats.season, season),
+      eq2(teamWeekStats.team, normalizedTeamCode)
+    ));
+    const statsByWeek = /* @__PURE__ */ new Map();
+    for (const row of statsRows) {
+      statsByWeek.set(row.week, row.games);
+    }
+    const matchupsByWeek = /* @__PURE__ */ new Map();
+    if (scheduleByWeek.size === 0) {
+      const matchupsRows = await db.select({
+        week: teamWeekMatchups.week,
+        opponent: teamWeekMatchups.opponent,
+        isHome: teamWeekMatchups.isHome
+      }).from(teamWeekMatchups).where(and2(
+        eq2(teamWeekMatchups.season, season),
+        eq2(teamWeekMatchups.team, normalizedTeamCode)
+      ));
+      for (const row of matchupsRows) {
+        matchupsByWeek.set(row.week, {
+          opponent: row.opponent ?? "",
+          isHome: row.isHome ?? null
+        });
+      }
+    }
+    const result = [];
+    for (let w = 1; w <= 18; w++) {
+      const schedule = scheduleByWeek.get(w);
+      const fallbackMatchup = matchupsByWeek.get(w);
+      const opponent = schedule?.opponent ?? fallbackMatchup?.opponent ?? "";
+      const isHome = schedule ? schedule.isHome : fallbackMatchup?.isHome ?? null;
+      let isBye = false;
+      if (scheduleByWeek.size > 0) {
+        isBye = !schedule;
+      } else {
+        const games = statsByWeek.get(w) ?? 0;
+        isBye = games === 0 && !opponent;
+      }
+      const gamesCount = statsByWeek.get(w) ?? 0;
+      const hasStats = gamesCount > 0;
+      if (venue !== "all" && !isBye && isHome !== null && isHome !== (venue === "home")) {
+        continue;
+      }
+      result.push({
+        week: w,
+        opponent,
+        isHome,
+        isBye,
+        hasStats
+      });
+    }
+    return result.sort((a, b) => a.week - b.week);
   });
 }
 function normalizeSelection(input) {
