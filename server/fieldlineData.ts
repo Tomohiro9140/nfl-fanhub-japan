@@ -1,6 +1,6 @@
 import { asyncBufferFromUrl, parquetReadObjects } from "hyparquet";
 import { and, eq, gt, inArray, max } from "drizzle-orm";
-import { seasonImports, seasonRefreshSchedules, teamWeekMatchups, teamWeekStats } from "../drizzle/schema";
+import { officialGames, seasonImports, seasonRefreshSchedules, teamWeekMatchups, teamWeekStats } from "../drizzle/schema";
 import { getDb } from "./db";
 import { ShortLivedPromiseCache } from "./fieldlineCache";
 
@@ -20,7 +20,7 @@ export const fieldlinePbpSource = (season: number) => `https://github.com/nflver
 
 export type FieldlineVenue = "all" | "home" | "away";
 export type FieldlineSelection = { season: number; team: string; weeks: number[]; venue?: FieldlineVenue };
-export type FieldlineWeek = { week: number; opponent: string; isHome: boolean | null; isBye: boolean };
+export type FieldlineWeek = { week: number; opponent: string; isHome: boolean | null; isBye: boolean; hasStats: boolean };
 type PbpRow = Record<string, unknown>;
 type Aggregate = {
   season: number; team: string; week: number; games: number; pointsFor: number; pointsAgainst: number;
@@ -209,10 +209,98 @@ export async function getFieldlineWeeks(season: number, team: string, venue: Fie
   return weekCache.getOrCreate(key, async () => {
     const db = await getDb();
     if (!db) return [];
-    const rows = await db.select({ week: teamWeekStats.week, games: teamWeekStats.games, opponent: teamWeekMatchups.opponent, isHome: teamWeekMatchups.isHome }).from(teamWeekStats).leftJoin(teamWeekMatchups, and(
-      eq(teamWeekMatchups.season, teamWeekStats.season), eq(teamWeekMatchups.team, teamWeekStats.team), eq(teamWeekMatchups.week, teamWeekStats.week),
-    )).where(and(eq(teamWeekStats.season, season), eq(teamWeekStats.team, normalizedTeamCode)));
-    return rows.filter(row => row.games === 0 || venue === "all" || row.isHome === (venue === "home")).map(row => ({ week: row.week, opponent: row.opponent ?? "", isHome: row.isHome ?? null, isBye: row.games === 0 })).sort((a, b) => a.week - b.week);
+
+    // 1. 公式レギュラーシーズンの全日程を取得（プレシーズン・Hall of Fame Game は除外）
+    const scheduledGames = await db.select({
+      weekLabel: officialGames.weekLabel,
+      opponentCode: officialGames.opponentCode,
+      homeAway: officialGames.homeAway,
+    }).from(officialGames).where(and(
+      eq(officialGames.teamCode, normalizedTeamCode),
+      eq(officialGames.seasonPhase, "regular")
+    ));
+
+    const scheduleByWeek = new Map<number, { opponent: string; isHome: boolean }>();
+    for (const game of scheduledGames) {
+      const match = game.weekLabel?.match(/WEEK\s*(\d+)/i);
+      if (match) {
+        const weekNum = Number.parseInt(match[1], 10);
+        if (weekNum >= 1 && weekNum <= 18) {
+          scheduleByWeek.set(weekNum, {
+            opponent: game.opponentCode ?? "",
+            isHome: game.homeAway === "home",
+          });
+        }
+      }
+    }
+
+    // 2. 集計済みスタッツを取得（消化試合数の判定用）
+    const statsRows = await db.select({
+      week: teamWeekStats.week,
+      games: teamWeekStats.games,
+    }).from(teamWeekStats).where(and(
+      eq(teamWeekStats.season, season),
+      eq(teamWeekStats.team, normalizedTeamCode)
+    ));
+    const statsByWeek = new Map<number, number>();
+    for (const row of statsRows) {
+      statsByWeek.set(row.week, row.games);
+    }
+
+    // 3. 過去シーズン等で officialGames にスケジュールがない場合のフォールバック
+    const matchupsByWeek = new Map<number, { opponent: string; isHome: boolean | null }>();
+    if (scheduleByWeek.size === 0) {
+      const matchupsRows = await db.select({
+        week: teamWeekMatchups.week,
+        opponent: teamWeekMatchups.opponent,
+        isHome: teamWeekMatchups.isHome,
+      }).from(teamWeekMatchups).where(and(
+        eq(teamWeekMatchups.season, season),
+        eq(teamWeekMatchups.team, normalizedTeamCode)
+      ));
+      for (const row of matchupsRows) {
+        matchupsByWeek.set(row.week, {
+          opponent: row.opponent ?? "",
+          isHome: row.isHome ?? null,
+        });
+      }
+    }
+
+    // 4. Week 1〜18 を生成
+    const result: FieldlineWeek[] = [];
+    for (let w = 1; w <= 18; w++) {
+      const schedule = scheduleByWeek.get(w);
+      const fallbackMatchup = matchupsByWeek.get(w);
+      const opponent = schedule?.opponent ?? fallbackMatchup?.opponent ?? "";
+      const isHome = schedule ? schedule.isHome : (fallbackMatchup?.isHome ?? null);
+
+      let isBye = false;
+      if (scheduleByWeek.size > 0) {
+        // 公式スケジュールが存在しない週のみが正規の Bye Week
+        isBye = !schedule;
+      } else {
+        const games = statsByWeek.get(w) ?? 0;
+        isBye = games === 0 && !opponent;
+      }
+
+      const gamesCount = statsByWeek.get(w) ?? 0;
+      const hasStats = gamesCount > 0;
+
+      // 開催地フィルター
+      if (venue !== "all" && !isBye && isHome !== null && isHome !== (venue === "home")) {
+        continue;
+      }
+
+      result.push({
+        week: w,
+        opponent,
+        isHome,
+        isBye,
+        hasStats,
+      });
+    }
+
+    return result.sort((a, b) => a.week - b.week);
   });
 }
 
