@@ -12,6 +12,7 @@ import { TRPCError } from "@trpc/server";
 import { atlasAwards, atlasBrowse, atlasCareer, atlasContracts, atlasFilters, atlasProfile, atlasResolveGameBookPlayers, atlasSearch, atlasSearchSuggestions, atlasStats } from "./atlasData";
 import { compareFieldlineSelections, FIELDLINE_TEAM_CODES, FIELDLINE_TEAM_NAMES, getFieldlineFreshness, getFieldlineRefreshSchedules, getFieldlineSeasons, getFieldlineWeeks, importFieldlineSeasonFromNflverse } from "./fieldlineData";
 import { getOfficialGameStats } from "./officialGameStats";
+import { playoffRouter } from "./playoffRouter";
 
 const fieldlineVenueSchema = z.enum(["all", "home", "away"]);
 const fieldlineSelectionSchema = z.object({
@@ -26,7 +27,7 @@ const fieldlineAdminProcedure = protectedProcedure.use(async ({ ctx, next }) => 
 });
 
 export const appRouter = router({
-    // if you need to use socket.io, read and register route in server/_core/index.ts, all api should start with '/api/' so that the gateway can route correctly
+  // if you need to use socket.io, read and register route in server/_core/index.ts, all api should start with '/api/' so that the gateway can route correctly
   system: systemRouter,
   auth: router({
     me: publicProcedure.query(opts => opts.ctx.user),
@@ -119,6 +120,7 @@ export const appRouter = router({
     refreshSchedules: fieldlineAdminProcedure.query(getFieldlineRefreshSchedules),
     importSeason: fieldlineAdminProcedure.input(z.object({ season: z.number().int().min(2025).max(2100) })).mutation(({ input, ctx }) => importFieldlineSeasonFromNflverse(input.season, ctx.user.openId)),
   }),
+  playoff: playoffRouter,
 });
 
 export type AppRouter = typeof appRouter;
