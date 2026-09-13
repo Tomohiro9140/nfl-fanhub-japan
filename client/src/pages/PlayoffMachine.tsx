@@ -8,19 +8,18 @@ import { fieldlineTeamBrand } from "@/lib/fieldlineTeams";
 import { NFL_TEAMS } from "@/lib/tiebreaker/nflTeams";
 import { calculateAllStandings } from "@/lib/tiebreaker/playoffEngine";
 import { generateRootingGuide } from "@/lib/tiebreaker/rootingGuide";
-import { PLAYOFF_SCENARIOS, ScenarioPreset } from "@/lib/tiebreaker/scenarios";
+import { PLAYOFF_SCENARIOS } from "@/lib/tiebreaker/scenarios";
 import { Conference, GameOutcome, PlayoffSeed, ScheduledGame } from "@/lib/tiebreaker/types";
 import {
-  AlertCircle,
-  ArrowRight,
   CheckCircle2,
-  ChevronRight,
   HelpCircle,
   Layers,
   RotateCcw,
   Sparkles,
   Trophy,
   X,
+  Flame,
+  Ban,
 } from "lucide-react";
 import { memo, useMemo, useState, useEffect } from "react";
 
@@ -31,7 +30,7 @@ function TeamMark({ code, size = "md" }: { code: string; size?: "sm" | "md" | "l
     <img
       src={brand.logo}
       alt={`${code} logo`}
-      className={`${dimension} shrink-0 object-contain drop-shadow-sm`}
+      className={`${dimension} shrink-0 object-contain drop-shadow-xs`}
       style={{ mixBlendMode: "multiply" }}
     />
   ) : (
@@ -43,7 +42,6 @@ function TeamMark({ code, size = "md" }: { code: string; size?: "sm" | "md" | "l
 const MemoTeamMark = memo(TeamMark);
 
 export default function PlayoffMachine() {
-  // 1. シナリオ選択（検証済みプリセット / 2026公式）
   const [selectedScenarioId, setSelectedScenarioId] = useState<string>("week12_race");
   const [focusTeam, setFocusTeam] = useState<string>("NE");
   const [selectedWeek, setSelectedWeek] = useState<number>(12);
@@ -51,16 +49,13 @@ export default function PlayoffMachine() {
   const [activeTab, setActiveTab] = useState<"simulator" | "rooting">("simulator");
   const [explanationModalSeed, setExplanationModalSeed] = useState<PlayoffSeed | null>(null);
 
-  // 公式スケジュールの取得
   const officialScheduleQuery = trpc.playoff.getSchedule.useQuery({ season: 2026 }, { staleTime: 10 * 60_000 });
 
-  // 試合データ（ローカルシミュレーション用）
   const [games, setGames] = useState<ScheduledGame[]>(() => {
     const preset = PLAYOFF_SCENARIOS.find((s) => s.id === "week12_race");
     return preset ? preset.games : [];
   });
 
-  // シナリオ切り替えハンドラー
   const handleScenarioChange = (scenarioId: string) => {
     setSelectedScenarioId(scenarioId);
     if (scenarioId === "official_2026") {
@@ -77,35 +72,53 @@ export default function PlayoffMachine() {
     }
   };
 
-  // 公式スケジュールがロード完了した際に公式シナリオが選ばれていれば反映
   useEffect(() => {
     if (selectedScenarioId === "official_2026" && officialScheduleQuery.data?.games) {
       setGames(officialScheduleQuery.data.games as ScheduledGame[]);
     }
   }, [officialScheduleQuery.data, selectedScenarioId]);
 
-  // 勝敗トグル処理
   const toggleOutcome = (gameId: number, target: "home" | "away" | "tie") => {
     setGames((prev) =>
       prev.map((g) => {
         if (g.id !== gameId) return g;
-        // 既に同じ結果が選択されていた場合はクリア、それ以外は切り替え
         const newOutcome: GameOutcome | undefined = g.outcome === target ? undefined : target;
         return { ...g, outcome: newOutcome };
       })
     );
   };
 
-  // 指定週の試合リセット
   const resetWeekOutcomes = (weekNum: number) => {
     setGames((prev) => prev.map((g) => (g.week === weekNum ? { ...g, outcome: undefined } : g)));
   };
 
-  // タイブレーカーエンジンによる即時シード計算
   const standings = useMemo(() => calculateAllStandings(games), [games]);
   const currentConfStandings = standings[activeConf];
 
-  // 週間応援ガイドの生成
+  // In the Hunt と Eliminated の数学的分類
+  const { inTheHuntTeams, eliminatedTeams } = useMemo(() => {
+    // 第7シードの現時点の勝ち星
+    const seed7Wins = currentConfStandings.wildCards[2]?.record.wins ?? 0;
+
+    const inTheHunt: PlayoffSeed[] = [];
+    const eliminated: PlayoffSeed[] = [];
+
+    for (const team of currentConfStandings.inTheHunt) {
+      const played = team.record.wins + team.record.losses + team.record.ties;
+      const remainingGames = Math.max(0, 17 - played);
+      const maxPossibleWins = team.record.wins + remainingGames;
+
+      // 残り試合全勝でも第7シードの現勝利数に届かない場合は完全敗退
+      if (maxPossibleWins < seed7Wins) {
+        eliminated.push(team);
+      } else {
+        inTheHunt.push(team);
+      }
+    }
+
+    return { inTheHuntTeams: inTheHunt, eliminatedTeams: eliminated };
+  }, [currentConfStandings]);
+
   const rootingGuide = useMemo(
     () => generateRootingGuide(focusTeam, games, selectedWeek),
     [focusTeam, games, selectedWeek]
@@ -138,9 +151,8 @@ export default function PlayoffMachine() {
       </header>
 
       {/* コントロールバー */}
-      <div className="border-b border-slate-200 bg-white shadow-sm">
+      <div className="border-b border-slate-200 bg-white shadow-xs">
         <div className="container mx-auto grid gap-4 px-4 py-4 sm:px-6 md:grid-cols-3">
-          {/* シナリオ選択 */}
           <div>
             <Label className="text-xs font-semibold text-slate-600">検証シナリオ・プリセット</Label>
             <Select value={selectedScenarioId} onValueChange={handleScenarioChange}>
@@ -158,7 +170,6 @@ export default function PlayoffMachine() {
             </Select>
           </div>
 
-          {/* 応援チーム選択 */}
           <div>
             <Label className="text-xs font-semibold text-slate-600">あなたの応援チーム（Focus）</Label>
             <Select
@@ -186,7 +197,6 @@ export default function PlayoffMachine() {
             </Select>
           </div>
 
-          {/* 閲覧・シミュレーションWeek選択 */}
           <div>
             <div className="flex items-center justify-between">
               <Label className="text-xs font-semibold text-slate-600">対象 Week</Label>
@@ -197,7 +207,7 @@ export default function PlayoffMachine() {
                 onClick={() => resetWeekOutcomes(selectedWeek)}
               >
                 <RotateCcw className="mr-1 h-3 w-3" />
-                この週のトグルをリセット
+                トグルをリセット
               </Button>
             </div>
             <div className="mt-1 flex gap-1 overflow-x-auto pb-1">
@@ -208,7 +218,7 @@ export default function PlayoffMachine() {
                   onClick={() => setSelectedWeek(w)}
                   className={`flex h-8 min-w-[2.2rem] items-center justify-center rounded-lg text-xs font-semibold transition-all ${
                     selectedWeek === w
-                      ? "bg-[#e85d2a] text-white shadow-sm"
+                      ? "bg-[#e85d2a] text-white shadow-xs"
                       : "bg-slate-100 text-slate-600 hover:bg-slate-200"
                   }`}
                 >
@@ -223,9 +233,9 @@ export default function PlayoffMachine() {
       {/* メインレイアウト */}
       <main className="container mx-auto mt-6 px-4 sm:px-6">
         <div className="grid gap-6 lg:grid-cols-12">
-          {/* 左カラム: シード順位表（7カラム） */}
+          {/* 左カラム: シード順位表 */}
           <div className="space-y-6 lg:col-span-7">
-            <Card className="border-slate-200 shadow-sm">
+            <Card className="border-slate-200 shadow-xs">
               <CardHeader className="flex flex-row items-center justify-between border-b border-slate-100 pb-3">
                 <div className="flex items-center gap-2">
                   <Layers className="h-5 w-5 text-[#e85d2a]" />
@@ -249,7 +259,7 @@ export default function PlayoffMachine() {
                 </div>
               </CardHeader>
               <CardContent className="p-0">
-                {/* 地区優勝（#1〜#4） */}
+                {/* 地区首位（#1〜#4） */}
                 <div className="border-b border-slate-100 bg-slate-50/70 px-4 py-2 text-[11px] font-bold tracking-wider text-slate-500">
                   DIVISION LEADERS (#1〜#4)
                 </div>
@@ -264,7 +274,7 @@ export default function PlayoffMachine() {
                   ))}
                 </div>
 
-                {/* ワイルドカード進出圏内（#5〜#7） */}
+                {/* ワイルドカード（#5〜#7） */}
                 <div className="border-y border-slate-100 bg-amber-50/50 px-4 py-2 text-[11px] font-bold tracking-wider text-amber-800">
                   WILD CARD (#5〜#7)
                 </div>
@@ -279,27 +289,52 @@ export default function PlayoffMachine() {
                   ))}
                 </div>
 
-                {/* 圏外・追撃チーム（#8〜#16） */}
-                <div className="border-y border-slate-100 bg-slate-50/70 px-4 py-2 text-[11px] font-bold tracking-wider text-slate-500">
-                  IN THE HUNT / ELIMINATED (#8〜#16)
+                {/* プレーオフ追撃圏内 (IN THE HUNT) */}
+                <div className="flex items-center gap-1.5 border-y border-slate-100 bg-blue-50/50 px-4 py-2 text-[11px] font-bold tracking-wider text-blue-800">
+                  <Flame className="h-3.5 w-3.5 text-blue-600" />
+                  IN THE HUNT (進出可能性あり)
                 </div>
                 <div className="divide-y divide-slate-100">
-                  {currentConfStandings.inTheHunt.map((team) => (
-                    <SeedRow
-                      key={team.team}
-                      seed={team}
-                      isFocus={team.team === focusTeam}
-                      onExplainClick={() => setExplanationModalSeed(team)}
-                    />
-                  ))}
+                  {inTheHuntTeams.length > 0 ? (
+                    inTheHuntTeams.map((team) => (
+                      <SeedRow
+                        key={team.team}
+                        seed={team}
+                        isFocus={team.team === focusTeam}
+                        onExplainClick={() => setExplanationModalSeed(team)}
+                      />
+                    ))
+                  ) : (
+                    <div className="px-4 py-3 text-xs text-slate-400">該当球団なし</div>
+                  )}
                 </div>
+
+                {/* プレーオフ完全敗退 (ELIMINATED) */}
+                {eliminatedTeams.length > 0 && (
+                  <>
+                    <div className="flex items-center gap-1.5 border-y border-slate-100 bg-slate-100/70 px-4 py-2 text-[11px] font-bold tracking-wider text-slate-500">
+                      <Ban className="h-3.5 w-3.5 text-rose-500" />
+                      ELIMINATED (完全敗退決定)
+                    </div>
+                    <div className="divide-y divide-slate-100 opacity-60">
+                      {eliminatedTeams.map((team) => (
+                        <SeedRow
+                          key={team.team}
+                          seed={team}
+                          isFocus={team.team === focusTeam}
+                          isEliminated={true}
+                          onExplainClick={() => setExplanationModalSeed(team)}
+                        />
+                      ))}
+                    </div>
+                  </>
+                )}
               </CardContent>
             </Card>
           </div>
 
-          {/* 右カラム: 週間応援ガイド & 試合トグル（5カラム） */}
+          {/* 右カラム: 週間応援ガイド & 試合トグル */}
           <div className="space-y-6 lg:col-span-5">
-            {/* タブ切り替え */}
             <div className="flex rounded-xl border border-slate-200 bg-white p-1 shadow-xs">
               <button
                 type="button"
@@ -329,10 +364,10 @@ export default function PlayoffMachine() {
 
             {/* タブ 1: 試合勝敗トグル */}
             {activeTab === "simulator" && (
-              <Card className="border-slate-200 shadow-sm">
+              <Card className="border-slate-200 shadow-xs">
                 <CardHeader className="border-b border-slate-100 pb-3">
                   <CardTitle className="text-sm font-bold text-slate-800">
-                    Week {selectedWeek} 対戦カード（タップして結果を切り替え）
+                    Week {selectedWeek} 対戦カード（全{weekGames.length}試合）
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-3 p-4">
@@ -346,7 +381,6 @@ export default function PlayoffMachine() {
                         key={game.id}
                         className="flex items-center justify-between rounded-xl border border-slate-200 bg-white p-2.5 transition-all hover:border-slate-300 shadow-xs"
                       >
-                        {/* アウェーチームボタン */}
                         <button
                           type="button"
                           onClick={() => toggleOutcome(game.id, "away")}
@@ -363,7 +397,6 @@ export default function PlayoffMachine() {
                           </div>
                         </button>
 
-                        {/* 引分ボタン / VS */}
                         <div className="px-1 text-center">
                           <button
                             type="button"
@@ -379,7 +412,6 @@ export default function PlayoffMachine() {
                           </button>
                         </div>
 
-                        {/* ホームチームボタン */}
                         <button
                           type="button"
                           onClick={() => toggleOutcome(game.id, "home")}
@@ -404,7 +436,7 @@ export default function PlayoffMachine() {
 
             {/* タブ 2: 週間応援ガイド */}
             {activeTab === "rooting" && (
-              <Card className="border-slate-200 shadow-sm">
+              <Card className="border-slate-200 shadow-xs">
                 <CardHeader className="border-b border-slate-100 pb-3">
                   <div className="flex items-center gap-2">
                     <MemoTeamMark code={focusTeam} size="sm" />
@@ -539,16 +571,15 @@ export default function PlayoffMachine() {
   );
 }
 
-/**
- * シード行コンポーネント
- */
 function SeedRow({
   seed,
   isFocus,
+  isEliminated = false,
   onExplainClick,
 }: {
   seed: PlayoffSeed;
   isFocus: boolean;
+  isEliminated?: boolean;
   onExplainClick: () => void;
 }) {
   const hasTiebreaker = seed.tiebreakerExplanations && seed.tiebreakerExplanations.length > 0;
@@ -562,11 +593,13 @@ function SeedRow({
       <div className="flex items-center gap-3">
         <span
           className={`flex h-6 w-6 items-center justify-center rounded-md text-xs font-bold ${
-            seed.seed <= 4
+            isEliminated
+              ? "bg-slate-200 text-slate-400 line-through"
+              : seed.seed <= 4
               ? "bg-[#101827] text-white"
               : seed.seed <= 7
               ? "bg-[#e85d2a] text-white"
-              : "bg-slate-200 text-slate-600"
+              : "bg-blue-100 text-blue-800"
           }`}
         >
           {seed.seed}
@@ -574,10 +607,17 @@ function SeedRow({
         <MemoTeamMark code={seed.team} size="sm" />
         <div>
           <div className="flex items-center gap-1.5">
-            <span className="text-xs font-bold text-slate-800">{seed.teamName}</span>
+            <span className={`text-xs font-bold ${isEliminated ? "text-slate-400 line-through" : "text-slate-800"}`}>
+              {seed.teamName}
+            </span>
             {seed.isDivisionWinner && (
               <span className="rounded bg-slate-100 px-1 py-0.2 text-[9px] font-semibold text-slate-600">
                 地区1位
+              </span>
+            )}
+            {isEliminated && (
+              <span className="rounded bg-rose-100 px-1 py-0.2 text-[9px] font-semibold text-rose-600">
+                敗退
               </span>
             )}
           </div>
