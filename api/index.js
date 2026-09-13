@@ -894,7 +894,14 @@ async function getOfficialLeagueCalendar(teamCode) {
       { id: -(index2 * 2 + 2), teamCode: score.homeTeamCode, opponentCode: score.awayTeamCode, homeAway: "home", seasonPhase: score.seasonPhase, weekLabel: score.weekLabel, kickoffAt, broadcast: null, sourceUrl: score.gameUrl, daznUrl: null, fetchedAt: score.fetchedAt, liveScoreboardFallback: !isOfficialFinal(score) && !score.kickoffAt }
     ];
   });
-  const calendar = selectRelevantCalendarGames([...games, ...liveScoreboardFallbacks], teamCode, now).map((game) => attachOfficialScore(game, rawResults));
+  const synchronizedGames = games.map((game) => {
+    const score = findOfficialScoreForGame(rawResults, game);
+    if (score?.kickoffAt) {
+      return { ...game, kickoffAt: score.kickoffAt };
+    }
+    return game;
+  });
+  const calendar = selectRelevantCalendarGames([...synchronizedGames, ...liveScoreboardFallbacks], teamCode, now).map((game) => attachOfficialScore(game, rawResults));
   const lastUpdatedAt = calendar.map((game) => game.fetchedAt).filter((value) => Boolean(value)).sort((a, b) => b.getTime() - a.getTime())[0];
   return { calendar, lastUpdatedAt };
 }
@@ -2524,7 +2531,7 @@ ${reference.text}
 }
 
 // server/routers.ts
-import { z as z2 } from "zod";
+import { z as z3 } from "zod";
 import { TRPCError as TRPCError3 } from "@trpc/server";
 
 // server/atlasData.ts
@@ -4307,12 +4314,91 @@ async function getOfficialGameStats(gameUrl) {
   return payload;
 }
 
+// server/playoffRouter.ts
+import { z as z2 } from "zod";
+import { and as and3, eq as eq3 } from "drizzle-orm";
+var playoffRouter = router({
+  /**
+   * レギュラーシーズン公式スケジュール（全272試合）と消化済み勝敗を取得
+   */
+  getSchedule: publicProcedure.input(
+    z2.object({
+      season: z2.number().int().default(2026)
+    }).optional()
+  ).query(async ({ input }) => {
+    const season = input?.season ?? 2026;
+    const db = await getDb();
+    if (!db) {
+      return { season, games: [] };
+    }
+    const scheduledRows = await db.select({
+      id: officialGames.id,
+      teamCode: officialGames.teamCode,
+      opponentCode: officialGames.opponentCode,
+      weekLabel: officialGames.weekLabel,
+      kickoffAt: officialGames.kickoffAt
+    }).from(officialGames).where(
+      and3(
+        eq3(officialGames.seasonPhase, "regular"),
+        eq3(officialGames.homeAway, "home")
+      )
+    );
+    const statsRows = await db.select({
+      team: teamWeekStats.team,
+      week: teamWeekStats.week,
+      games: teamWeekStats.games,
+      pointsFor: teamWeekStats.pointsFor,
+      pointsAgainst: teamWeekStats.pointsAgainst
+    }).from(teamWeekStats).where(eq3(teamWeekStats.season, season));
+    const statsMap = /* @__PURE__ */ new Map();
+    for (const row of statsRows) {
+      statsMap.set(`${row.team}_W${row.week}`, {
+        games: row.games,
+        pf: row.pointsFor,
+        pa: row.pointsAgainst
+      });
+    }
+    const games = scheduledRows.map((row) => {
+      const match = row.weekLabel?.match(/WEEK\s*(\d+)/i);
+      const week = match ? Number.parseInt(match[1], 10) : 1;
+      const homeStat = statsMap.get(`${row.teamCode}_W${week}`);
+      const awayStat = statsMap.get(`${row.opponentCode}_W${week}`);
+      const isFinished = Boolean(
+        homeStat && awayStat && homeStat.games > 0 && awayStat.games > 0
+      );
+      let outcome = void 0;
+      if (isFinished && homeStat) {
+        if (homeStat.pf > homeStat.pa) {
+          outcome = "home";
+        } else if (homeStat.pf < homeStat.pa) {
+          outcome = "away";
+        } else {
+          outcome = "tie";
+        }
+      }
+      return {
+        id: row.id,
+        season,
+        week,
+        homeTeam: row.teamCode,
+        awayTeam: row.opponentCode,
+        outcome,
+        isFinished
+      };
+    }).sort((a, b) => a.week - b.week || a.id - b.id);
+    return {
+      season,
+      games
+    };
+  })
+});
+
 // server/routers.ts
-var fieldlineVenueSchema = z2.enum(["all", "home", "away"]);
-var fieldlineSelectionSchema = z2.object({
-  season: z2.number().int().min(2025).max(2100),
-  team: z2.string().length(2).or(z2.string().length(3)),
-  weeks: z2.array(z2.number().int().min(1).max(18)).min(1).max(18),
+var fieldlineVenueSchema = z3.enum(["all", "home", "away"]);
+var fieldlineSelectionSchema = z3.object({
+  season: z3.number().int().min(2025).max(2100),
+  team: z3.string().length(2).or(z3.string().length(3)),
+  weeks: z3.array(z3.number().int().min(1).max(18)).min(1).max(18),
   venue: fieldlineVenueSchema.default("all")
 });
 var fieldlineAdminProcedure = protectedProcedure.use(async ({ ctx, next }) => {
@@ -4333,14 +4419,14 @@ var appRouter = router({
     })
   }),
   officialFeed: router({
-    byTeam: publicProcedure.input(z2.object({ teamCode: z2.string().length(2).or(z2.string().length(3)) })).query(async ({ input }) => {
+    byTeam: publicProcedure.input(z3.object({ teamCode: z3.string().length(2).or(z3.string().length(3)) })).query(async ({ input }) => {
       return getFreshOfficialTeamFeed(input.teamCode.toUpperCase());
     }),
-    refresh: publicProcedure.input(z2.object({ teamCode: z2.string().length(2).or(z2.string().length(3)) })).mutation(async ({ input }) => {
+    refresh: publicProcedure.input(z3.object({ teamCode: z3.string().length(2).or(z3.string().length(3)) })).mutation(async ({ input }) => {
       const count = await refreshOfficialTeamFeed(input.teamCode.toUpperCase());
       return { count };
     }),
-    japaneseSummary: publicProcedure.input(z2.object({ itemId: z2.number().int().positive() })).mutation(async ({ input }) => {
+    japaneseSummary: publicProcedure.input(z3.object({ itemId: z3.number().int().positive() })).mutation(async ({ input }) => {
       if (!NEWS_SUMMARIES_ENABLED) return { itemId: input.itemId, summary: null, generated: false, frozen: true };
       const item = await getOfficialFeedItemById(input.itemId);
       if (!item) throw new Error("Official news item was not found");
@@ -4356,7 +4442,7 @@ var appRouter = router({
       }
       return { itemId: item.id, summary: item.summary, generated: false };
     }),
-    englishSummary: publicProcedure.input(z2.object({ itemId: z2.number().int().positive() })).mutation(async ({ input }) => {
+    englishSummary: publicProcedure.input(z3.object({ itemId: z3.number().int().positive() })).mutation(async ({ input }) => {
       if (!NEWS_SUMMARIES_ENABLED) return { itemId: input.itemId, summary: null, generated: false, frozen: true };
       const item = await getOfficialFeedItemById(input.itemId);
       if (!item) throw new Error("Official news item was not found");
@@ -4374,36 +4460,36 @@ var appRouter = router({
     })
   }),
   teamSnapshot: router({
-    byTeam: publicProcedure.input(z2.object({ teamCode: z2.string().length(2).or(z2.string().length(3)), skipGameUrl: z2.string().url().optional(), forceLastGame: z2.boolean().optional(), includeRoster: z2.boolean().optional() })).query(({ input }) => {
+    byTeam: publicProcedure.input(z3.object({ teamCode: z3.string().length(2).or(z3.string().length(3)), skipGameUrl: z3.string().url().optional(), forceLastGame: z3.boolean().optional(), includeRoster: z3.boolean().optional() })).query(({ input }) => {
       return getCachedOfficialTeamSnapshot(input.teamCode, input.skipGameUrl, input.forceLastGame, input.includeRoster ?? true);
     })
   }),
   leagueDashboard: router({
     summary: publicProcedure.query(() => getCachedOfficialLeagueDashboardSummary()),
-    latestResult: publicProcedure.input(z2.object({ teamCode: z2.string().length(2).or(z2.string().length(3)) })).query(({ input }) => getCachedOfficialLatestResult(input.teamCode)),
-    calendar: publicProcedure.input(z2.object({ teamCode: z2.string().length(2).or(z2.string().length(3)) })).query(({ input }) => getCachedOfficialLeagueCalendar(input.teamCode))
+    latestResult: publicProcedure.input(z3.object({ teamCode: z3.string().length(2).or(z3.string().length(3)) })).query(({ input }) => getCachedOfficialLatestResult(input.teamCode)),
+    calendar: publicProcedure.input(z3.object({ teamCode: z3.string().length(2).or(z3.string().length(3)) })).query(({ input }) => getCachedOfficialLeagueCalendar(input.teamCode))
   }),
   gameStats: router({
-    byGameUrl: publicProcedure.input(z2.object({ gameUrl: z2.string().url().refine((value) => /^https:\/\/www\.nfl\.com\/games\//.test(value), "NFL\u516C\u5F0FGame Center URL\u304C\u5FC5\u8981\u3067\u3059\u3002") })).query(({ input }) => getOfficialGameStats(input.gameUrl))
+    byGameUrl: publicProcedure.input(z3.object({ gameUrl: z3.string().url().refine((value) => /^https:\/\/www\.nfl\.com\/games\//.test(value), "NFL\u516C\u5F0FGame Center URL\u304C\u5FC5\u8981\u3067\u3059\u3002") })).query(({ input }) => getOfficialGameStats(input.gameUrl))
   }),
   atlas: router({
-    filters: publicProcedure.input(z2.object({ team: z2.string().min(2).optional() }).optional()).query(({ input }) => atlasFilters(input?.team)),
-    searchSuggestions: publicProcedure.input(z2.object({ query: z2.string().trim().max(80) })).query(({ input }) => atlasSearchSuggestions(input.query)),
-    search: publicProcedure.input(z2.object({ query: z2.string().trim().max(80) })).query(({ input }) => atlasSearch(input.query)),
-    resolveGameBookPlayers: publicProcedure.input(z2.object({ entries: z2.array(z2.object({ team: z2.string().min(2).max(4), name: z2.string().trim().min(1).max(80) })).max(240) })).query(({ input }) => atlasResolveGameBookPlayers(input.entries)),
-    browse: publicProcedure.input(z2.object({ team: z2.string().min(2), position: z2.string().min(1).optional(), jersey: z2.string().trim().max(3).optional() })).query(({ input }) => atlasBrowse(input)),
-    profile: publicProcedure.input(z2.object({ playerId: z2.string().min(1) })).query(({ input }) => atlasProfile(input.playerId)),
-    career: publicProcedure.input(z2.object({ playerId: z2.string().min(1) })).query(({ input }) => atlasCareer(input.playerId)),
-    awards: publicProcedure.input(z2.object({ playerId: z2.string().min(1) })).query(({ input }) => atlasAwards(input.playerId)),
-    stats: publicProcedure.input(z2.object({ playerId: z2.string().min(1) })).query(({ input }) => atlasStats(input.playerId)),
-    contracts: publicProcedure.input(z2.object({ playerId: z2.string().min(1) })).query(({ input }) => atlasContracts(input.playerId))
+    filters: publicProcedure.input(z3.object({ team: z3.string().min(2).optional() }).optional()).query(({ input }) => atlasFilters(input?.team)),
+    searchSuggestions: publicProcedure.input(z3.object({ query: z3.string().trim().max(80) })).query(({ input }) => atlasSearchSuggestions(input.query)),
+    search: publicProcedure.input(z3.object({ query: z3.string().trim().max(80) })).query(({ input }) => atlasSearch(input.query)),
+    resolveGameBookPlayers: publicProcedure.input(z3.object({ entries: z3.array(z3.object({ team: z3.string().min(2).max(4), name: z3.string().trim().min(1).max(80) })).max(240) })).query(({ input }) => atlasResolveGameBookPlayers(input.entries)),
+    browse: publicProcedure.input(z3.object({ team: z3.string().min(2), position: z3.string().min(1).optional(), jersey: z3.string().trim().max(3).optional() })).query(({ input }) => atlasBrowse(input)),
+    profile: publicProcedure.input(z3.object({ playerId: z3.string().min(1) })).query(({ input }) => atlasProfile(input.playerId)),
+    career: publicProcedure.input(z3.object({ playerId: z3.string().min(1) })).query(({ input }) => atlasCareer(input.playerId)),
+    awards: publicProcedure.input(z3.object({ playerId: z3.string().min(1) })).query(({ input }) => atlasAwards(input.playerId)),
+    stats: publicProcedure.input(z3.object({ playerId: z3.string().min(1) })).query(({ input }) => atlasStats(input.playerId)),
+    contracts: publicProcedure.input(z3.object({ playerId: z3.string().min(1) })).query(({ input }) => atlasContracts(input.playerId))
   }),
   fieldline: router({
     teams: publicProcedure.query(() => FIELDLINE_TEAM_CODES.map((code) => ({ code, name: FIELDLINE_TEAM_NAMES[code] }))),
     seasons: publicProcedure.query(getFieldlineSeasons),
-    freshness: publicProcedure.input(z2.object({ seasons: z2.array(z2.number().int().min(2025).max(2100)).min(1).max(2) })).query(({ input }) => getFieldlineFreshness(input.seasons)),
-    weeks: publicProcedure.input(z2.object({ season: z2.number().int().min(2025).max(2100), team: z2.string().length(2).or(z2.string().length(3)), venue: fieldlineVenueSchema.default("all") })).query(({ input }) => getFieldlineWeeks(input.season, input.team, input.venue)),
-    compare: publicProcedure.input(z2.object({ left: fieldlineSelectionSchema, right: fieldlineSelectionSchema })).query(async ({ input }) => {
+    freshness: publicProcedure.input(z3.object({ seasons: z3.array(z3.number().int().min(2025).max(2100)).min(1).max(2) })).query(({ input }) => getFieldlineFreshness(input.seasons)),
+    weeks: publicProcedure.input(z3.object({ season: z3.number().int().min(2025).max(2100), team: z3.string().length(2).or(z3.string().length(3)), venue: fieldlineVenueSchema.default("all") })).query(({ input }) => getFieldlineWeeks(input.season, input.team, input.venue)),
+    compare: publicProcedure.input(z3.object({ left: fieldlineSelectionSchema, right: fieldlineSelectionSchema })).query(async ({ input }) => {
       const [left, right] = await compareFieldlineSelections([input.left, input.right]);
       return { left, right };
     })
@@ -4411,8 +4497,9 @@ var appRouter = router({
   fieldlineAdmin: router({
     imports: fieldlineAdminProcedure.query(getFieldlineSeasons),
     refreshSchedules: fieldlineAdminProcedure.query(getFieldlineRefreshSchedules),
-    importSeason: fieldlineAdminProcedure.input(z2.object({ season: z2.number().int().min(2025).max(2100) })).mutation(({ input, ctx }) => importFieldlineSeasonFromNflverse(input.season, ctx.user.openId))
-  })
+    importSeason: fieldlineAdminProcedure.input(z3.object({ season: z3.number().int().min(2025).max(2100) })).mutation(({ input, ctx }) => importFieldlineSeasonFromNflverse(input.season, ctx.user.openId))
+  }),
+  playoff: playoffRouter
 });
 
 // server/_core/context.ts
@@ -4431,7 +4518,7 @@ async function createContext(opts) {
 }
 
 // server/officialFeedScheduler.ts
-import { z as z3 } from "zod";
+import { z as z4 } from "zod";
 
 // server/externalTeamNews.ts
 import { createHash as createHash4 } from "node:crypto";
@@ -5038,20 +5125,20 @@ async function refreshPftAvailabilityInsights(seedUrls = []) {
 }
 
 // server/officialFeedScheduler.ts
-var agentFeedPayload = z3.object({
-  teamCode: z3.string().min(2).max(3),
-  items: z3.array(z3.object({
-    title: z3.string().min(1).max(800),
-    summary: z3.string().max(560).nullable().optional(),
-    sourceUrl: z3.string().url(),
-    sourceName: z3.string().min(1).max(128),
-    sourceKind: z3.enum(["team_official", "nfl_official"]),
-    category: z3.enum(["news", "injury"]),
-    publishedAt: z3.string().min(1)
+var agentFeedPayload = z4.object({
+  teamCode: z4.string().min(2).max(3),
+  items: z4.array(z4.object({
+    title: z4.string().min(1).max(800),
+    summary: z4.string().max(560).nullable().optional(),
+    sourceUrl: z4.string().url(),
+    sourceName: z4.string().min(1).max(128),
+    sourceKind: z4.enum(["team_official", "nfl_official"]),
+    category: z4.enum(["news", "injury"]),
+    publishedAt: z4.string().min(1)
   })).max(24)
 });
-var heartbeatPayload = z3.object({
-  forceGroupIndex: z3.number().int().min(0).max(3).optional()
+var heartbeatPayload = z4.object({
+  forceGroupIndex: z4.number().int().min(0).max(3).optional()
 });
 async function refreshOfficialFeedHandler(req, res) {
   try {
@@ -5109,18 +5196,18 @@ async function receiveOfficialFeedAgentHandler(req, res) {
 }
 
 // server/fieldlineScheduler.ts
-import { and as and3, eq as eq3 } from "drizzle-orm";
+import { and as and4, eq as eq4 } from "drizzle-orm";
 async function refreshFieldlineSeasonHandler(req, res) {
   try {
     const user = await sdk.authenticateRequest(req);
     if (!user.isCron || !user.taskUid) return res.status(403).json({ error: "cron-only" });
     const db = await getDb();
     if (!db) throw new Error("Database unavailable");
-    const schedule = (await db.select().from(seasonRefreshSchedules).where(and3(eq3(seasonRefreshSchedules.scheduleCronTaskUid, user.taskUid), eq3(seasonRefreshSchedules.isEnabled, true))).limit(1))[0];
+    const schedule = (await db.select().from(seasonRefreshSchedules).where(and4(eq4(seasonRefreshSchedules.scheduleCronTaskUid, user.taskUid), eq4(seasonRefreshSchedules.isEnabled, true))).limit(1))[0];
     if (!schedule) return res.json({ ok: true, skipped: "orphan", taskUid: user.taskUid });
-    await db.update(seasonRefreshSchedules).set({ lastStatus: "running", lastRunAt: /* @__PURE__ */ new Date(), lastError: null }).where(eq3(seasonRefreshSchedules.id, schedule.id));
+    await db.update(seasonRefreshSchedules).set({ lastStatus: "running", lastRunAt: /* @__PURE__ */ new Date(), lastError: null }).where(eq4(seasonRefreshSchedules.id, schedule.id));
     const result = await importFieldlineSeasonFromNflverse(schedule.season);
-    await db.update(seasonRefreshSchedules).set({ lastStatus: "ready", lastSuccessAt: /* @__PURE__ */ new Date(), lastError: null }).where(eq3(seasonRefreshSchedules.id, schedule.id));
+    await db.update(seasonRefreshSchedules).set({ lastStatus: "ready", lastSuccessAt: /* @__PURE__ */ new Date(), lastError: null }).where(eq4(seasonRefreshSchedules.id, schedule.id));
     res.json({ ok: true, taskUid: user.taskUid, ...result, timestamp: (/* @__PURE__ */ new Date()).toISOString() });
   } catch (error) {
     const details = error instanceof Error ? { message: error.message, stack: error.stack } : { message: String(error) };
