@@ -566,7 +566,17 @@ export async function getOfficialLeagueCalendar(teamCode: string) {
       { id: -(index * 2 + 2), teamCode: score.homeTeamCode, opponentCode: score.awayTeamCode, homeAway: "home" as const, seasonPhase: score.seasonPhase, weekLabel: score.weekLabel, kickoffAt, broadcast: null, sourceUrl: score.gameUrl, daznUrl: null, fetchedAt: score.fetchedAt, liveScoreboardFallback: !isOfficialFinal(score) && !score.kickoffAt },
     ];
   });
-  const calendar = selectRelevantCalendarGames([...games, ...liveScoreboardFallbacks], teamCode, now).map((game) => attachOfficialScore(game, rawResults));
+
+  // スコアボードに確定キックオフ日時が存在する場合は仮日時(秒=59)を上書き補正
+  const synchronizedGames = games.map((game) => {
+    const score = findOfficialScoreForGame(rawResults, game);
+    if (score?.kickoffAt) {
+      return { ...game, kickoffAt: score.kickoffAt };
+    }
+    return game;
+  });
+
+  const calendar = selectRelevantCalendarGames([...synchronizedGames, ...liveScoreboardFallbacks], teamCode, now).map((game) => attachOfficialScore(game, rawResults));
   const lastUpdatedAt = calendar.map((game) => game.fetchedAt).filter((value): value is Date => Boolean(value)).sort((a, b) => b.getTime() - a.getTime())[0];
   return { calendar, lastUpdatedAt };
 }
