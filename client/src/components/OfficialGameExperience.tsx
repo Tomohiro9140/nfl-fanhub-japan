@@ -124,7 +124,7 @@ export function OfficialGameTicket({ favorite, snapshot, loading, spoilerMode = 
         {game.broadcast ? <p className="mt-2 font-mono text-[9px] tracking-[.08em] text-[#d9e3f3]">{game.broadcast}</p> : null}
         <div className="border-t border-white/15 pt-2 font-mono text-[9px]">
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1"><span className="font-bold tracking-[.1em] text-[#a5b3c9]">GAME STATUS</span><span className={`rounded px-1.5 py-0.5 font-bold ${gameStatus.label === "LIVE" ? "bg-[#e85d2a] text-white" : gameStatus.label === "FINAL" ? "bg-white text-[#10213a]" : "bg-[#315272] text-white"}`}>{gameStatus.label}</span>{(isRevealedFinal ? "OFFICIAL SCORE CONFIRMED" : gameStatus.score ? `OFFICIAL SCORE ${gameStatus.score}` : gameStatus.detail) ? <span className="text-[#d9e3f3]">{isRevealedFinal ? "OFFICIAL SCORE CONFIRMED" : gameStatus.score ? `OFFICIAL SCORE ${gameStatus.score}` : gameStatus.detail}</span> : null}</div>
-          {isGameDay || gameStatus.label === "FINAL" ? (
+          {isGameDay || gameStatus.label === "FINAL" || Boolean(snapshot?.inactiveReport) ? (
             <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
               <span className="font-bold tracking-[.1em] text-[#a5b3c9]">INJURIES</span>
               {snapshot?.inactiveReport ? (
