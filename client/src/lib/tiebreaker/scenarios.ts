@@ -1,104 +1,70 @@
 import { ScheduledGame } from "./types";
-import { DIVISIONS } from "./nflTeams";
+import { ALL_TEAMS } from "./nflTeams";
 
 export type ScenarioPreset = {
   id: string;
   name: string;
   descriptionJa: string;
-  targetWeek: number; // 注目するWeek
+  targetWeek: number;
   games: ScheduledGame[];
 };
 
 /**
- * 32チームによる18週（全272試合）の基本スケジュールを生成するヘルパー
+ * 32チームが各週「必ず1試合（16カード）」を行う重複なしのスケジュールを生成
  */
-function createBaseSchedule(): ScheduledGame[] {
+function createValidSchedule(): ScheduledGame[] {
   const games: ScheduledGame[] = [];
+  const teams = [...ALL_TEAMS]; // 32チーム
+  const n = teams.length;
   let gameId = 1;
 
-  // 1. 各地区内の総当り対決（ホーム＆アウェー 6試合 × 8地区 = 48対戦 / 96チーム枠）
-  const divList = Object.values(DIVISIONS);
-  for (const teams of divList) {
-    for (let i = 0; i < teams.length; i++) {
-      for (let j = i + 1; j < teams.length; j++) {
-        const homeTeam = teams[i];
-        const awayTeam = teams[j];
+  // ラウンドロビン方式で18週の対戦カードを生成（同一週内のチーム重複を完全防止）
+  for (let round = 0; round < 18; round++) {
+    const week = round + 1;
+    const roundTeams = [...teams];
 
-        // 1戦目（Week 2〜9の前半）
-        const week1 = ((gameId * 3) % 8) + 2;
-        games.push({
-          id: gameId++,
-          season: 2026,
-          week: week1,
-          homeTeam,
-          awayTeam,
-          isFinished: false,
-        });
+    // ラウンドごとに配列を回転させて対戦相手を変動
+    const offset = round % (n - 1);
+    const rotated = [roundTeams[0], ...roundTeams.slice(1 + offset), ...roundTeams.slice(1, 1 + offset)];
 
-        // 2戦目（Week 12〜18の終盤直接対決）
-        const week2 = ((gameId * 7) % 7) + 12;
-        games.push({
-          id: gameId++,
-          season: 2026,
-          week: week2,
-          homeTeam: awayTeam,
-          awayTeam: homeTeam,
-          isFinished: false,
-        });
-      }
-    }
-  }
+    for (let i = 0; i < n / 2; i++) {
+      const home = rotated[i];
+      const away = rotated[n - 1 - i];
 
-  // 2. カンファレンス内・外の対戦カードを補完（Week 1〜18の枠を生成）
-  const allTeams = divList.flat();
-  for (let w = 1; w <= 18; w++) {
-    const currentWeekGames = games.filter((g) => g.week === w);
-    const busyTeams = new Set<string>();
-    for (const g of currentWeekGames) {
-      busyTeams.add(g.homeTeam);
-      busyTeams.add(g.awayTeam);
-    }
-
-    const freeTeams = allTeams.filter((t) => !busyTeams.has(t));
-    for (let i = 0; i + 1 < freeTeams.length; i += 2) {
       games.push({
         id: gameId++,
         season: 2026,
-        week: w,
-        homeTeam: freeTeams[i],
-        awayTeam: freeTeams[i + 1],
+        week,
+        homeTeam: round % 2 === 0 ? home : away,
+        awayTeam: round % 2 === 0 ? away : home,
         isFinished: false,
       });
     }
   }
 
-  return games.sort((a, b) => a.week - b.week || a.id - b.id);
+  return games;
 }
 
-// 基本スケジュール枠
-const baseGames = createBaseSchedule();
+const baseGames = createValidSchedule();
 
 /**
- * シナリオA: Week 12 混戦ワイルドカード争奪シナリオ
- * （Week 1〜11の試合結果をシミュレーション確定させ、Week 12以降の勝敗トグルを解放）
+ * 強豪チームの基本戦績シミュレーション重み付け
  */
+const STRONG_TEAMS = new Set(["KC", "BUF", "BAL", "DET", "SF", "PHI", "GB", "CIN"]);
+const WEAK_TEAMS = new Set(["CAR", "NE", "NYG", "TEN", "DEN", "LV"]);
+
+function determineOutcome(home: string, away: string, salt: number): "home" | "away" {
+  if (STRONG_TEAMS.has(home) && WEAK_TEAMS.has(away)) return "home";
+  if (WEAK_TEAMS.has(home) && STRONG_TEAMS.has(away)) return "away";
+  return salt % 2 === 0 ? "home" : "away";
+}
+
 function buildWeek12Scenario(): ScheduledGame[] {
   return baseGames.map((game) => {
     if (game.week < 12) {
-      // 確定済みの勝敗（強豪チームが競り合う現実的な勝率バランス）
-      const homeFavorite = ["KC", "BUF", "BAL", "DET", "SF", "PHI", "GB"].includes(game.homeTeam);
-      const awayFavorite = ["KC", "BUF", "BAL", "DET", "SF", "PHI", "GB"].includes(game.awayTeam);
-
-      let outcome: "home" | "away" = "home";
-      if (awayFavorite && !homeFavorite) {
-        outcome = "away";
-      } else if (game.id % 3 === 0) {
-        outcome = "away";
-      }
-
       return {
         ...game,
-        outcome,
+        outcome: determineOutcome(game.homeTeam, game.awayTeam, game.id),
         isFinished: true,
       };
     }
@@ -106,17 +72,12 @@ function buildWeek12Scenario(): ScheduledGame[] {
   });
 }
 
-/**
- * シナリオB: Week 18 運命の最終節決戦シナリオ
- * （Week 1〜17まで全て確定し、Week 18の1試合ごとにシード順位やプレイオフ圏内が激変）
- */
 function buildWeek18Scenario(): ScheduledGame[] {
   return baseGames.map((game) => {
     if (game.week < 18) {
-      const outcome = (game.id * 7 + game.week) % 2 === 0 ? "home" : "away";
       return {
         ...game,
-        outcome,
+        outcome: determineOutcome(game.homeTeam, game.awayTeam, game.id + game.week),
         isFinished: true,
       };
     }
@@ -124,10 +85,6 @@ function buildWeek18Scenario(): ScheduledGame[] {
   });
 }
 
-/**
- * シナリオC: 2026年 Week 1 開幕シナリオ
- * （初期状態：Week 1の対戦カードを自由にトグル可能）
- */
 function build2026OpeningScenario(): ScheduledGame[] {
   return baseGames.map((game) => ({
     ...game,
@@ -139,7 +96,7 @@ export const PLAYOFF_SCENARIOS: ScenarioPreset[] = [
   {
     id: "week12_race",
     name: "Week 12 混戦ワイルドカード争覇モデル",
-    descriptionJa: "シーズン終盤戦に突入した時点の検証済みモデル。タイブレーカーの直接対決やカンファレンス勝率が活発に発動します。",
+    descriptionJa: "シーズン終盤戦に突入した時点の検証モデル。タイブレーカーの直接対決やカンファレンス勝率が活発に発動します。",
     targetWeek: 12,
     games: buildWeek12Scenario(),
   },
@@ -158,7 +115,3 @@ export const PLAYOFF_SCENARIOS: ScenarioPreset[] = [
     games: build2026OpeningScenario(),
   },
 ];
-
-export function getScenario(id: string): ScenarioPreset {
-  return PLAYOFF_SCENARIOS.find((s) => s.id === id) ?? PLAYOFF_SCENARIOS[0];
-}
