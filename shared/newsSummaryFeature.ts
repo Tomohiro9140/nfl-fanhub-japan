@@ -1,5 +1,4 @@
 /**
- * Temporary operations switch for AI-backed article summaries.
- * Keep false while LATEST NEWS links directly to source articles.
+ * Operations switch for AI-backed article summaries.
  */
-export const NEWS_SUMMARIES_ENABLED = false;
+export const NEWS_SUMMARIES_ENABLED = true;
