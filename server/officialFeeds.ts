@@ -2,6 +2,8 @@ import { createHash } from "node:crypto";
 import type { InsertOfficialFeedItem } from "../drizzle/schema";
 import { getOfficialFeedItems, upsertOfficialFeedItems } from "./db";
 import { refreshOfficialTeamData, TEAM_NAMES } from "./officialTeamData";
+import { generateBilingualSummary } from "./geminiSummary";
+import { NEWS_SUMMARIES_ENABLED } from "@shared/newsSummaryFeature";
 
 const NFL_OFFICIAL_INJURY_URL = "https://www.nfl.com/injuries/";
 const NFL_OFFICIAL_INACTIVES_URL = "https://www.nfl.com/injuries/";
@@ -204,13 +206,11 @@ export function parseOfficialNflInactivesPage(html: string, teamCode: string, no
   ].filter((name): name is string => Boolean(name));
   if (candidateNames.length === 0) return [];
 
-  // チーム名見出しタグをピンポイントで検索: <div class="d3-o-section-sub-title"><span>Patriots</span></div>
   const pattern = candidateNames.map((name) => name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|");
   const headerRegex = new RegExp(`<div[^>]*class="[^"]*d3-o-section-sub-title[^"]*"[^>]*>\\s*<span[^>]*>\\s*(?:${pattern})\\s*<\\/span>`, "i");
   const match = headerRegex.exec(html);
   if (!match) return [];
 
-  // 見出し直後の </table> までを切り出す（他チームの混入を完全防止）
   const tableEnd = html.indexOf("</table>", match.index);
   const tableHtml = html.slice(match.index, tableEnd !== -1 ? tableEnd : match.index + 8000);
 
@@ -218,7 +218,6 @@ export function parseOfficialNflInactivesPage(html: string, teamCode: string, no
   const outPlayers: string[] = [];
 
   for (const row of rows) {
-    // Game Status 列が "Out" の行のみ対象
     if (/<td[^>]*>\s*Out\s*<\/td>/i.test(row)) {
       const nameMatch = row.match(/<a[^>]*class="[^"]*nfl-o-cta--link[^"]*"[^>]*>([\s\S]*?)<\/a>/i)
         || row.match(/<td[^>]*scope="row"[^>]*>([\s\S]*?)<\/td>/i);
@@ -328,12 +327,33 @@ export async function refreshOfficialNflInactives(options: { fetchHtml?: (url: s
   return { reports: items.length };
 }
 
-/** Refreshes only a club's official RSS news, avoiding an unnecessary injury-page pass for a news-panel top-up. */
+/** Refreshes only a club's official RSS news, generating bilingual summaries if enabled. */
 export async function refreshOfficialTeamNews(teamCode: string) {
   const [teamSource] = getOfficialSources(teamCode);
   const xml = await fetchRss(teamSource.url);
   const items = parseOfficialTeamRss(xml, teamCode, teamSource);
   if (items.length === 0) throw new Error(`No RSS items found for ${teamCode}`);
+
+  // AI要約が有効かつGEMINI_API_KEYが存在する場合、最新ニュース上位3件に日英要約を自動付与
+  if (NEWS_SUMMARIES_ENABLED && process.env.GEMINI_API_KEY) {
+    const targetNews = items.filter((item) => item.category === "news").slice(0, 3);
+    for (const item of targetNews) {
+      if (item.summary) {
+        try {
+          const summaryRes = await generateBilingualSummary(item.title, item.summary);
+          if (summaryRes) {
+            item.japaneseSummary = summaryRes.japaneseSummary;
+            item.japaneseSummaryFetchedAt = new Date();
+            item.englishSummary = summaryRes.englishSummary;
+            item.englishSummaryFetchedAt = new Date();
+          }
+        } catch (err) {
+          console.warn(`[AI Summary] Skipped for ${item.title}:`, err);
+        }
+      }
+    }
+  }
+
   await upsertOfficialFeedItems(items);
   return items.length;
 }
@@ -349,6 +369,26 @@ export async function refreshOfficialTeamFeed(teamCode: string) {
   const injuryItems = await retainFreshNflInjuryItems(injuryCandidates);
   const items = [...teamItems, ...injuryItems];
   if (items.length === 0) throw new Error(`No RSS items found for ${teamCode}`);
+
+  if (NEWS_SUMMARIES_ENABLED && process.env.GEMINI_API_KEY) {
+    const targetNews = items.filter((item) => item.category === "news").slice(0, 3);
+    for (const item of targetNews) {
+      if (item.summary) {
+        try {
+          const summaryRes = await generateBilingualSummary(item.title, item.summary);
+          if (summaryRes) {
+            item.japaneseSummary = summaryRes.japaneseSummary;
+            item.japaneseSummaryFetchedAt = new Date();
+            item.englishSummary = summaryRes.englishSummary;
+            item.englishSummaryFetchedAt = new Date();
+          }
+        } catch (err) {
+          console.warn(`[AI Summary] Skipped for ${item.title}:`, err);
+        }
+      }
+    }
+  }
+
   await upsertOfficialFeedItems(items);
   return items.length;
 }
