@@ -18,17 +18,17 @@ function isRosterMoveNews(item: FeedItem) {
   return /\b(?:transactions?|roster moves?|sign(?:ed|s)?|released?|waived|waivers?|claimed|claim|trade(?:d)?|contract(?: extension)?|extensions?|activated?|designated (?:for|to return)|placed on (?:injured reserve|ir|pup))\b/.test(text);
 }
 
-/** 放送・配信案内（How to watch）記事を全チームで一律除外 */
+/** 全チームのニュースから「How to watch」などの放送・視聴案内記事を一律除外 */
 function isBroadcastOrWatchArticle(item: FeedItem) {
   const text = `${item.title} ${item.sourceUrl}`.toLowerCase();
-  return /\b(?:how to (?:watch|listen|stream)|ways to watch|where to watch|tune in|broadcast guide|tv schedule|game preview & stream)\b/i.test(text);
+  return /\b(?:how to (?:watch|listen|stream)|ways to watch|where to watch|tune in|broadcast guide|tv schedule|game preview & stream|stream & listen)\b/i.test(text);
 }
 
-/** 英語以外の記事（DALのSomos Cowboys等のスペイン語記事）を除外 */
+/** 英語以外の記事（DALのSomos Cowboys等のスペイン語記事）を一律除外 */
 function isNonEnglishArticle(item: FeedItem) {
   const text = `${item.title} ${item.summary ?? ""} ${item.sourceUrl}`.toLowerCase();
   if (/\/(?:es|espanol|somos-?cowboys)\//i.test(item.sourceUrl)) return true;
-  if (/\b(?:claves del juego|contra|semana|lesi[oó]n|en vivo|partido|temporada|entrenamiento|noticias|jugador|equipo|alineaci[oó]n|por la)\b/i.test(text)) return true;
+  if (/\b(?:claves del juego|contra|semana|lesi[oó]n|en vivo|partido|temporada|entrenamiento|noticias|jugador|equipo|alineaci[oó]n|por la|de la)\b/i.test(text)) return true;
   return /[¿¡]/.test(item.title);
 }
 
@@ -51,7 +51,7 @@ function SourceMark({ kind }: { kind: SourceKind }) {
   return <span className={`mt-0.5 inline-flex h-5 w-[58px] shrink-0 items-center justify-center gap-1 overflow-hidden whitespace-nowrap border px-1 font-mono text-[8px] font-bold tracking-[.08em] ${tone}`}><Icon className="h-2.5 w-2.5 shrink-0" />{label}</span>;
 }
 
-/** キックオフ90分前以降の全報道、またはキックオフ不明時はgameDate UTC午前0時以降を遮断 */
+/** 試合開始90分前（キックオフ時刻マイナス90分）以降の報道を一律遮断 */
 export function spoilerNewsCutoff(game?: CompletedGame) {
   if (!game) return null;
   const kickoffAt = new Date(game.kickoffAt);
