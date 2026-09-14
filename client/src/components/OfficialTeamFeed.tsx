@@ -31,12 +31,15 @@ function SourceMark({ kind }: { kind: SourceKind }) {
   return <span className={`mt-0.5 inline-flex h-5 w-[58px] shrink-0 items-center justify-center gap-1 overflow-hidden whitespace-nowrap border px-1 font-mono text-[8px] font-bold tracking-[.08em] ${tone}`}><Icon className="h-2.5 w-2.5 shrink-0" />{label}</span>;
 }
 
-/** Hides all coverage from the official kickoff, or from gameDate UTC midnight only when kickoff is unavailable. */
+/** Hides all coverage from 90 minutes before the official kickoff, or from gameDate UTC midnight only when kickoff is unavailable. */
 export function spoilerNewsCutoff(game?: CompletedGame) {
   if (!game) return null;
   // All persisted timestamps are UTC instants. Prefer the precise official kickoff in every normal case.
   const kickoffAt = new Date(game.kickoffAt);
-  if (!game.kickoffAtEstimated && !Number.isNaN(kickoffAt.getTime())) return kickoffAt;
+  if (!game.kickoffAtEstimated && !Number.isNaN(kickoffAt.getTime())) {
+    // 試合開始90分前（90 * 60 * 1000 ms）以降の記事を一律カット
+    return new Date(kickoffAt.getTime() - 90 * 60 * 1000);
+  }
   // A live scoreboard can lack an official kickoff. Only in that fallback case, retain the requested gameDate UTC boundary.
   const gameDateCutoff = game.gameDate ? new Date(`${game.gameDate}T00:00:00.000Z`) : null;
   return gameDateCutoff && !Number.isNaN(gameDateCutoff.getTime()) ? gameDateCutoff : null;
