@@ -42,7 +42,7 @@ function hash(value: string) {
 }
 
 function normalizeOfficialHtml(value: string) {
-  return value.replaceAll("\\/", "/").replaceAll("\\\"", '"');
+  return value.replaceAll("\\/", "/").replaceAll('\\"', '"');
 }
 
 function objectAt(source: string, start: number) {
@@ -156,9 +156,40 @@ export function parseOfficialGameBookTeamStats(gameBookText: string) {
   ] satisfies GameStatsPayload["teamStats"];
 }
 
-function gameBookUrlFromHtml(html: string) {
+function gameBookUrlFromHtml(
+  html: string,
+  awayTeamCode?: string,
+  homeTeamCode?: string,
+  gameUrl?: string
+): string | null {
   const normalized = normalizeOfficialHtml(html);
-  return normalized.match(/https:\/\/static\.www\.nfl\.com[^"'<>\s]+\/gamecenter\/[^"'<>\s]+\.pdf/i)?.[0] ?? null;
+  const pdfRegex = /https:\/\/static\.www\.nfl\.com[^"'<>\s\\]+\/gamecenter\/[^"'<>\s\\]+\.pdf/gi;
+  let match: RegExpExecArray | null;
+  let fallback: string | null = null;
+
+  const slug = gameUrl ? gameUrl.replace(/^https?:\/\/[^/]+\/games\//, "").replace(/\?.*$/, "") : "";
+
+  while ((match = pdfRegex.exec(normalized)) !== null) {
+    const pdfUrl = match[0].replace(/\\/g, "");
+    if (!fallback) fallback = pdfUrl;
+
+    const start = Math.max(0, match.index - 1000);
+    const end = Math.min(normalized.length, match.index + match[0].length + 1000);
+    const context = normalized.slice(start, end);
+
+    const hasAway = awayTeamCode ? new RegExp(`\\b${awayTeamCode}\\b`, "i").test(context) : false;
+    const hasHome = homeTeamCode ? new RegExp(`\\b${homeTeamCode}\\b`, "i").test(context) : false;
+    const hasSlug = slug ? context.toLowerCase().includes(slug.toLowerCase()) : false;
+
+    if (hasSlug || (hasAway && hasHome)) {
+      return pdfUrl;
+    }
+    if (hasAway || hasHome) {
+      fallback = pdfUrl;
+    }
+  }
+
+  return fallback;
 }
 
 async function officialText(url: string) {
@@ -199,7 +230,7 @@ export async function getOfficialGameStats(gameUrl: string): Promise<GameStatsPa
   if (cached && Date.now() - cached.fetchedAt.getTime() < CACHE_MAX_AGE_MS) return JSON.parse(cached.payload) as GameStatsPayload;
 
   const html = await officialText(`${game.gameUrl}?tab=stats`);
-  const sourceUrl = gameBookUrlFromHtml(html);
+  const sourceUrl = gameBookUrlFromHtml(html, game.awayTeamCode, game.homeTeamCode, game.gameUrl);
   if (!sourceUrl) throw new Error("Official Game Book is not available for this game yet.");
   const [gameBookText, tables] = await Promise.all([officialGameBookText(sourceUrl), Promise.resolve(parseOfficialGameCenterTables(html))]);
   const payload: GameStatsPayload = {
