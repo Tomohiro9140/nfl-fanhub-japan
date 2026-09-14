@@ -4261,9 +4261,29 @@ function parseOfficialGameBookTeamStats(gameBookText) {
     { key: "penaltiesYards", label: "PENALTIES / YDS", away: awayPenalties, home: homePenalties, better: "lower" }
   ];
 }
-function gameBookUrlFromHtml(html) {
+function gameBookUrlFromHtml(html, awayTeamCode, homeTeamCode, gameUrl) {
   const normalized = normalizeOfficialHtml(html);
-  return normalized.match(/https:\/\/static\.www\.nfl\.com[^"'<>\s]+\/gamecenter\/[^"'<>\s]+\.pdf/i)?.[0] ?? null;
+  const pdfRegex = /https:\/\/static\.www\.nfl\.com[^"'<>\s\\]+\/gamecenter\/[^"'<>\s\\]+\.pdf/gi;
+  let match;
+  let fallback = null;
+  const slug = gameUrl ? gameUrl.replace(/^https?:\/\/[^/]+\/games\//, "").replace(/\?.*$/, "") : "";
+  while ((match = pdfRegex.exec(normalized)) !== null) {
+    const pdfUrl = match[0].replace(/\\/g, "");
+    if (!fallback) fallback = pdfUrl;
+    const start = Math.max(0, match.index - 1e3);
+    const end = Math.min(normalized.length, match.index + match[0].length + 1e3);
+    const context = normalized.slice(start, end);
+    const hasAway = awayTeamCode ? new RegExp(`\\b${awayTeamCode}\\b`, "i").test(context) : false;
+    const hasHome = homeTeamCode ? new RegExp(`\\b${homeTeamCode}\\b`, "i").test(context) : false;
+    const hasSlug = slug ? context.toLowerCase().includes(slug.toLowerCase()) : false;
+    if (hasSlug || hasAway && hasHome) {
+      return pdfUrl;
+    }
+    if (hasAway || hasHome) {
+      fallback = pdfUrl;
+    }
+  }
+  return fallback;
 }
 async function officialText(url) {
   const response = await fetch(url, { headers: { Accept: "text/html", "User-Agent": "Mozilla/5.0 NFLFanHubJapan/1.0" } });
@@ -4298,7 +4318,7 @@ async function getOfficialGameStats(gameUrl) {
   const cached2 = await getOfficialGameStatsCache(gameExternalId);
   if (cached2 && Date.now() - cached2.fetchedAt.getTime() < CACHE_MAX_AGE_MS) return JSON.parse(cached2.payload);
   const html = await officialText(`${game.gameUrl}?tab=stats`);
-  const sourceUrl = gameBookUrlFromHtml(html);
+  const sourceUrl = gameBookUrlFromHtml(html, game.awayTeamCode, game.homeTeamCode, game.gameUrl);
   if (!sourceUrl) throw new Error("Official Game Book is not available for this game yet.");
   const [gameBookText, tables] = await Promise.all([officialGameBookText(sourceUrl), Promise.resolve(parseOfficialGameCenterTables(html))]);
   const payload = {
