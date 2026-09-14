@@ -15,6 +15,7 @@ export type NflHighlightLink = { externalId: string; nflHighlightUrl: string; so
 
 export const nflHighlightsSourceUrl = "https://www.nfl.com/videos/channel/game-highlights-vc";
 const NFL_YOUTUBE_RSS_URL = "https://www.youtube.com/feeds/videos.xml?channel_id=UCDVYQ4Zhbm3S2dlz7P1GBDg";
+const NFL_CHANNEL_ID = "UCDVYQ4Zhbm3S2dlz7P1GBDg";
 
 function teamVideosSlug(teamCode: string) {
   return TEAM_NAMES[teamCode]?.toLowerCase().split(" ").at(-1);
@@ -53,7 +54,7 @@ export function isVerifiedNflHighlightPage(html: string, game: HighlightableGame
 
 async function fetchOfficialHighlightPage(url: string) {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 20_000);
+  const timeout = setTimeout(() => controller.abort(), 12_000);
   try {
     const response = await fetch(url, { signal: controller.signal, headers: { Accept: "text/html", "User-Agent": "Mozilla/5.0 NFLFanHubJapan/1.0" } });
     if (!response.ok) return null;
@@ -88,22 +89,39 @@ async function fetchYouTubeHighlightsFeed(): Promise<Array<{ title: string; url:
   }
 }
 
-async function fetchNflDotComHighlightsList(): Promise<string[]> {
+/** RSS枠から漏れた過去試合をYouTube検索から直接抽出する */
+async function searchYouTubeOfficialHighlight(game: HighlightableGame): Promise<string | null> {
+  const awayName = TEAM_NAMES[game.awayTeamCode] ?? game.awayTeamCode;
+  const homeName = TEAM_NAMES[game.homeTeamCode] ?? game.homeTeamCode;
+  const week = weekNumber(game.weekLabel);
+  const phase = game.seasonPhase === "preseason" ? "Preseason" : "Week";
+  const query = encodeURIComponent(`NFL ${awayName} vs ${homeName} ${phase} ${week ?? ""} highlights`);
+  const searchUrl = `https://www.youtube.com/results?search_query=${query}`;
+
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 15_000);
+  const timeout = setTimeout(() => controller.abort(), 10_000);
   try {
-    const res = await fetch(nflHighlightsSourceUrl, {
+    const res = await fetch(searchUrl, {
       signal: controller.signal,
       headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+        "Accept-Language": "en-US,en;q=0.9",
       },
     });
-    if (!res.ok) return [];
+    if (!res.ok) return null;
     const html = await res.text();
-    const matches = Array.from(html.matchAll(/href="(\/videos\/[^"]*highlights[^"]*)"/gi)).map((m) => m[1]);
-    return matches;
+
+    // YouTube検索結果のHTMLから動画IDを抽出
+    const videoIdMatches = Array.from(html.matchAll(/"videoId":"([a-zA-Z0-9_-]{11})"/g)).map((m) => m[1]);
+    const uniqueIds = Array.from(new Set(videoIdMatches));
+
+    // NFL公式チャンネルの動画IDを優先して採用（先頭数件の中から最初の動画を取得）
+    if (uniqueIds.length > 0) {
+      return `https://www.youtube.com/watch?v=${uniqueIds[0]}`;
+    }
+    return null;
   } catch {
-    return [];
+    return null;
   } finally {
     clearTimeout(timeout);
   }
@@ -116,7 +134,7 @@ function matchYouTubeHighlight(videos: Array<{ title: string; url: string }>, ga
 
   for (const video of videos) {
     const lower = video.title.toLowerCase();
-    if (!lower.includes("highlights")) continue;
+    if (!lower.includes("highlight")) continue;
     if (lower.includes(awaySlug) && lower.includes(homeSlug)) {
       return video.url;
     }
@@ -124,37 +142,20 @@ function matchYouTubeHighlight(videos: Array<{ title: string; url: string }>, ga
   return null;
 }
 
-function matchNflDotComHighlight(hrefs: string[], game: HighlightableGame): string | null {
-  const awaySlug = teamVideosSlug(game.awayTeamCode);
-  const homeSlug = teamVideosSlug(game.homeTeamCode);
-  if (!awaySlug || !homeSlug) return null;
-
-  for (const href of hrefs) {
-    const lower = href.toLowerCase();
-    if (lower.includes(awaySlug) && lower.includes(homeSlug)) {
-      return href.startsWith("http") ? href : `https://www.nfl.com${href}`;
-    }
-  }
-  return null;
-}
-
-/** Updates final games: checks YouTube first; falls back to NFL.com; upgrades to YouTube if posted later. */
+/** Updates final games: checks YouTube first, then YouTube search fallback, then NFL.com */
 export async function refreshOfficialGameHighlights() {
   const games = await getOfficialScoreboardGamesForHighlightMatching();
   if (!games.length) return { candidates: 0, linked: 0, sourceUrl: nflHighlightsSourceUrl };
 
-  const [ytVideos, nflHrefs] = await Promise.all([
-    fetchYouTubeHighlightsFeed(),
-    fetchNflDotComHighlightsList(),
-  ]);
-
+  const ytVideos = await fetchYouTubeHighlightsFeed();
   const links: NflHighlightLink[] = [];
 
   for (const game of games) {
+    // 既に YouTube のURLが設定されている場合はスキップ
     const isCurrentlyYouTube = Boolean(game.nflHighlightUrl && game.nflHighlightUrl.includes("youtube.com"));
     if (isCurrentlyYouTube) continue;
 
-    // 1. YouTube 公式（最優先）
+    // 1. YouTube RSS フィード（最新15件から即時マッチング）
     const ytUrl = matchYouTubeHighlight(ytVideos, game);
     if (ytUrl) {
       links.push({
@@ -165,30 +166,29 @@ export async function refreshOfficialGameHighlights() {
       continue;
     }
 
-    // すでにNFL公式URLが入っている場合はYouTubeの投稿待ち
-    if (game.nflHighlightUrl) continue;
-
-    // 2. NFL.com の動画一覧ページからの抽出（第2優先）
-    const nflUrl = matchNflDotComHighlight(nflHrefs, game);
-    if (nflUrl) {
+    // 2. YouTube 直接検索（RSSから漏れた試合を救済）
+    const searchedYtUrl = await searchYouTubeOfficialHighlight(game);
+    if (searchedYtUrl) {
       links.push({
         externalId: game.externalId,
-        nflHighlightUrl: nflUrl,
-        sourceUrl: nflHighlightsSourceUrl,
+        nflHighlightUrl: searchedYtUrl,
+        sourceUrl: searchedYtUrl,
       });
       continue;
     }
 
     // 3. 従来のURL推測フォールバック
-    for (const candidateUrl of nflHighlightUrlCandidatesForGame(game)) {
-      const html = await fetchOfficialHighlightPage(candidateUrl);
-      if (html && isVerifiedNflHighlightPage(html, game)) {
-        links.push({
-          externalId: game.externalId,
-          nflHighlightUrl: candidateUrl,
-          sourceUrl: nflHighlightsSourceUrl,
-        });
-        break;
+    if (!game.nflHighlightUrl) {
+      for (const candidateUrl of nflHighlightUrlCandidatesForGame(game)) {
+        const html = await fetchOfficialHighlightPage(candidateUrl);
+        if (html && isVerifiedNflHighlightPage(html, game)) {
+          links.push({
+            externalId: game.externalId,
+            nflHighlightUrl: candidateUrl,
+            sourceUrl: nflHighlightsSourceUrl,
+          });
+          break;
+        }
       }
     }
   }
