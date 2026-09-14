@@ -18,6 +18,26 @@ function isRosterMoveNews(item: FeedItem) {
   return /\b(?:transactions?|roster moves?|sign(?:ed|s)?|released?|waived|waivers?|claimed|claim|trade(?:d)?|contract(?: extension)?|extensions?|activated?|designated (?:for|to return)|placed on (?:injured reserve|ir|pup))\b/.test(text);
 }
 
+/** 放送・配信案内（How to watch）記事を全チームで一律除外 */
+function isBroadcastOrWatchArticle(item: FeedItem) {
+  const text = `${item.title} ${item.sourceUrl}`.toLowerCase();
+  return /\b(?:how to (?:watch|listen|stream)|ways to watch|where to watch|tune in|broadcast guide|tv schedule|game preview & stream)\b/i.test(text);
+}
+
+/** 英語以外の記事（DALのSomos Cowboys等のスペイン語記事）を除外 */
+function isNonEnglishArticle(item: FeedItem) {
+  const text = `${item.title} ${item.summary ?? ""} ${item.sourceUrl}`.toLowerCase();
+  if (/\/(?:es|espanol|somos-?cowboys)\//i.test(item.sourceUrl)) return true;
+  if (/\b(?:claves del juego|contra|semana|lesi[oó]n|en vivo|partido|temporada|entrenamiento|noticias|jugador|equipo|alineaci[oó]n|por la)\b/i.test(text)) return true;
+  return /[¿¡]/.test(item.title);
+}
+
+/** リアルタイム速報・実況スレッド・ハイライト等のネタバレ要素を除外 */
+function isSpoilerNoiseArticle(item: FeedItem) {
+  const text = `${item.title} ${item.summary ?? ""} ${item.sourceUrl}`.toLowerCase();
+  return /\b(?:live chat|game blog|live updates|in-game updates|highlights?|sliding int|pick-?6|interception|touchdown|final score|instant analysis|postgame|post-game|what we learned|takeaways|game recap)\b/i.test(text);
+}
+
 function sourceLabel(kind: SourceKind) {
   if (kind === "pft") return "PFT";
   if (kind === "cbs") return "CBS";
@@ -31,28 +51,34 @@ function SourceMark({ kind }: { kind: SourceKind }) {
   return <span className={`mt-0.5 inline-flex h-5 w-[58px] shrink-0 items-center justify-center gap-1 overflow-hidden whitespace-nowrap border px-1 font-mono text-[8px] font-bold tracking-[.08em] ${tone}`}><Icon className="h-2.5 w-2.5 shrink-0" />{label}</span>;
 }
 
-/** Hides all coverage from 90 minutes before the official kickoff, or from gameDate UTC midnight only when kickoff is unavailable. */
+/** キックオフ90分前以降の全報道、またはキックオフ不明時はgameDate UTC午前0時以降を遮断 */
 export function spoilerNewsCutoff(game?: CompletedGame) {
   if (!game) return null;
-  // All persisted timestamps are UTC instants. Prefer the precise official kickoff in every normal case.
   const kickoffAt = new Date(game.kickoffAt);
   if (!game.kickoffAtEstimated && !Number.isNaN(kickoffAt.getTime())) {
-    // 試合開始90分前（90 * 60 * 1000 ms）以降の記事を一律カット
     return new Date(kickoffAt.getTime() - 90 * 60 * 1000);
   }
-  // A live scoreboard can lack an official kickoff. Only in that fallback case, retain the requested gameDate UTC boundary.
   const gameDateCutoff = game.gameDate ? new Date(`${game.gameDate}T00:00:00.000Z`) : null;
   return gameDateCutoff && !Number.isNaN(gameDateCutoff.getTime()) ? gameDateCutoff : null;
 }
 
-/** A live game with neither official kickoff nor gameDate has no trustworthy boundary, so hide safely until official data arrives. */
 export function shouldHideAllSpoilerNews(game?: CompletedGame) {
   return Boolean(game?.kickoffAtEstimated && !game.gameDate && /live|ingame|in_progress|halftime/i.test(game.gameState ?? ""));
 }
 
-/** Keeps official stories foremost while reserving room for one PFT and one CBS team story when available. */
-export function selectLatestNews(items: FeedItem[], hideFrom?: Date | null, hideAll = false) {
-  const sorted = dedupeDisplayArticles([...items].filter((item) => !hideAll && item.category === "news" && !isRosterMoveNews(item) && (!hideFrom || new Date(item.publishedAt).getTime() < hideFrom.getTime())).sort((left, right) => new Date(right.publishedAt).getTime() - new Date(left.publishedAt).getTime()));
+export function selectLatestNews(items: FeedItem[], hideFrom?: Date | null, hideAll = false, spoilerMode = false) {
+  const filtered = items.filter((item) => {
+    if (hideAll) return false;
+    if (item.category !== "news") return false;
+    if (isRosterMoveNews(item)) return false;
+    if (isBroadcastOrWatchArticle(item)) return false;
+    if (isNonEnglishArticle(item)) return false;
+    if (spoilerMode && isSpoilerNoiseArticle(item)) return false;
+    if (hideFrom && new Date(item.publishedAt).getTime() >= hideFrom.getTime()) return false;
+    return true;
+  });
+
+  const sorted = dedupeDisplayArticles(filtered.sort((left, right) => new Date(right.publishedAt).getTime() - new Date(left.publishedAt).getTime()));
   const official = sorted.filter((item) => !externalSourceKinds.has(item.sourceKind));
   const selected = [...official.slice(0, 3)];
   for (const kind of ["pft", "cbs"] as const) {
@@ -87,7 +113,8 @@ export function OfficialTeamFeed({ favorite, spoilerMode = false, completedGame 
   const items = (shouldSimulateUnavailable ? [] : feed.data?.items ?? []) as FeedItem[];
   const hideFrom = spoilerMode ? spoilerNewsCutoff(completedGame) : null;
   const hideAll = spoilerMode && shouldHideAllSpoilerNews(completedGame);
-  const news = useMemo(() => selectLatestNews(items, hideFrom, hideAll), [items, hideFrom, hideAll]);
+  const news = useMemo(() => selectLatestNews(items, hideFrom, hideAll, spoilerMode), [items, hideFrom, hideAll, spoilerMode]);
+
   return (
     <section id="updates" className="scroll-mt-24">
       <div className="flex items-center gap-2 font-mono text-[10px] font-semibold tracking-[0.2em] text-[#64748b]"><span className="text-[#10213a]">02</span><span>{favorite.code} NEWS DESK</span><span className="h-px flex-1 bg-[#d9d5cc]" /></div>
