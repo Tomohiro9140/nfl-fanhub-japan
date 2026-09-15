@@ -2162,19 +2162,15 @@ async function generateBilingualSummary(title, rawText) {
     console.warn("[Gemini API] GEMINI_API_KEY is not set.");
     return null;
   }
-  const articleBody = rawText.slice(0, 4e3);
+  const articleBody = rawText.slice(0, 3500);
   const prompt = `You are a professional NFL analyst writing for passionate Japanese NFL fans.
-Analyze the following article carefully and provide a comprehensive, substantive bilingual summary focusing directly on the facts, specific plays, tactical details, roster decisions, and performance breakdowns.
+Analyze the following article carefully and provide a comprehensive, substantive Japanese summary directly describing the actual facts, tactical takeaways, roster moves, and player performances.
 
-[Rules for japaneseSummary]
+[Critical Rules]
 - Target length: 350 to 450 Japanese characters.
-- DO NOT use meta-phrases such as "\u301C\u306B\u3064\u3044\u3066\u306E\u8A18\u4E8B", "\u301C\u3092\u63B2\u8F09\u3057\u3066\u3044\u308B", "\u301C\u3092\u5206\u6790\u3057\u3066\u3044\u308B", or "\u301C\u306E\u30EC\u30D3\u30E5\u30FC".
-- Directly describe WHAT happened, WHO did what, HOW players/teams performed, and WHAT the tactical takeaways are.
-- Provide concrete substance, player names, tactical strengths/weaknesses, or game context.
-
-[Rules for englishSummary]
-- Provide 3 to 4 detailed bullet points or paragraphs covering the core takeaways, facts, and film breakdown points.
-- Avoid generic meta-announcements.
+- DO NOT write meta-introductions or table-of-contents phrases such as "\u301C\u306B\u3064\u3044\u3066\u306E\u8A18\u4E8B", "\u301C\u3092\u63B2\u8F09\u3057\u3066\u3044\u308B", "\u301C\u3092\u5206\u6790\u3057\u3066\u3044\u308B", or "\u301C\u306E\u30EC\u30D3\u30E5\u30FC".
+- Directly describe WHAT happened, WHO performed well/poorly, tactical adjustments made, and key takeaways.
+- Provide concrete substance, player names, or strategic context.
 
 Article Title: ${title}
 Article Body:
@@ -2190,23 +2186,22 @@ ${articleBody}`;
           contents: [{ parts: [{ text: prompt }] }],
           generationConfig: {
             responseMimeType: "application/json",
-            // Structured Outputs: JSONの型スキーマを厳格に強制
             responseSchema: {
               type: "OBJECT",
               properties: {
                 japaneseSummary: {
                   type: "STRING",
-                  description: "350\u301C450\u5B57\u306E\u5177\u4F53\u7684\u306A\u5206\u6790\u30FB\u4E8B\u5B9F\u30FB\u8A66\u5408\u5C55\u958B\u3092\u8A18\u8FF0\u3057\u305F\u65E5\u672C\u8A9E\u8981\u7D04"
-                },
-                englishSummary: {
-                  type: "STRING",
-                  description: "Detailed takeaways, facts, and film breakdown points in English"
+                  description: "350\u301C450\u5B57\u306E\u5177\u4F53\u7684\u306A\u4E8B\u5B9F\u30FB\u5206\u6790\u30FB\u8A66\u5408\u5C55\u958B\u3092\u8A18\u8FF0\u3057\u305F\u65E5\u672C\u8A9E\u8981\u7D04"
                 }
               },
-              required: ["japaneseSummary", "englishSummary"]
+              required: ["japaneseSummary"]
             },
             temperature: 0.2,
-            maxOutputTokens: 2500
+            maxOutputTokens: 800,
+            // 思考プロセスの待機時間をゼロにして即座に出力を開始
+            thinkingConfig: {
+              thinkingBudget: 0
+            }
           }
         })
       });
@@ -2232,7 +2227,7 @@ ${articleBody}`;
       const parsed = JSON.parse(cleaned);
       return {
         japaneseSummary: parsed.japaneseSummary?.trim() || "",
-        englishSummary: parsed.englishSummary?.trim() || ""
+        englishSummary: ""
       };
     } catch (error) {
       console.warn(`[Gemini API] Error on attempt ${attempt}:`, error instanceof Error ? error.message : error);
@@ -4139,6 +4134,34 @@ var fieldlineAdminProcedure = protectedProcedure.use(async ({ ctx, next }) => {
   if (ctx.user.role !== "admin") throw new TRPCError3({ code: "FORBIDDEN", message: "\u7BA1\u7406\u8005\u6A29\u9650\u304C\u5FC5\u8981\u3067\u3059\u3002" });
   return next({ ctx });
 });
+var activeSummaryItemIds = /* @__PURE__ */ new Set();
+async function prefetchUnsummarizedNews(items, limit = 5) {
+  if (!NEWS_SUMMARIES_ENABLED || !items || items.length === 0) return;
+  const targets = items.filter((item) => item.category === "news" && !item.japaneseSummary && !activeSummaryItemIds.has(item.id)).slice(0, limit);
+  if (targets.length === 0) return;
+  for (const item of targets) {
+    activeSummaryItemIds.add(item.id);
+    try {
+      const freshItem = await getOfficialFeedItemById(item.id);
+      if (freshItem?.japaneseSummary) {
+        continue;
+      }
+      const textToSummarize = item.summary || item.title;
+      const result = await generateBilingualSummary(item.title, textToSummarize);
+      if (result?.japaneseSummary) {
+        await saveOfficialFeedJapaneseSummary(item.id, result.japaneseSummary);
+      }
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+    } catch (error) {
+      console.warn("[Background News Summary] Failed for item", {
+        itemId: item.id,
+        error: error instanceof Error ? error.message : error
+      });
+    } finally {
+      activeSummaryItemIds.delete(item.id);
+    }
+  }
+}
 var appRouter = router({
   system: systemRouter,
   auth: router({
@@ -4153,50 +4176,46 @@ var appRouter = router({
   }),
   officialFeed: router({
     byTeam: publicProcedure.input(z3.object({ teamCode: z3.string().length(2).or(z3.string().length(3)) })).query(async ({ input }) => {
-      return getFreshOfficialTeamFeed(input.teamCode.toUpperCase());
+      const feed = await getFreshOfficialTeamFeed(input.teamCode.toUpperCase());
+      if (feed?.items?.length) {
+        void prefetchUnsummarizedNews(feed.items, 5);
+      }
+      return feed;
     }),
     refresh: publicProcedure.input(z3.object({ teamCode: z3.string().length(2).or(z3.string().length(3)) })).mutation(async ({ input }) => {
       const count = await refreshOfficialTeamFeed(input.teamCode.toUpperCase());
       return { count };
     }),
     japaneseSummary: publicProcedure.input(z3.object({ itemId: z3.number().int().positive() })).mutation(async ({ input }) => {
-      if (!NEWS_SUMMARIES_ENABLED) return { itemId: input.itemId, summary: null, englishSummary: null, generated: false, frozen: true };
+      if (!NEWS_SUMMARIES_ENABLED) return { itemId: input.itemId, summary: null, generated: false, frozen: true };
       const item = await getOfficialFeedItemById(input.itemId);
       if (!item) throw new Error("Official news item was not found");
       if (item.japaneseSummary) {
-        return { itemId: item.id, summary: item.japaneseSummary, englishSummary: item.englishSummary, generated: true };
+        return { itemId: item.id, summary: item.japaneseSummary, generated: true };
       }
       try {
         const textToSummarize = item.summary || item.title;
         const result = await generateBilingualSummary(item.title, textToSummarize);
         if (result?.japaneseSummary) {
           await saveOfficialFeedJapaneseSummary(item.id, result.japaneseSummary);
-          if (result.englishSummary) {
-            await saveOfficialFeedEnglishSummary(item.id, result.englishSummary);
-          }
-          return { itemId: item.id, summary: result.japaneseSummary, englishSummary: result.englishSummary, generated: true };
+          return { itemId: item.id, summary: result.japaneseSummary, generated: true };
         }
       } catch (error) {
         console.warn("[Official news summary] generation unavailable", { itemId: item.id, error: error instanceof Error ? error.message : error });
       }
-      return { itemId: item.id, summary: null, englishSummary: null, generated: false };
+      return { itemId: item.id, summary: null, generated: false };
     }),
     englishSummary: publicProcedure.input(z3.object({ itemId: z3.number().int().positive() })).mutation(async ({ input }) => {
-      if (!NEWS_SUMMARIES_ENABLED) return { itemId: input.itemId, summary: null, japaneseSummary: null, generated: false, frozen: true };
+      if (!NEWS_SUMMARIES_ENABLED) return { itemId: input.itemId, summary: null, generated: false, frozen: true };
       const item = await getOfficialFeedItemById(input.itemId);
       if (!item) throw new Error("Official news item was not found");
-      if (item.englishSummary) {
-        return { itemId: item.id, summary: item.englishSummary, japaneseSummary: item.japaneseSummary, generated: true };
-      }
+      if (item.englishSummary) return { itemId: item.id, summary: item.englishSummary, generated: true };
       try {
         const textToSummarize = item.summary || item.title;
         const result = await generateBilingualSummary(item.title, textToSummarize);
         if (result?.englishSummary) {
           await saveOfficialFeedEnglishSummary(item.id, result.englishSummary);
-          if (result.japaneseSummary) {
-            await saveOfficialFeedJapaneseSummary(item.id, result.japaneseSummary);
-          }
-          return { itemId: item.id, summary: result.englishSummary, japaneseSummary: result.japaneseSummary, generated: true };
+          return { itemId: item.id, summary: result.englishSummary, generated: true };
         }
       } catch (error) {
         console.warn("[Official English news summary] generation unavailable", { itemId: item.id, error: error instanceof Error ? error.message : error });
