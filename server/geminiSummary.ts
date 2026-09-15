@@ -13,30 +13,24 @@ export async function generateBilingualSummary(
     return null;
   }
 
-  // 記事の中身をより多く渡す（最大4,000文字）
+  // 記事の中身を最大4,000文字まで渡す
   const articleBody = rawText.slice(0, 4000);
 
-  const prompt = `You are a professional NFL beat writer and expert analyst for Japanese NFL fans.
-Read the following NFL article title and text carefully. Then, provide a detailed, substantive summary that explains the ACTUAL CONTENT, facts, performance evaluations, and tactical takeaways of the article.
+  const prompt = `You are a professional NFL analyst writing for passionate Japanese NFL fans.
+Analyze the following article carefully and provide a comprehensive, substantive bilingual summary focusing directly on the facts, specific plays, tactical details, roster decisions, and performance breakdowns.
 
-[CRITICAL INSTRUCTIONS FOR "japaneseSummary"]
-1. DO NOT write meta-summaries or table-of-contents introductions such as "〜についての記事" (Article about...), "〜を掲載している" (Features...), "〜を解説" (Explains...), or "〜のレビュー".
-2. Write the ACTUAL SUBSTANCE and analysis directly (e.g., what specific plays worked, player performance details, coach comments, tactical strengths/weaknesses, statistical context).
-3. Target length: approximately 350 to 450 Japanese characters.
-4. Format: Either a well-structured multi-point breakdown or 2-3 substantive analytical paragraphs explaining the core story in depth.
+[Rules for japaneseSummary]
+- Target length: 350 to 450 Japanese characters.
+- DO NOT use meta-phrases such as "〜についての記事", "〜を掲載している", "〜を分析している", or "〜のレビュー".
+- Directly describe WHAT happened, WHO did what, HOW players/teams performed, and WHAT the tactical takeaways are.
+- Provide concrete substance, player names, tactical strengths/weaknesses, or game context.
 
-[CRITICAL INSTRUCTIONS FOR "englishSummary"]
-1. Provide a clear, substantive English summary (3 to 4 detailed bullet points or 1-2 analytical paragraphs) focusing on concrete takeaways, facts, and film breakdown points.
-2. Avoid generic meta-statements like "This article discusses...".
-
-Output MUST be strictly valid JSON matching this schema:
-{
-  "japaneseSummary": "記事の具体的な事実や分析内容を直接記述した400字前後の詳細要約",
-  "englishSummary": "Substantive takeaway 1\\nSubstantive takeaway 2\\nSubstantive takeaway 3"
-}
+[Rules for englishSummary]
+- Provide 3 to 4 detailed bullet points or paragraphs covering the core takeaways, facts, and film breakdown points.
+- Avoid generic meta-announcements.
 
 Article Title: ${title}
-Article Content:
+Article Body:
 ${articleBody}`;
 
   const model = "gemini-3.6-flash";
@@ -51,8 +45,23 @@ ${articleBody}`;
           contents: [{ parts: [{ text: prompt }] }],
           generationConfig: {
             responseMimeType: "application/json",
+            // Structured Outputs: JSONの型スキーマを厳格に強制
+            responseSchema: {
+              type: "OBJECT",
+              properties: {
+                japaneseSummary: {
+                  type: "STRING",
+                  description: "350〜450字の具体的な分析・事実・試合展開を記述した日本語要約",
+                },
+                englishSummary: {
+                  type: "STRING",
+                  description: "Detailed takeaways, facts, and film breakdown points in English",
+                },
+              },
+              required: ["japaneseSummary", "englishSummary"],
+            },
             temperature: 0.2,
-            maxOutputTokens: 1500, // 400字以上の長文でも途切れないよう拡張
+            maxOutputTokens: 2500,
           },
         }),
       });
@@ -73,11 +82,17 @@ ${articleBody}`;
       const contentText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
       if (!contentText) return null;
 
-      // JSON パース（前後の空白や余分な改行をトリム）
-      const parsed = JSON.parse(contentText.trim());
+      let cleaned = contentText.trim();
+      if (cleaned.startsWith("```json")) {
+        cleaned = cleaned.replace(/^```json\s*/, "").replace(/\s*```$/, "");
+      } else if (cleaned.startsWith("```")) {
+        cleaned = cleaned.replace(/^```\s*/, "").replace(/\s*```$/, "");
+      }
+
+      const parsed = JSON.parse(cleaned);
       return {
-        japaneseSummary: parsed.japaneseSummary || "",
-        englishSummary: parsed.englishSummary || "",
+        japaneseSummary: parsed.japaneseSummary?.trim() || "",
+        englishSummary: parsed.englishSummary?.trim() || "",
       };
     } catch (error) {
       console.warn(`[Gemini API] Error on attempt ${attempt}:`, error instanceof Error ? error.message : error);
