@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { ExternalLink, Sparkles, Languages, Loader2, AlertCircle, RefreshCw } from "lucide-react";
+import { ExternalLink, Sparkles, Loader2, AlertCircle, RefreshCw } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import {
@@ -32,10 +32,7 @@ export function ArticleSummaryDialog({
   open,
   onClose,
 }: ArticleSummaryDialogProps) {
-  const [activeTab, setActiveTab] = useState<"ja" | "en">("ja");
-  const [sessionSummaries, setSessionSummaries] = useState<
-    Record<number, { ja?: string | null; en?: string | null }>
-  >({});
+  const [sessionSummaries, setSessionSummaries] = useState<Record<number, string>>({});
   const [hasFailed, setHasFailed] = useState(false);
 
   const summaryMutation = trpc.officialFeed.japaneseSummary.useMutation({
@@ -43,10 +40,7 @@ export function ArticleSummaryDialog({
       if (data?.generated && data.summary) {
         setSessionSummaries((prev) => ({
           ...prev,
-          [data.itemId]: {
-            ja: data.summary,
-            en: data.englishSummary ?? prev[data.itemId]?.en,
-          },
+          [data.itemId]: data.summary,
         }));
         setHasFailed(false);
       } else {
@@ -66,22 +60,20 @@ export function ArticleSummaryDialog({
 
   useEffect(() => {
     if (!open || !article) {
-      setActiveTab("ja");
       setHasFailed(false);
       return;
     }
 
-    const currentJa = sessionSummaries[article.id]?.ja ?? article.japaneseSummary;
-    if (!currentJa && !summaryMutation.isPending) {
+    const currentSummary = sessionSummaries[article.id] ?? article.japaneseSummary;
+    if (!currentSummary && !summaryMutation.isPending) {
       requestSummary();
     }
   }, [open, article?.id]);
 
   if (!article) return null;
 
-  const currentJa = sessionSummaries[article.id]?.ja ?? article.japaneseSummary;
-  const currentEn = sessionSummaries[article.id]?.en ?? article.englishSummary;
-  const isGenerating = summaryMutation.isPending && !currentJa;
+  const currentSummary = sessionSummaries[article.id] ?? article.japaneseSummary;
+  const isGenerating = summaryMutation.isPending && !currentSummary;
 
   const formattedDate = `${new Intl.DateTimeFormat("ja-JP", {
     month: "numeric",
@@ -109,32 +101,10 @@ export function ArticleSummaryDialog({
           </DialogDescription>
         </div>
 
-        {/* 日英切り替えタブ */}
-        <div className="flex border-b border-[#eeeae1] bg-[#f8f6f0] px-5 pt-2">
-          <button
-            type="button"
-            onClick={() => setActiveTab("ja")}
-            className={`flex items-center gap-1.5 px-4 py-2 font-mono text-xs font-bold transition-colors border-b-2 ${
-              activeTab === "ja"
-                ? "border-[#e85d2a] text-[#10213a] bg-white rounded-t-md"
-                : "border-transparent text-[#64748b] hover:text-[#10213a]"
-            }`}
-          >
-            <Sparkles className="w-3.5 h-3.5 text-[#e85d2a]" />
-            日本語要約
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab("en")}
-            className={`flex items-center gap-1.5 px-4 py-2 font-mono text-xs font-bold transition-colors border-b-2 ${
-              activeTab === "en"
-                ? "border-[#e85d2a] text-[#10213a] bg-white rounded-t-md"
-                : "border-transparent text-[#64748b] hover:text-[#10213a]"
-            }`}
-          >
-            <Languages className="w-3.5 h-3.5 text-[#526173]" />
-            English Summary
-          </button>
+        {/* 要約ヘッダー */}
+        <div className="flex items-center gap-1.5 border-b border-[#eeeae1] bg-[#f8f6f0] px-5 py-2.5">
+          <Sparkles className="w-3.5 h-3.5 text-[#e85d2a]" />
+          <span className="font-mono text-xs font-bold text-[#10213a]">AI要約</span>
         </div>
 
         {/* 要約本文エリア */}
@@ -146,12 +116,11 @@ export function ArticleSummaryDialog({
                 Gemini AI が要約を生成中…
               </p>
             </div>
-          ) : hasFailed && !currentJa ? (
+          ) : hasFailed && !currentSummary ? (
             <div className="flex flex-col items-center justify-center py-6 text-center space-y-3 bg-[#fff8f6] rounded-lg border border-[#fbdad4] p-4">
               <AlertCircle className="w-5 h-5 text-[#e85d2a]" />
               <p className="text-xs text-[#842e1b] font-medium leading-relaxed">
-                Google AI サーバーが一時的に混雑しているか、短時間のリクエスト上限に達しました。<br />
-                少し時間を置いてから再試行してください。
+                要約の取得に失敗しました。一時的な混雑の可能性があります。
               </p>
               <Button
                 variant="outline"
@@ -165,9 +134,7 @@ export function ArticleSummaryDialog({
             </div>
           ) : (
             <div className="text-sm leading-relaxed text-[#334155] whitespace-pre-wrap font-sans">
-              {activeTab === "ja"
-                ? currentJa || "日本語要約がまだありません。「もう一度要約を試す」を押してください。"
-                : currentEn || article.summary || "No summary available."}
+              {currentSummary || "要約がありません。「もう一度要約を試す」を押してください。"}
             </div>
           )}
         </div>
