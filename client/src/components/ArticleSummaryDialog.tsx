@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { ExternalLink, Sparkles, Languages, Loader2 } from "lucide-react";
+import { ExternalLink, Sparkles, Languages, Loader2, AlertCircle, RefreshCw } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import {
@@ -36,76 +36,52 @@ export function ArticleSummaryDialog({
   const [sessionSummaries, setSessionSummaries] = useState<
     Record<number, { ja?: string | null; en?: string | null }>
   >({});
+  const [hasFailed, setHasFailed] = useState(false);
 
-  const jaMutation = trpc.officialFeed.japaneseSummary.useMutation({
+  const summaryMutation = trpc.officialFeed.japaneseSummary.useMutation({
     onSuccess: (data) => {
-      if (data?.itemId && data.summary) {
+      if (data?.generated && data.summary) {
         setSessionSummaries((prev) => ({
           ...prev,
           [data.itemId]: {
-            ...prev[data.itemId],
             ja: data.summary,
+            en: data.englishSummary ?? prev[data.itemId]?.en,
           },
         }));
+        setHasFailed(false);
+      } else {
+        setHasFailed(true);
       }
+    },
+    onError: () => {
+      setHasFailed(true);
     },
   });
 
-  const enMutation = trpc.officialFeed.englishSummary.useMutation({
-    onSuccess: (data) => {
-      if (data?.itemId && data.summary) {
-        setSessionSummaries((prev) => ({
-          ...prev,
-          [data.itemId]: {
-            ...prev[data.itemId],
-            en: data.summary,
-          },
-        }));
-      }
-    },
-  });
+  const requestSummary = () => {
+    if (!article) return;
+    setHasFailed(false);
+    summaryMutation.mutate({ itemId: article.id });
+  };
 
-  // モーダルを開いた時、日本語要約が未生成なら自動生成を実行
   useEffect(() => {
     if (!open || !article) {
       setActiveTab("ja");
+      setHasFailed(false);
       return;
     }
 
     const currentJa = sessionSummaries[article.id]?.ja ?? article.japaneseSummary;
-    if (!currentJa && !jaMutation.isPending) {
-      jaMutation.mutate({ itemId: article.id });
+    if (!currentJa && !summaryMutation.isPending) {
+      requestSummary();
     }
   }, [open, article?.id]);
-
-  // 英語タブに切り替えた際、英語要約が未生成なら自動取得を実行
-  useEffect(() => {
-    if (!open || !article || activeTab !== "en") return;
-
-    const currentEn = sessionSummaries[article.id]?.en ?? article.englishSummary;
-    if (!currentEn && !enMutation.isPending) {
-      enMutation.mutate({ itemId: article.id });
-    }
-  }, [open, article?.id, activeTab]);
 
   if (!article) return null;
 
   const currentJa = sessionSummaries[article.id]?.ja ?? article.japaneseSummary;
   const currentEn = sessionSummaries[article.id]?.en ?? article.englishSummary;
-
-  const isGenerating =
-    (activeTab === "ja" && jaMutation.isPending && !currentJa) ||
-    (activeTab === "en" && enMutation.isPending && !currentEn);
-
-  const jaText =
-    currentJa ||
-    article.summary ||
-    "日本語の要約は準備中です。下のボタンから元記事をご確認ください。";
-
-  const enText =
-    currentEn ||
-    article.summary ||
-    "English summary is currently being prepared. Please view the original article below.";
+  const isGenerating = summaryMutation.isPending && !currentJa;
 
   const formattedDate = `${new Intl.DateTimeFormat("ja-JP", {
     month: "numeric",
@@ -162,17 +138,36 @@ export function ArticleSummaryDialog({
         </div>
 
         {/* 要約本文エリア */}
-        <div className="p-5 max-h-[45vh] min-h-[120px] overflow-y-auto">
+        <div className="p-5 max-h-[45vh] min-h-[140px] overflow-y-auto">
           {isGenerating ? (
-            <div className="flex flex-col items-center justify-center py-6 text-center space-y-2">
-              <Loader2 className="w-5 h-5 animate-spin text-[#e85d2a]" />
+            <div className="flex flex-col items-center justify-center py-8 text-center space-y-2">
+              <Loader2 className="w-6 h-6 animate-spin text-[#e85d2a]" />
               <p className="font-mono text-xs font-semibold text-[#64748b]">
-                {activeTab === "ja" ? "AI日本語要約を生成中…" : "Generating AI summary…"}
+                Gemini AI が要約を生成中…
               </p>
+            </div>
+          ) : hasFailed && !currentJa ? (
+            <div className="flex flex-col items-center justify-center py-6 text-center space-y-3 bg-[#fff8f6] rounded-lg border border-[#fbdad4] p-4">
+              <AlertCircle className="w-5 h-5 text-[#e85d2a]" />
+              <p className="text-xs text-[#842e1b] font-medium leading-relaxed">
+                Google AI サーバーが一時的に混雑しているか、短時間のリクエスト上限に達しました。<br />
+                少し時間を置いてから再試行してください。
+              </p>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={requestSummary}
+                className="inline-flex items-center gap-1.5 text-xs font-bold text-[#e85d2a] border-[#e85d2a] hover:bg-[#fff0eb]"
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+                もう一度要約を試す
+              </Button>
             </div>
           ) : (
             <div className="text-sm leading-relaxed text-[#334155] whitespace-pre-wrap font-sans">
-              {activeTab === "ja" ? jaText : enText}
+              {activeTab === "ja"
+                ? currentJa || "日本語要約がまだありません。「もう一度要約を試す」を押してください。"
+                : currentEn || article.summary || "No summary available."}
             </div>
           )}
         </div>
