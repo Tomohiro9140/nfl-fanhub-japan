@@ -7,8 +7,9 @@ interface SummaryResult {
  * Google AI Studio の Gemini API を使用して、記事のタイトルと概要から日英の3行要約を生成する
  */
 export async function generateBilingualSummary(title: string, rawText: string): Promise<SummaryResult | null> {
-  const apiKey = process.env.GEMINI_API_KEY;
+  const apiKey = process.env.GEMINI_API_KEY?.trim();
   if (!apiKey) {
+    console.warn("[Gemini API] GEMINI_API_KEY is not set.");
     return null;
   }
 
@@ -26,36 +27,43 @@ Output MUST be strictly valid JSON matching this structure:
 Article Title: ${title}
 Article Snippet: ${rawText.slice(0, 1000)}`;
 
-  try {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
-    const response = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: {
-          responseMimeType: "application/json",
-          temperature: 0.2,
-        },
-      }),
-    });
+  // 404を回避するため、最新モデルから順にフォールバック試行
+  const candidateModels = ["gemini-2.0-flash", "gemini-1.5-flash-latest", "gemini-1.5-flash"];
 
-    if (!response.ok) {
-      console.warn(`[Gemini API] Failed to generate summary: ${response.status}`);
-      return null;
+  for (const model of candidateModels) {
+    try {
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+      const response = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: {
+            responseMimeType: "application/json",
+            temperature: 0.2,
+          },
+        }),
+      });
+
+      if (!response.ok) {
+        const errText = await response.text();
+        console.warn(`[Gemini API] Model ${model} returned ${response.status}: ${errText}`);
+        continue;
+      }
+
+      const data = await response.json();
+      const contentText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (!contentText) continue;
+
+      const parsed = JSON.parse(contentText);
+      return {
+        japaneseSummary: parsed.japaneseSummary || "",
+        englishSummary: parsed.englishSummary || "",
+      };
+    } catch (error) {
+      console.warn(`[Gemini API] Error with ${model}:`, error instanceof Error ? error.message : error);
     }
-
-    const data = await response.json();
-    const contentText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (!contentText) return null;
-
-    const parsed = JSON.parse(contentText);
-    return {
-      japaneseSummary: parsed.japaneseSummary || "",
-      englishSummary: parsed.englishSummary || "",
-    };
-  } catch (error) {
-    console.warn("[Gemini API] Error during summary generation:", error instanceof Error ? error.message : error);
-    return null;
   }
+
+  return null;
 }
