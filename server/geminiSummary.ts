@@ -3,31 +3,45 @@ interface SummaryResult {
   englishSummary: string;
 }
 
-export async function generateBilingualSummary(title: string, rawText: string): Promise<SummaryResult | null> {
+export async function generateBilingualSummary(
+  title: string,
+  rawText: string
+): Promise<SummaryResult | null> {
   const apiKey = process.env.GEMINI_API_KEY?.trim();
   if (!apiKey) {
     console.warn("[Gemini API] GEMINI_API_KEY is not set.");
     return null;
   }
 
-  const prompt = `You are an expert NFL analyst and bilingual editor.
-Based on the following NFL article title and snippet, produce two summaries:
-1. "japaneseSummary": 2 to 3 concise, clear Japanese bullet points explaining the core news to a Japanese NFL fan.
-2. "englishSummary": 2 to 3 concise, clear English bullet points explaining the core news.
+  // 記事の中身をより多く渡す（最大4,000文字）
+  const articleBody = rawText.slice(0, 4000);
 
-Output MUST be strictly valid JSON matching this structure:
+  const prompt = `You are a professional NFL beat writer and expert analyst for Japanese NFL fans.
+Read the following NFL article title and text carefully. Then, provide a detailed, substantive summary that explains the ACTUAL CONTENT, facts, performance evaluations, and tactical takeaways of the article.
+
+[CRITICAL INSTRUCTIONS FOR "japaneseSummary"]
+1. DO NOT write meta-summaries or table-of-contents introductions such as "〜についての記事" (Article about...), "〜を掲載している" (Features...), "〜を解説" (Explains...), or "〜のレビュー".
+2. Write the ACTUAL SUBSTANCE and analysis directly (e.g., what specific plays worked, player performance details, coach comments, tactical strengths/weaknesses, statistical context).
+3. Target length: approximately 350 to 450 Japanese characters.
+4. Format: Either a well-structured multi-point breakdown or 2-3 substantive analytical paragraphs explaining the core story in depth.
+
+[CRITICAL INSTRUCTIONS FOR "englishSummary"]
+1. Provide a clear, substantive English summary (3 to 4 detailed bullet points or 1-2 analytical paragraphs) focusing on concrete takeaways, facts, and film breakdown points.
+2. Avoid generic meta-statements like "This article discusses...".
+
+Output MUST be strictly valid JSON matching this schema:
 {
-  "japaneseSummary": "・要点1\\n・要点2\\n・要点3",
-  "englishSummary": "• Key takeaway 1\\n• Key takeaway 2\\n• Key takeaway 3"
+  "japaneseSummary": "記事の具体的な事実や分析内容を直接記述した400字前後の詳細要約",
+  "englishSummary": "Substantive takeaway 1\\nSubstantive takeaway 2\\nSubstantive takeaway 3"
 }
 
 Article Title: ${title}
-Article Snippet: ${rawText.slice(0, 1000)}`;
+Article Content:
+${articleBody}`;
 
   const model = "gemini-3.6-flash";
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
 
-  // 503（一時的過負荷）対策として最大2回試行
   for (let attempt = 1; attempt <= 2; attempt++) {
     try {
       const response = await fetch(url, {
@@ -38,6 +52,7 @@ Article Snippet: ${rawText.slice(0, 1000)}`;
           generationConfig: {
             responseMimeType: "application/json",
             temperature: 0.2,
+            maxOutputTokens: 1500, // 400字以上の長文でも途切れないよう拡張
           },
         }),
       });
@@ -58,7 +73,8 @@ Article Snippet: ${rawText.slice(0, 1000)}`;
       const contentText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
       if (!contentText) return null;
 
-      const parsed = JSON.parse(contentText);
+      // JSON パース（前後の空白や余分な改行をトリム）
+      const parsed = JSON.parse(contentText.trim());
       return {
         japaneseSummary: parsed.japaneseSummary || "",
         englishSummary: parsed.englishSummary || "",
