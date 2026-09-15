@@ -51,13 +51,25 @@ export type AgentOfficialFeedItem = {
   publishedAt: string;
 };
 
-/** Returns true when the five-card LATEST NEWS panel needs more official RSS entries. */
-export function needsOfficialNewsTopUp(items: Array<{ category: string }>) {
-  return items.filter((item) => item.category === "news").length < 5;
+/** Returns true when the five-card LATEST NEWS panel needs more official RSS entries or missing summaries. */
+export function needsOfficialNewsTopUp(items: Array<{ category: string; japaneseSummary?: string | null }>) {
+  const newsItems = items.filter((item) => item.category === "news");
+  if (newsItems.length < 5) return true;
+  if (NEWS_SUMMARIES_ENABLED && process.env.GEMINI_API_KEY) {
+    const hasAnySummary = newsItems.some((item) => Boolean(item.japaneseSummary));
+    if (!hasAnySummary) return true;
+  }
+  return false;
 }
 
-export function shouldSynchronouslyTopUpOfficialNews(items: Array<{ category: string }>) {
-  return items.length === 0;
+export function shouldSynchronouslyTopUpOfficialNews(items: Array<{ category: string; japaneseSummary?: string | null }>) {
+  if (items.length === 0) return true;
+  if (NEWS_SUMMARIES_ENABLED && process.env.GEMINI_API_KEY) {
+    const newsItems = items.filter((item) => item.category === "news");
+    const hasAnySummary = newsItems.some((item) => Boolean(item.japaneseSummary));
+    if (newsItems.length > 0 && !hasAnySummary) return true;
+  }
+  return false;
 }
 
 const TEAM_NEWS_TOP_UP_COOLDOWN_MS = 15 * 60 * 1_000;
@@ -334,22 +346,22 @@ export async function refreshOfficialTeamNews(teamCode: string) {
   const items = parseOfficialTeamRss(xml, teamCode, teamSource);
   if (items.length === 0) throw new Error(`No RSS items found for ${teamCode}`);
 
-  // AI要約が有効かつGEMINI_API_KEYが存在する場合、最新ニュース上位3件に日英要約を自動付与
   if (NEWS_SUMMARIES_ENABLED && process.env.GEMINI_API_KEY) {
     const targetNews = items.filter((item) => item.category === "news").slice(0, 3);
     for (const item of targetNews) {
-      if (item.summary) {
-        try {
-          const summaryRes = await generateBilingualSummary(item.title, item.summary);
-          if (summaryRes) {
-            item.japaneseSummary = summaryRes.japaneseSummary;
-            item.japaneseSummaryFetchedAt = new Date();
-            item.englishSummary = summaryRes.englishSummary;
-            item.englishSummaryFetchedAt = new Date();
-          }
-        } catch (err) {
-          console.warn(`[AI Summary] Skipped for ${item.title}:`, err);
+      const textToSummarize = item.summary || item.title;
+      try {
+        console.log(`[Gemini API] Generating summary for: ${item.title}`);
+        const summaryRes = await generateBilingualSummary(item.title, textToSummarize);
+        if (summaryRes) {
+          item.japaneseSummary = summaryRes.japaneseSummary;
+          item.japaneseSummaryFetchedAt = new Date();
+          item.englishSummary = summaryRes.englishSummary;
+          item.englishSummaryFetchedAt = new Date();
+          console.log(`[Gemini API] Successfully generated summary for: ${item.title}`);
         }
+      } catch (err) {
+        console.warn(`[AI Summary] Skipped for ${item.title}:`, err);
       }
     }
   }
@@ -373,18 +385,19 @@ export async function refreshOfficialTeamFeed(teamCode: string) {
   if (NEWS_SUMMARIES_ENABLED && process.env.GEMINI_API_KEY) {
     const targetNews = items.filter((item) => item.category === "news").slice(0, 3);
     for (const item of targetNews) {
-      if (item.summary) {
-        try {
-          const summaryRes = await generateBilingualSummary(item.title, item.summary);
-          if (summaryRes) {
-            item.japaneseSummary = summaryRes.japaneseSummary;
-            item.japaneseSummaryFetchedAt = new Date();
-            item.englishSummary = summaryRes.englishSummary;
-            item.englishSummaryFetchedAt = new Date();
-          }
-        } catch (err) {
-          console.warn(`[AI Summary] Skipped for ${item.title}:`, err);
+      const textToSummarize = item.summary || item.title;
+      try {
+        console.log(`[Gemini API] Generating summary for: ${item.title}`);
+        const summaryRes = await generateBilingualSummary(item.title, textToSummarize);
+        if (summaryRes) {
+          item.japaneseSummary = summaryRes.japaneseSummary;
+          item.japaneseSummaryFetchedAt = new Date();
+          item.englishSummary = summaryRes.englishSummary;
+          item.englishSummaryFetchedAt = new Date();
+          console.log(`[Gemini API] Successfully generated summary for: ${item.title}`);
         }
+      } catch (err) {
+        console.warn(`[AI Summary] Skipped for ${item.title}:`, err);
       }
     }
   }
