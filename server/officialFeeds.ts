@@ -2,8 +2,6 @@ import { createHash } from "node:crypto";
 import type { InsertOfficialFeedItem } from "../drizzle/schema";
 import { getOfficialFeedItems, upsertOfficialFeedItems } from "./db";
 import { refreshOfficialTeamData, TEAM_NAMES } from "./officialTeamData";
-import { generateBilingualSummary } from "./geminiSummary";
-import { NEWS_SUMMARIES_ENABLED } from "@shared/newsSummaryFeature";
 
 const NFL_OFFICIAL_INJURY_URL = "https://www.nfl.com/injuries/";
 const NFL_OFFICIAL_INACTIVES_URL = "https://www.nfl.com/injuries/";
@@ -51,25 +49,13 @@ export type AgentOfficialFeedItem = {
   publishedAt: string;
 };
 
-/** Returns true when the five-card LATEST NEWS panel needs more official RSS entries or missing summaries. */
-export function needsOfficialNewsTopUp(items: Array<{ category: string; japaneseSummary?: string | null }>) {
-  const newsItems = items.filter((item) => item.category === "news");
-  if (newsItems.length < 5) return true;
-  if (NEWS_SUMMARIES_ENABLED && process.env.GEMINI_API_KEY) {
-    const hasAnySummary = newsItems.some((item) => Boolean(item.japaneseSummary));
-    if (!hasAnySummary) return true;
-  }
-  return false;
+/** Returns true when the five-card LATEST NEWS panel needs more official RSS entries. */
+export function needsOfficialNewsTopUp(items: Array<{ category: string }>) {
+  return items.filter((item) => item.category === "news").length < 5;
 }
 
-export function shouldSynchronouslyTopUpOfficialNews(items: Array<{ category: string; japaneseSummary?: string | null }>) {
-  if (items.length === 0) return true;
-  if (NEWS_SUMMARIES_ENABLED && process.env.GEMINI_API_KEY) {
-    const newsItems = items.filter((item) => item.category === "news");
-    const hasAnySummary = newsItems.some((item) => Boolean(item.japaneseSummary));
-    if (newsItems.length > 0 && !hasAnySummary) return true;
-  }
-  return false;
+export function shouldSynchronouslyTopUpOfficialNews(items: Array<{ category: string }>) {
+  return items.length === 0;
 }
 
 const TEAM_NEWS_TOP_UP_COOLDOWN_MS = 15 * 60 * 1_000;
@@ -339,33 +325,12 @@ export async function refreshOfficialNflInactives(options: { fetchHtml?: (url: s
   return { reports: items.length };
 }
 
-/** Refreshes only a club's official RSS news, generating bilingual summaries if enabled. */
+/** Refreshes only a club's official RSS news. */
 export async function refreshOfficialTeamNews(teamCode: string) {
   const [teamSource] = getOfficialSources(teamCode);
   const xml = await fetchRss(teamSource.url);
   const items = parseOfficialTeamRss(xml, teamCode, teamSource);
   if (items.length === 0) throw new Error(`No RSS items found for ${teamCode}`);
-
-  if (NEWS_SUMMARIES_ENABLED && process.env.GEMINI_API_KEY) {
-    const targetNews = items.filter((item) => item.category === "news").slice(0, 3);
-    for (const item of targetNews) {
-      const textToSummarize = item.summary || item.title;
-      try {
-        console.log(`[Gemini API] Generating summary for: ${item.title}`);
-        const summaryRes = await generateBilingualSummary(item.title, textToSummarize);
-        if (summaryRes) {
-          item.japaneseSummary = summaryRes.japaneseSummary;
-          item.japaneseSummaryFetchedAt = new Date();
-          item.englishSummary = summaryRes.englishSummary;
-          item.englishSummaryFetchedAt = new Date();
-          console.log(`[Gemini API] Successfully generated summary for: ${item.title}`);
-        }
-      } catch (err) {
-        console.warn(`[AI Summary] Skipped for ${item.title}:`, err);
-      }
-    }
-  }
-
   await upsertOfficialFeedItems(items);
   return items.length;
 }
@@ -381,27 +346,6 @@ export async function refreshOfficialTeamFeed(teamCode: string) {
   const injuryItems = await retainFreshNflInjuryItems(injuryCandidates);
   const items = [...teamItems, ...injuryItems];
   if (items.length === 0) throw new Error(`No RSS items found for ${teamCode}`);
-
-  if (NEWS_SUMMARIES_ENABLED && process.env.GEMINI_API_KEY) {
-    const targetNews = items.filter((item) => item.category === "news").slice(0, 3);
-    for (const item of targetNews) {
-      const textToSummarize = item.summary || item.title;
-      try {
-        console.log(`[Gemini API] Generating summary for: ${item.title}`);
-        const summaryRes = await generateBilingualSummary(item.title, textToSummarize);
-        if (summaryRes) {
-          item.japaneseSummary = summaryRes.japaneseSummary;
-          item.japaneseSummaryFetchedAt = new Date();
-          item.englishSummary = summaryRes.englishSummary;
-          item.englishSummaryFetchedAt = new Date();
-          console.log(`[Gemini API] Successfully generated summary for: ${item.title}`);
-        }
-      } catch (err) {
-        console.warn(`[AI Summary] Skipped for ${item.title}:`, err);
-      }
-    }
-  }
-
   await upsertOfficialFeedItems(items);
   return items.length;
 }
