@@ -1,6 +1,6 @@
 interface SummaryResult {
   japaneseSummary: string;
-  englishSummary: string;
+  englishSummary?: string;
 }
 
 export async function generateBilingualSummary(
@@ -13,21 +13,17 @@ export async function generateBilingualSummary(
     return null;
   }
 
-  // 記事の中身を最大4,000文字まで渡す
-  const articleBody = rawText.slice(0, 4000);
+  // 記事本文の読み取り量を最適化
+  const articleBody = rawText.slice(0, 3500);
 
   const prompt = `You are a professional NFL analyst writing for passionate Japanese NFL fans.
-Analyze the following article carefully and provide a comprehensive, substantive bilingual summary focusing directly on the facts, specific plays, tactical details, roster decisions, and performance breakdowns.
+Analyze the following article carefully and provide a comprehensive, substantive Japanese summary directly describing the actual facts, tactical takeaways, roster moves, and player performances.
 
-[Rules for japaneseSummary]
+[Critical Rules]
 - Target length: 350 to 450 Japanese characters.
-- DO NOT use meta-phrases such as "〜についての記事", "〜を掲載している", "〜を分析している", or "〜のレビュー".
-- Directly describe WHAT happened, WHO did what, HOW players/teams performed, and WHAT the tactical takeaways are.
-- Provide concrete substance, player names, tactical strengths/weaknesses, or game context.
-
-[Rules for englishSummary]
-- Provide 3 to 4 detailed bullet points or paragraphs covering the core takeaways, facts, and film breakdown points.
-- Avoid generic meta-announcements.
+- DO NOT write meta-introductions or table-of-contents phrases such as "〜についての記事", "〜を掲載している", "〜を分析している", or "〜のレビュー".
+- Directly describe WHAT happened, WHO performed well/poorly, tactical adjustments made, and key takeaways.
+- Provide concrete substance, player names, or strategic context.
 
 Article Title: ${title}
 Article Body:
@@ -45,23 +41,22 @@ ${articleBody}`;
           contents: [{ parts: [{ text: prompt }] }],
           generationConfig: {
             responseMimeType: "application/json",
-            // Structured Outputs: JSONの型スキーマを厳格に強制
             responseSchema: {
               type: "OBJECT",
               properties: {
                 japaneseSummary: {
                   type: "STRING",
-                  description: "350〜450字の具体的な分析・事実・試合展開を記述した日本語要約",
-                },
-                englishSummary: {
-                  type: "STRING",
-                  description: "Detailed takeaways, facts, and film breakdown points in English",
+                  description: "350〜450字の具体的な事実・分析・試合展開を記述した日本語要約",
                 },
               },
-              required: ["japaneseSummary", "englishSummary"],
+              required: ["japaneseSummary"],
             },
             temperature: 0.2,
-            maxOutputTokens: 2500,
+            maxOutputTokens: 800,
+            // 思考プロセスの待機時間をゼロにして即座に出力を開始
+            thinkingConfig: {
+              thinkingBudget: 0,
+            },
           },
         }),
       });
@@ -92,7 +87,7 @@ ${articleBody}`;
       const parsed = JSON.parse(cleaned);
       return {
         japaneseSummary: parsed.japaneseSummary?.trim() || "",
-        englishSummary: parsed.englishSummary?.trim() || "",
+        englishSummary: "",
       };
     } catch (error) {
       console.warn(`[Gemini API] Error on attempt ${attempt}:`, error instanceof Error ? error.message : error);
