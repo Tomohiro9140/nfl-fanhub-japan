@@ -1,13 +1,25 @@
-import React, { useMemo } from "react";
-import { ArrowUpRight, BadgeCheck, CircleAlert, Newspaper, Radio, RefreshCw, Tv } from "lucide-react";
+import React, { useMemo, useState } from "react";
+import { ArrowUpRight, BadgeCheck, CircleAlert, Newspaper, Radio, RefreshCw, Sparkles, Tv } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { hasDistinctNewsSummary } from "@/lib/newsSummary";
 import { dedupeDisplayArticles } from "@/lib/articleDedup";
 import type { FavoriteTeam } from "@/lib/nflTeams";
-import { NEWS_SUMMARIES_ENABLED } from "@shared/newsSummaryFeature";
+import { ArticleSummaryDialog } from "./ArticleSummaryDialog";
 
 type SourceKind = "team_official" | "nfl_official" | "pft" | "cbs";
-type FeedItem = { id: number; title: string; summary: string | null; sourceUrl: string; sourceName: string; sourceKind: SourceKind; category: "news" | "injury" | "transaction"; publishedAt: Date; fetchedAt: Date };
+type FeedItem = {
+  id: number;
+  title: string;
+  summary: string | null;
+  japaneseSummary?: string | null;
+  englishSummary?: string | null;
+  sourceUrl: string;
+  sourceName: string;
+  sourceKind: SourceKind;
+  category: "news" | "injury" | "transaction";
+  publishedAt: Date;
+  fetchedAt: Date;
+};
 type CompletedGame = { gameState: string | null; gameDate?: string | null; finishedAt?: Date | null; kickoffAt: Date; kickoffAtEstimated?: boolean };
 const externalSourceKinds = new Set<SourceKind>(["pft", "cbs"]);
 
@@ -18,13 +30,11 @@ function isRosterMoveNews(item: FeedItem) {
   return /\b(?:transactions?|roster moves?|sign(?:ed|s)?|released?|waived|waivers?|claimed|claim|trade(?:d)?|contract(?: extension)?|extensions?|activated?|designated (?:for|to return)|placed on (?:injured reserve|ir|pup))\b/.test(text);
 }
 
-/** 全チームのニュースから「How to watch」などの放送・視聴案内記事を一律除外 */
 function isBroadcastOrWatchArticle(item: FeedItem) {
   const text = `${item.title} ${item.sourceUrl}`.toLowerCase();
   return /\b(?:how to (?:watch|listen|stream)|ways to watch|where to watch|tune in|broadcast guide|tv schedule|game preview & stream|stream & listen)\b/i.test(text);
 }
 
-/** 英語以外の記事（DALのSomos Cowboys等のスペイン語記事）を一律除外 */
 function isNonEnglishArticle(item: FeedItem) {
   const text = `${item.title} ${item.summary ?? ""} ${item.sourceUrl}`.toLowerCase();
   if (/\/(?:es|espanol|somos-?cowboys)\//i.test(item.sourceUrl)) return true;
@@ -32,7 +42,6 @@ function isNonEnglishArticle(item: FeedItem) {
   return /[¿¡]/.test(item.title);
 }
 
-/** リアルタイム速報・実況スレッド・ハイライト等のネタバレ要素を除外 */
 function isSpoilerNoiseArticle(item: FeedItem) {
   const text = `${item.title} ${item.summary ?? ""} ${item.sourceUrl}`.toLowerCase();
   return /\b(?:live chat|game blog|live updates|in-game updates|highlights?|sliding int|pick-?6|interception|touchdown|final score|instant analysis|postgame|post-game|what we learned|takeaways|game recap)\b/i.test(text);
@@ -51,7 +60,6 @@ function SourceMark({ kind }: { kind: SourceKind }) {
   return <span className={`mt-0.5 inline-flex h-5 w-[58px] shrink-0 items-center justify-center gap-1 overflow-hidden whitespace-nowrap border px-1 font-mono text-[8px] font-bold tracking-[.08em] ${tone}`}><Icon className="h-2.5 w-2.5 shrink-0" />{label}</span>;
 }
 
-/** 試合開始90分前（キックオフ時刻マイナス90分）以降の報道を一律遮断 */
 export function spoilerNewsCutoff(game?: CompletedGame) {
   if (!game) return null;
   const kickoffAt = new Date(game.kickoffAt);
@@ -115,16 +123,66 @@ export function OfficialTeamFeed({ favorite, spoilerMode = false, completedGame 
   const hideAll = spoilerMode && shouldHideAllSpoilerNews(completedGame);
   const news = useMemo(() => selectLatestNews(items, hideFrom, hideAll, spoilerMode), [items, hideFrom, hideAll, spoilerMode]);
 
+  const [activeArticle, setActiveArticle] = useState<FeedItem | null>(null);
+
   return (
     <section id="updates" className="scroll-mt-24">
       <div className="flex items-center gap-2 font-mono text-[10px] font-semibold tracking-[0.2em] text-[#64748b]"><span className="text-[#10213a]">02</span><span>{favorite.code} NEWS DESK</span><span className="h-px flex-1 bg-[#d9d5cc]" /></div>
       <div className="mt-3">
         <article className="clip-note border border-[#ded8cc] bg-white p-3 shadow-[0_10px_30px_rgba(34,42,53,.05)]">
-          <div className="flex items-center justify-between border-b border-[#eeeae1] pb-2"><div className="flex items-center gap-2"><div className="grid h-7 w-7 place-items-center bg-[#10213a] text-white"><Newspaper className="h-3.5 w-3.5" /></div><p className="font-display text-lg font-bold tracking-wide">LATEST NEWS</p></div><button onClick={() => refresh.mutate(feedInput)} disabled={feed.isFetching || refresh.isPending || shouldSimulateUnavailable} className="inline-flex items-center gap-1 font-mono text-[9px] font-bold tracking-[.1em] text-[#526173] hover:text-[#e85d2a] disabled:opacity-50" aria-label="チーム公式RSSとNFL公式負傷情報を同期して最新ニュースを更新"><RefreshCw className={`h-3.5 w-3.5 ${feed.isFetching || refresh.isPending ? "animate-spin" : ""}`} /> {refresh.isPending ? "UPDATING" : "REFRESH"}</button></div>
-          {feed.isLoading && !shouldSimulateUnavailable ? <div className="py-5 text-center font-mono text-[10px] text-[#64748b]">LOADING TEAM NEWS…</div> : news.length > 0 ? <div className="divide-y divide-[#eeeae1]">{news.map((item) => <a key={item.id} href={item.sourceUrl} target="_blank" rel="noreferrer" data-feed-article="latest-news" data-article-url={item.sourceUrl} aria-label={`${item.title}を${sourceLabel(item.sourceKind)}で開く`} className="group flex w-full items-start gap-3 py-2.5 text-left transition hover:bg-[#fffaf0] active:bg-[#fff4ef]"><SourceMark kind={item.sourceKind} /><span className="min-w-0 flex-1"><span className="flex items-center justify-between gap-2"><span className="font-display text-base font-bold tracking-wide">{item.title}</span><ArrowUpRight className="h-3.5 w-3.5 shrink-0 text-[#94a3b8] transition group-hover:text-[#e85d2a]" /></span>{hasDistinctNewsSummary(item.title, item.summary) ? <span className="mt-0.5 block text-[11px] leading-4 text-[#687587]">{item.summary}</span> : null}<span className="mt-1 block font-mono text-[8px] font-bold tracking-[.05em] text-[#94a3b8]">PUBLISHED · {displayDate(item.publishedAt)}</span></span></a>)}</div> : <EmptyFeed teamCode={favorite.code} error={displayError} />}
+          <div className="flex items-center justify-between border-b border-[#eeeae1] pb-2">
+            <div className="flex items-center gap-2">
+              <div className="grid h-7 w-7 place-items-center bg-[#10213a] text-white">
+                <Newspaper className="h-3.5 w-3.5" />
+              </div>
+              <p className="font-display text-lg font-bold tracking-wide">LATEST NEWS</p>
+            </div>
+            <button onClick={() => refresh.mutate(feedInput)} disabled={feed.isFetching || refresh.isPending || shouldSimulateUnavailable} className="inline-flex items-center gap-1 font-mono text-[9px] font-bold tracking-[.1em] text-[#526173] hover:text-[#e85d2a] disabled:opacity-50" aria-label="チーム公式RSSとNFL公式負傷情報を同期して最新ニュースを更新">
+              <RefreshCw className={`h-3.5 w-3.5 ${feed.isFetching || refresh.isPending ? "animate-spin" : ""}`} /> {refresh.isPending ? "UPDATING" : "REFRESH"}
+            </button>
+          </div>
+          {feed.isLoading && !shouldSimulateUnavailable ? (
+            <div className="py-5 text-center font-mono text-[10px] text-[#64748b]">LOADING TEAM NEWS…</div>
+          ) : news.length > 0 ? (
+            <div className="divide-y divide-[#eeeae1]">
+              {news.map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => setActiveArticle(item)}
+                  data-feed-article="latest-news"
+                  data-article-url={item.sourceUrl}
+                  aria-label={`${item.title}の要約を読む`}
+                  className="group flex w-full items-start gap-3 py-2.5 text-left transition hover:bg-[#fffaf0] active:bg-[#fff4ef]"
+                >
+                  <SourceMark kind={item.sourceKind} />
+                  <span className="min-w-0 flex-1">
+                    <span className="flex items-center justify-between gap-2">
+                      <span className="font-display text-base font-bold tracking-wide group-hover:text-[#e85d2a] transition-colors">{item.title}</span>
+                      <span className="inline-flex items-center gap-0.5 font-mono text-[9px] font-bold text-[#e85d2a] shrink-0 opacity-80 group-hover:opacity-100">
+                        <Sparkles className="h-3 w-3" /> 要約
+                      </span>
+                    </span>
+                    {hasDistinctNewsSummary(item.title, item.summary) ? (
+                      <span className="mt-0.5 block text-[11px] leading-4 text-[#687587] line-clamp-2">{item.summary}</span>
+                    ) : null}
+                    <span className="mt-1 block font-mono text-[8px] font-bold tracking-[.05em] text-[#94a3b8]">PUBLISHED · {displayDate(item.publishedAt)}</span>
+                  </span>
+                </button>
+              ))}
+            </div>
+          ) : (
+            <EmptyFeed teamCode={favorite.code} error={displayError} />
+          )}
         </article>
       </div>
       {displayError && <div className="mt-2 flex items-center gap-1.5 border border-[#f1c7b5] bg-[#fff4ef] px-3 py-2 font-mono text-[9px] font-bold tracking-[.06em] text-[#a34220]"><CircleAlert className="h-3.5 w-3.5 shrink-0" />LIVE REFRESH UNAVAILABLE — SHOWING LAST SAVED OFFICIAL ITEMS</div>}
+
+      <ArticleSummaryDialog
+        article={activeArticle}
+        open={Boolean(activeArticle)}
+        onClose={() => setActiveArticle(null)}
+      />
     </section>
   );
 }
