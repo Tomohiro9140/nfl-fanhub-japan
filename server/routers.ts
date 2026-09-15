@@ -26,6 +26,53 @@ const fieldlineAdminProcedure = protectedProcedure.use(async ({ ctx, next }) => 
   return next({ ctx });
 });
 
+// 重複生成を防ぐための処理中アイテム管理
+const activeSummaryItemIds = new Set<number>();
+
+/**
+ * トップページ表示をブロックせず、裏側で未要約の最新ニュースを1件ずつ直列に先回り生成する
+ */
+async function prefetchUnsummarizedNews(
+  items: Array<{ id: number; title: string; summary: string | null; japaneseSummary?: string | null; category: string }>,
+  limit = 5
+) {
+  if (!NEWS_SUMMARIES_ENABLED || !items || items.length === 0) return;
+
+  // 未要約の最新ニュース記事（最大 limit 件）を抽出
+  const targets = items
+    .filter((item) => item.category === "news" && !item.japaneseSummary && !activeSummaryItemIds.has(item.id))
+    .slice(0, limit);
+
+  if (targets.length === 0) return;
+
+  for (const item of targets) {
+    activeSummaryItemIds.add(item.id);
+    try {
+      // 既にDBで要約されていないか念のため再確認
+      const freshItem = await getOfficialFeedItemById(item.id);
+      if (freshItem?.japaneseSummary) {
+        continue;
+      }
+
+      const textToSummarize = item.summary || item.title;
+      const result = await generateBilingualSummary(item.title, textToSummarize);
+      if (result?.japaneseSummary) {
+        await saveOfficialFeedJapaneseSummary(item.id, result.japaneseSummary);
+      }
+
+      // API過負荷（429 / 503）を防ぐため、1件完了ごとに1.5秒のインターバルを設ける
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+    } catch (error) {
+      console.warn("[Background News Summary] Failed for item", {
+        itemId: item.id,
+        error: error instanceof Error ? error.message : error,
+      });
+    } finally {
+      activeSummaryItemIds.delete(item.id);
+    }
+  }
+}
+
 export const appRouter = router({
   system: systemRouter,
   auth: router({
@@ -40,18 +87,27 @@ export const appRouter = router({
   }),
   officialFeed: router({
     byTeam: publicProcedure.input(z.object({ teamCode: z.string().length(2).or(z.string().length(3)) })).query(async ({ input }) => {
-      return getFreshOfficialTeamFeed(input.teamCode.toUpperCase());
+      const feed = await getFreshOfficialTeamFeed(input.teamCode.toUpperCase());
+
+      // 画面の返却を一切待たせず、バックグラウンドで最新5件の未要約ニュースを順次先回り生成
+      if (feed?.items?.length) {
+        void prefetchUnsummarizedNews(feed.items, 5);
+      }
+
+      return feed;
     }),
     refresh: publicProcedure.input(z.object({ teamCode: z.string().length(2).or(z.string().length(3)) })).mutation(async ({ input }) => {
       const count = await refreshOfficialTeamFeed(input.teamCode.toUpperCase());
       return { count };
     }),
     japaneseSummary: publicProcedure.input(z.object({ itemId: z.number().int().positive() })).mutation(async ({ input }) => {
-      if (!NEWS_SUMMARIES_ENABLED) return { itemId: input.itemId, summary: null, englishSummary: null, generated: false, frozen: true };
+      if (!NEWS_SUMMARIES_ENABLED) return { itemId: input.itemId, summary: null, generated: false, frozen: true };
       const item = await getOfficialFeedItemById(input.itemId);
       if (!item) throw new Error("Official news item was not found");
+      
+      // バックグラウンド等で既にDBに保存されていれば即座に返却（0.1秒表示）
       if (item.japaneseSummary) {
-        return { itemId: item.id, summary: item.japaneseSummary, englishSummary: item.englishSummary, generated: true };
+        return { itemId: item.id, summary: item.japaneseSummary, generated: true };
       }
 
       try {
@@ -59,33 +115,25 @@ export const appRouter = router({
         const result = await generateBilingualSummary(item.title, textToSummarize);
         if (result?.japaneseSummary) {
           await saveOfficialFeedJapaneseSummary(item.id, result.japaneseSummary);
-          if (result.englishSummary) {
-            await saveOfficialFeedEnglishSummary(item.id, result.englishSummary);
-          }
-          return { itemId: item.id, summary: result.japaneseSummary, englishSummary: result.englishSummary, generated: true };
+          return { itemId: item.id, summary: result.japaneseSummary, generated: true };
         }
       } catch (error) {
         console.warn("[Official news summary] generation unavailable", { itemId: item.id, error: error instanceof Error ? error.message : error });
       }
-      return { itemId: item.id, summary: null, englishSummary: null, generated: false };
+      return { itemId: item.id, summary: null, generated: false };
     }),
     englishSummary: publicProcedure.input(z.object({ itemId: z.number().int().positive() })).mutation(async ({ input }) => {
-      if (!NEWS_SUMMARIES_ENABLED) return { itemId: input.itemId, summary: null, japaneseSummary: null, generated: false, frozen: true };
+      if (!NEWS_SUMMARIES_ENABLED) return { itemId: input.itemId, summary: null, generated: false, frozen: true };
       const item = await getOfficialFeedItemById(input.itemId);
       if (!item) throw new Error("Official news item was not found");
-      if (item.englishSummary) {
-        return { itemId: item.id, summary: item.englishSummary, japaneseSummary: item.japaneseSummary, generated: true };
-      }
+      if (item.englishSummary) return { itemId: item.id, summary: item.englishSummary, generated: true };
 
       try {
         const textToSummarize = item.summary || item.title;
         const result = await generateBilingualSummary(item.title, textToSummarize);
         if (result?.englishSummary) {
           await saveOfficialFeedEnglishSummary(item.id, result.englishSummary);
-          if (result.japaneseSummary) {
-            await saveOfficialFeedJapaneseSummary(item.id, result.japaneseSummary);
-          }
-          return { itemId: item.id, summary: result.englishSummary, japaneseSummary: result.japaneseSummary, generated: true };
+          return { itemId: item.id, summary: result.englishSummary, generated: true };
         }
       } catch (error) {
         console.warn("[Official English news summary] generation unavailable", { itemId: item.id, error: error instanceof Error ? error.message : error });
