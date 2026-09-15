@@ -47,10 +47,12 @@ export const appRouter = router({
       return { count };
     }),
     japaneseSummary: publicProcedure.input(z.object({ itemId: z.number().int().positive() })).mutation(async ({ input }) => {
-      if (!NEWS_SUMMARIES_ENABLED) return { itemId: input.itemId, summary: null, generated: false, frozen: true };
+      if (!NEWS_SUMMARIES_ENABLED) return { itemId: input.itemId, summary: null, englishSummary: null, generated: false, frozen: true };
       const item = await getOfficialFeedItemById(input.itemId);
       if (!item) throw new Error("Official news item was not found");
-      if (item.japaneseSummary) return { itemId: item.id, summary: item.japaneseSummary, generated: true };
+      if (item.japaneseSummary) {
+        return { itemId: item.id, summary: item.japaneseSummary, englishSummary: item.englishSummary, generated: true };
+      }
 
       try {
         const textToSummarize = item.summary || item.title;
@@ -60,18 +62,20 @@ export const appRouter = router({
           if (result.englishSummary) {
             await saveOfficialFeedEnglishSummary(item.id, result.englishSummary);
           }
-          return { itemId: item.id, summary: result.japaneseSummary, generated: true };
+          return { itemId: item.id, summary: result.japaneseSummary, englishSummary: result.englishSummary, generated: true };
         }
       } catch (error) {
         console.warn("[Official news summary] generation unavailable", { itemId: item.id, error: error instanceof Error ? error.message : error });
       }
-      return { itemId: item.id, summary: item.summary, generated: false };
+      return { itemId: item.id, summary: null, englishSummary: null, generated: false };
     }),
     englishSummary: publicProcedure.input(z.object({ itemId: z.number().int().positive() })).mutation(async ({ input }) => {
-      if (!NEWS_SUMMARIES_ENABLED) return { itemId: input.itemId, summary: null, generated: false, frozen: true };
+      if (!NEWS_SUMMARIES_ENABLED) return { itemId: input.itemId, summary: null, japaneseSummary: null, generated: false, frozen: true };
       const item = await getOfficialFeedItemById(input.itemId);
       if (!item) throw new Error("Official news item was not found");
-      if (item.englishSummary) return { itemId: item.id, summary: item.englishSummary, generated: true };
+      if (item.englishSummary) {
+        return { itemId: item.id, summary: item.englishSummary, japaneseSummary: item.japaneseSummary, generated: true };
+      }
 
       try {
         const textToSummarize = item.summary || item.title;
@@ -81,12 +85,12 @@ export const appRouter = router({
           if (result.japaneseSummary) {
             await saveOfficialFeedJapaneseSummary(item.id, result.japaneseSummary);
           }
-          return { itemId: item.id, summary: result.englishSummary, generated: true };
+          return { itemId: item.id, summary: result.englishSummary, japaneseSummary: result.japaneseSummary, generated: true };
         }
       } catch (error) {
         console.warn("[Official English news summary] generation unavailable", { itemId: item.id, error: error instanceof Error ? error.message : error });
       }
-      return { itemId: item.id, summary: item.summary, generated: false };
+      return { itemId: item.id, summary: null, generated: false };
     }),
   }),
   teamSnapshot: router({
