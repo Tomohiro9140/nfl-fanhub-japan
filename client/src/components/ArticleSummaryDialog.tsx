@@ -1,5 +1,6 @@
-import React, { useState } from "react";
-import { ExternalLink, Sparkles, Languages } from "lucide-react";
+import React, { useEffect, useState } from "react";
+import { ExternalLink, Sparkles, Languages, Loader2 } from "lucide-react";
+import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -32,15 +33,77 @@ export function ArticleSummaryDialog({
   onClose,
 }: ArticleSummaryDialogProps) {
   const [activeTab, setActiveTab] = useState<"ja" | "en">("ja");
+  const [sessionSummaries, setSessionSummaries] = useState<
+    Record<number, { ja?: string | null; en?: string | null }>
+  >({});
+
+  const jaMutation = trpc.officialFeed.japaneseSummary.useMutation({
+    onSuccess: (data) => {
+      if (data?.itemId && data.summary) {
+        setSessionSummaries((prev) => ({
+          ...prev,
+          [data.itemId]: {
+            ...prev[data.itemId],
+            ja: data.summary,
+          },
+        }));
+      }
+    },
+  });
+
+  const enMutation = trpc.officialFeed.englishSummary.useMutation({
+    onSuccess: (data) => {
+      if (data?.itemId && data.summary) {
+        setSessionSummaries((prev) => ({
+          ...prev,
+          [data.itemId]: {
+            ...prev[data.itemId],
+            en: data.summary,
+          },
+        }));
+      }
+    },
+  });
+
+  // モーダルを開いた時、日本語要約が未生成なら自動生成を実行
+  useEffect(() => {
+    if (!open || !article) {
+      setActiveTab("ja");
+      return;
+    }
+
+    const currentJa = sessionSummaries[article.id]?.ja ?? article.japaneseSummary;
+    if (!currentJa && !jaMutation.isPending) {
+      jaMutation.mutate({ itemId: article.id });
+    }
+  }, [open, article?.id]);
+
+  // 英語タブに切り替えた際、英語要約が未生成なら自動取得を実行
+  useEffect(() => {
+    if (!open || !article || activeTab !== "en") return;
+
+    const currentEn = sessionSummaries[article.id]?.en ?? article.englishSummary;
+    if (!currentEn && !enMutation.isPending) {
+      enMutation.mutate({ itemId: article.id });
+    }
+  }, [open, article?.id, activeTab]);
 
   if (!article) return null;
 
+  const currentJa = sessionSummaries[article.id]?.ja ?? article.japaneseSummary;
+  const currentEn = sessionSummaries[article.id]?.en ?? article.englishSummary;
+
+  const isGenerating =
+    (activeTab === "ja" && jaMutation.isPending && !currentJa) ||
+    (activeTab === "en" && enMutation.isPending && !currentEn);
+
   const jaText =
-    article.japaneseSummary ||
+    currentJa ||
     article.summary ||
     "日本語の要約は準備中です。下のボタンから元記事をご確認ください。";
+
   const enText =
-    article.englishSummary ||
+    currentEn ||
     article.summary ||
     "English summary is currently being prepared. Please view the original article below.";
 
@@ -99,10 +162,19 @@ export function ArticleSummaryDialog({
         </div>
 
         {/* 要約本文エリア */}
-        <div className="p-5 max-h-[45vh] overflow-y-auto">
-          <div className="text-sm leading-relaxed text-[#334155] whitespace-pre-wrap font-sans">
-            {activeTab === "ja" ? jaText : enText}
-          </div>
+        <div className="p-5 max-h-[45vh] min-h-[120px] overflow-y-auto">
+          {isGenerating ? (
+            <div className="flex flex-col items-center justify-center py-6 text-center space-y-2">
+              <Loader2 className="w-5 h-5 animate-spin text-[#e85d2a]" />
+              <p className="font-mono text-xs font-semibold text-[#64748b]">
+                {activeTab === "ja" ? "AI日本語要約を生成中…" : "Generating AI summary…"}
+              </p>
+            </div>
+          ) : (
+            <div className="text-sm leading-relaxed text-[#334155] whitespace-pre-wrap font-sans">
+              {activeTab === "ja" ? jaText : enText}
+            </div>
+          )}
         </div>
 
         {/* フッター */}
