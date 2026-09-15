@@ -3,9 +3,6 @@ interface SummaryResult {
   englishSummary: string;
 }
 
-/**
- * Google AI Studio の Gemini API を使用して、記事のタイトルと概要から日英の3行要約を生成する
- */
 export async function generateBilingualSummary(title: string, rawText: string): Promise<SummaryResult | null> {
   const apiKey = process.env.GEMINI_API_KEY?.trim();
   if (!apiKey) {
@@ -27,12 +24,12 @@ Output MUST be strictly valid JSON matching this structure:
 Article Title: ${title}
 Article Snippet: ${rawText.slice(0, 1000)}`;
 
-  // Google API の指定に従い最新モデルを使用
-  const candidateModels = ["gemini-3.6-flash", "gemini-2.5-flash"];
+  const model = "gemini-3.6-flash";
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
 
-  for (const model of candidateModels) {
+  // 503（一時的過負荷）対策として最大2回試行
+  for (let attempt = 1; attempt <= 2; attempt++) {
     try {
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
       const response = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -45,15 +42,21 @@ Article Snippet: ${rawText.slice(0, 1000)}`;
         }),
       });
 
+      if (response.status === 503 && attempt === 1) {
+        console.warn(`[Gemini API] 503 high demand on attempt 1. Retrying in 2s...`);
+        await new Promise((res) => setTimeout(res, 2000));
+        continue;
+      }
+
       if (!response.ok) {
         const errText = await response.text();
-        console.warn(`[Gemini API] Model ${model} returned ${response.status}: ${errText}`);
-        continue;
+        console.warn(`[Gemini API] ${model} returned ${response.status}: ${errText}`);
+        return null;
       }
 
       const data = await response.json();
       const contentText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-      if (!contentText) continue;
+      if (!contentText) return null;
 
       const parsed = JSON.parse(contentText);
       return {
@@ -61,7 +64,7 @@ Article Snippet: ${rawText.slice(0, 1000)}`;
         englishSummary: parsed.englishSummary || "",
       };
     } catch (error) {
-      console.warn(`[Gemini API] Error with ${model}:`, error instanceof Error ? error.message : error);
+      console.warn(`[Gemini API] Error on attempt ${attempt}:`, error instanceof Error ? error.message : error);
     }
   }
 
