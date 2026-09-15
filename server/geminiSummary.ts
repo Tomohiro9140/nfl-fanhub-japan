@@ -27,8 +27,8 @@ Output MUST be strictly valid JSON matching this structure:
 Article Title: ${title}
 Article Snippet: ${rawText.slice(0, 1000)}`;
 
-  // 404を回避するため、最新モデルから順にフォールバック試行
-  const candidateModels = ["gemini-2.0-flash", "gemini-1.5-flash-latest", "gemini-1.5-flash"];
+  // Google API の指定に従い最新モデルを使用
+  const candidateModels = ["gemini-3.6-flash", "gemini-2.5-flash"];
 
   for (const model of candidateModels) {
     try {
