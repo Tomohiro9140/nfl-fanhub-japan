@@ -192,7 +192,6 @@ export function parseOfficialTeamRss(xml: string, teamCode: string, source: Offi
   return results.sort((left, right) => right.publishedAt.getTime() - left.publishedAt.getTime()).slice(0, 24);
 }
 
-/** 1月〜2月の年またぎ試合でもNFLのシーズン年を正確に返すヘルパー */
 function resolveNflSeasonYear(date: Date): number {
   const year = date.getFullYear();
   const month = date.getMonth() + 1;
@@ -200,15 +199,15 @@ function resolveNflSeasonYear(date: Date): number {
 }
 
 /**
- * 現在進行中、またはこれから行われる直近の試合から今週のシーズン年と週番号を自動特定し、
- * https://www.nfl.com/injuries/league/2026/reg2 のような実体URLを動的に生成する
+ * 水曜の切り替え時点で「直近の未来（金曜TNF〜）」の試合を確実に取得し、
+ * https://www.nfl.com/injuries/league/2026/reg2 を動的生成する
  */
 export async function getOfficialCurrentLeagueInjuryUrl(): Promise<string> {
   try {
     const db = await getDb();
     if (db) {
       const now = new Date();
-      // 過去試合を引きずらないよう、直近6時間前〜未来の試合（昇順）を対象とする
+      // 過去試合（Week 1のMNF等）を完全に除外するため、現在時刻 - 6時間以降の試合を昇順取得
       const activeWindowStart = new Date(now.getTime() - 6 * 60 * 60 * 1000);
       const upcomingGames = await db
         .select({
@@ -223,7 +222,6 @@ export async function getOfficialCurrentLeagueInjuryUrl(): Promise<string> {
 
       let targetGame = upcomingGames[0];
 
-      // 未来の試合がない場合（シーズン終了後など）のみ、直近終了した最後の試合をフォールバック
       if (!targetGame) {
         const pastGames = await db
           .select({
