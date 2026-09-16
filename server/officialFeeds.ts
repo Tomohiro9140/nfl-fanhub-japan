@@ -49,7 +49,6 @@ export type AgentOfficialFeedItem = {
   publishedAt: string;
 };
 
-/** Returns true when the five-card LATEST NEWS panel needs more official RSS entries. */
 export function needsOfficialNewsTopUp(items: Array<{ category: string }>) {
   return items.filter((item) => item.category === "news").length < 5;
 }
@@ -66,8 +65,8 @@ function queueOfficialTeamNewsTopUp(teamCode: string) {
   const lastQueuedAt = lastQueuedTeamNewsTopUpAt.get(teamCode) ?? 0;
   if (now - lastQueuedAt < TEAM_NEWS_TOP_UP_COOLDOWN_MS) return;
   lastQueuedTeamNewsTopUpAt.set(teamCode, now);
-  void refreshOfficialTeamNews(teamCode).catch((error) => {
-    console.warn("[Official news] background cache top-up unavailable", { teamCode, error: error instanceof Error ? error.message : error });
+  void refreshOfficialTeamFeed(teamCode).catch((error) => {
+    console.warn("[Official feed] background cache top-up unavailable", { teamCode, error: error instanceof Error ? error.message : error });
   });
 }
 
@@ -113,7 +112,7 @@ function isInjuryRelated(title: string, sourceUrl?: string) {
   const text = `${title} ${sourceUrl ?? ""}`;
   if (isViewingGuide(title, sourceUrl) || isTeamWideCampReport(title) || isEditorialHighlight(title) || isNonInjuryAbsence(title)) return false;
   const explicitOut = /\b(?:sit|sits|sitting|ruled|remain|remains|miss|misses|missing|will be|is|was)\s+out\b|\bout\s+(?:for|with|due to|of practice|until|through)\b|\blisted as out\b|\bwill not play\b/i.test(title);
-  return /\b(?:injury|injured|questionable|doubtful|inactive|inactives|medical)\b|\b(?:ir|pup)\b|practice report/i.test(text)
+  return /\b(?:injury|injured|injuries|questionable|doubtful|inactive|inactives|medical)\b|\b(?:ir|pup)\b|practice report/i.test(text)
     || explicitOut;
 }
 
@@ -123,7 +122,6 @@ function isTransactionRelated(title: string, sourceUrl?: string) {
   return /\b(?:transactions?|roster moves?|sign(?:ed|s)?|released?|waived|waivers?|claimed|claim|trade(?:d)?|contract(?: extension)?|extensions?|activated?|designated (?:for|to return)|placed on (?:injured reserve|ir|pup))\b/i.test(text);
 }
 
-/** Classifies official items from their headline and canonical URL; summary text is display-only. */
 export function classifyOfficialFeedItem(title: string, _summary: string, sourceUrl?: string): "news" | "injury" | "transaction" {
   if (isTeamWideCampReport(title) || isEditorialHighlight(title) || isNonInjuryAbsence(title)) return "news";
   if (isInjuryRelated(title, sourceUrl)) return "injury";
@@ -169,12 +167,11 @@ export function parseOfficialTeamRss(xml: string, teamCode: string, source: Offi
   return results.sort((left, right) => right.publishedAt.getTime() - left.publishedAt.getTime()).slice(0, 24);
 }
 
-/** Extracts only team-matched injury roundup links from the official NFL injuries page. */
 export function parseOfficialNflInjuryPage(html: string, teamCode: string, source: OfficialSource): InsertOfficialFeedItem[] {
   const aliases = teamAliases[teamCode] ?? [];
   const now = new Date();
   const results: InsertOfficialFeedItem[] = [];
-  const matches = Array.from(html.matchAll(/<a[^>]+href=["']([^"']*(?:injury|injured)[^"']*)["'][^>]*>([\s\S]*?)<\/a>/gi));
+  const matches = Array.from(html.matchAll(/<a[^>]+href=["']([^"']*(?:injury|injured|injuries)[^"']*)["'][^>]*>([\s\S]*?)<\/a>/gi));
 
   for (const match of matches) {
     const title = stripMarkup(match[2]);
@@ -196,7 +193,6 @@ export function parseOfficialNflInjuryPage(html: string, teamCode: string, sourc
   return results.slice(0, 3);
 }
 
-/** Reads team injury section from the NFL's official Injuries page and extracts OUT status players. */
 export function parseOfficialNflInactivesPage(html: string, teamCode: string, now = new Date()): InsertOfficialFeedItem[] {
   const candidateNames = [
     TEAM_NAMES[teamCode],
@@ -245,7 +241,6 @@ export function parseOfficialNflInactivesPage(html: string, teamCode: string, no
   }];
 }
 
-/** NFL injury index cards can surface historic stories; verify each linked article's published timestamp. */
 export function parseNflArticlePublishedAt(html: string) {
   const raw = html.match(/"datePublished"\s*:\s*"([^"]+)"/)?.[1]
     ?? html.match(/datePublished\\"\s*:\s*\\"([^\\]+)\\"/)?.[1];
@@ -263,7 +258,7 @@ async function fetchNflArticlePublishedAt(url: string) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 12_000);
   try {
-    const response = await fetch(url, { signal: controller.signal, headers: { Accept: "text/html", "User-Agent": "Mozilla/5.0 NFLFanHubJapan/1.0" } });
+    const response = await fetch(url, { signal: controller.signal, headers: { Accept: "text/html", "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" } });
     if (!response.ok) return null;
     return parseNflArticlePublishedAt(await response.text());
   } catch {
@@ -316,7 +311,6 @@ async function fetchOfficialHtml(url: string) {
   }
 }
 
-/** Updates team-specific official Inactives while the existing game-window score pulse is active. */
 export async function refreshOfficialNflInactives(options: { fetchHtml?: (url: string) => Promise<string>; saveItems?: (items: InsertOfficialFeedItem[]) => Promise<void>; now?: () => Date } = {}) {
   const html = await (options.fetchHtml ?? fetchOfficialHtml)(NFL_OFFICIAL_INACTIVES_URL);
   const now = options.now?.() ?? new Date();
@@ -325,7 +319,6 @@ export async function refreshOfficialNflInactives(options: { fetchHtml?: (url: s
   return { reports: items.length };
 }
 
-/** Refreshes only a club's official RSS news. */
 export async function refreshOfficialTeamNews(teamCode: string) {
   const [teamSource] = getOfficialSources(teamCode);
   const xml = await fetchRss(teamSource.url);
@@ -339,13 +332,21 @@ export async function refreshOfficialTeamFeed(teamCode: string) {
   const [teamSource, nflInjurySource] = getOfficialSources(teamCode);
   const [teamResult, injuryResult] = await Promise.allSettled([
     fetchRss(teamSource.url),
-    fetchRss(nflInjurySource.url),
+    fetchOfficialHtml(nflInjurySource.url),
   ]);
   const teamItems = teamResult.status === "fulfilled" ? parseOfficialTeamRss(teamResult.value, teamCode, teamSource) : [];
-  const injuryCandidates = injuryResult.status === "fulfilled" ? parseOfficialNflInjuryPage(injuryResult.value, teamCode, nflInjurySource) : [];
-  const injuryItems = await retainFreshNflInjuryItems(injuryCandidates);
+  
+  let injuryItems: InsertOfficialFeedItem[] = [];
+  if (injuryResult.status === "fulfilled") {
+    const html = injuryResult.value;
+    const injuryCandidates = parseOfficialNflInjuryPage(html, teamCode, nflInjurySource);
+    const inactives = parseOfficialNflInactivesPage(html, teamCode);
+    const freshInjuries = await retainFreshNflInjuryItems(injuryCandidates);
+    injuryItems = [...freshInjuries, ...inactives];
+  }
+
   const items = [...teamItems, ...injuryItems];
-  if (items.length === 0) throw new Error(`No RSS items found for ${teamCode}`);
+  if (items.length === 0) throw new Error(`No feed items found for ${teamCode}`);
   await upsertOfficialFeedItems(items);
   return items.length;
 }
@@ -354,10 +355,10 @@ export async function getFreshOfficialTeamFeed(teamCode: string) {
   let items = await getOfficialFeedItems(teamCode);
   if (shouldSynchronouslyTopUpOfficialNews(items)) {
     try {
-      await refreshOfficialTeamNews(teamCode);
+      await refreshOfficialTeamFeed(teamCode);
       items = await getOfficialFeedItems(teamCode);
     } catch (error) {
-      console.warn("[Official news] cache top-up unavailable", { teamCode, error: error instanceof Error ? error.message : error });
+      console.warn("[Official feed] cache top-up unavailable", { teamCode, error: error instanceof Error ? error.message : error });
     }
   } else if (needsOfficialNewsTopUp(items)) {
     queueOfficialTeamNewsTopUp(teamCode);
