@@ -129,10 +129,7 @@ export function classifyOfficialFeedItem(title: string, _summary: string, source
   return isTransactionRelated(title, sourceUrl) ? "transaction" : "news";
 }
 
-/**
- * 該当チームの直近・次戦スケジュールから今週の週番号とシーズンを特定し、
- * https://www.nfl.com/injuries/league/2026/reg2 のような実体URLを自動生成する
- */
+/** 該当チームの今週の試合情報から Week 2 などのURLを自動生成 */
 export async function getOfficialInjuryUrl(teamCode?: string): Promise<string> {
   try {
     const db = await getDb();
@@ -140,7 +137,6 @@ export async function getOfficialInjuryUrl(teamCode?: string): Promise<string> {
       const now = new Date();
       const recentWindow = new Date(now.getTime() - 4 * 24 * 60 * 60 * 1000);
 
-      // まず該当チームの直近〜次の試合を取得
       let games = teamCode
         ? await db
             .select({
@@ -154,7 +150,6 @@ export async function getOfficialInjuryUrl(teamCode?: string): Promise<string> {
             .limit(1)
         : [];
 
-      // 見つからない場合は全チームの直近スケジュールから現在週を取得
       if (!games.length) {
         games = await db
           .select({
@@ -256,8 +251,7 @@ export function parseOfficialNflInjuryPage(html: string, teamCode: string, sourc
 }
 
 /**
- * NFL公式の Injury Report ページから、確定ステータス（Out / Doubtful / Questionable）
- * および週間練習ステータス（DNP / Did Not Participate）の注目選手を抽出
+ * NFL公式の Injury Report ページから、各チームのテーブルを厳密に抽出
  */
 export function parseOfficialNflInactivesPage(
   html: string,
@@ -271,32 +265,29 @@ export function parseOfficialNflInactivesPage(
   ].filter((name): name is string => Boolean(name));
   if (candidateNames.length === 0) return [];
 
+  // ★ 1. グローバルヘッダー・ナビゲーション・フッターを除去（32チームのリンクへの誤マッチを完全排除）
+  const cleanedHtml = html.replace(/<(?:header|nav|footer)[\s\S]*?<\/(?:header|nav|footer)>/gi, "");
+
   const pattern = candidateNames.map((name) => name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|");
 
-  // チーム名が含まれるセクションヘッダーを柔軟に検索
-  const sectionRegex = new RegExp(
-    `(?:<div[^>]*class="[^"]*(?:d3-o-section-sub-title|nfl-o-injury-report)[^"]*"[^>]*>|<h[2-4][^>]*>|<caption[^>]*>|<header[^>]*>)[\\s\\S]*?(?:${pattern})[\\s\\S]*?<\\/(?:div|h[2-4]|caption|header)>`,
+  // ★ 2. チーム名が含まれるセクションヘッダーのみを検索
+  const headerRegex = new RegExp(
+    `(?:<div[^>]*class="[^"]*d3-o-section-sub-title[^"]*"[^>]*>|<h[2-4][^>]*>|<caption[^>]*>)[\\s\\S]*?(?:${pattern})[\\s\\S]*?<\\/(?:div|h[2-4]|caption)>`,
     "i"
   );
 
-  let match = sectionRegex.exec(html);
-  let tableStartIndex = -1;
+  const match = headerRegex.exec(cleanedHtml);
+  if (!match) return [];
 
-  if (match) {
-    tableStartIndex = match.index;
-  } else {
-    // チーム名直後に table が続くシンプルなフォールバック
-    const fallbackRegex = new RegExp(`(?:${pattern})[\\s\\S]{0,400}?<table`, "i");
-    const fallbackMatch = fallbackRegex.exec(html);
-    if (fallbackMatch) {
-      tableStartIndex = fallbackMatch.index;
-    }
-  }
+  // ★ 3. 見出し直後の <table> を厳密に取得（2000文字以上離れている場合は破棄）
+  const headerPos = match.index + match[0].length;
+  const tableStart = cleanedHtml.indexOf("<table", headerPos);
+  if (tableStart === -1 || (tableStart - headerPos > 2000)) return [];
 
-  if (tableStartIndex === -1) return [];
+  const tableEnd = cleanedHtml.indexOf("</table>", tableStart);
+  if (tableEnd === -1) return [];
 
-  const tableEnd = html.indexOf("</table>", tableStartIndex);
-  const tableHtml = html.slice(tableStartIndex, tableEnd !== -1 ? tableEnd : tableStartIndex + 15000);
+  const tableHtml = cleanedHtml.slice(tableStart, tableEnd + 8);
 
   const rows = tableHtml.match(/<tr[\s\S]*?<\/tr>/gi) || [];
   const outPlayers: string[] = [];
@@ -469,7 +460,6 @@ export async function refreshOfficialTeamNews(teamCode: string) {
 export async function refreshOfficialTeamFeed(teamCode: string) {
   const [teamSource] = getOfficialSources(teamCode);
 
-  // 対象チームの今週の試合情報から Week 2 などの実体URL（/injuries/league/2026/reg2）を動的に解決
   const dynamicInjuryUrl = await getOfficialInjuryUrl(teamCode);
   const nflInjurySource: OfficialSource = {
     name: "NFL Official Injury Report",
