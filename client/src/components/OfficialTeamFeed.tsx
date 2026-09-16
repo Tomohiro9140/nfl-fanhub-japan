@@ -1,7 +1,6 @@
 import React, { useMemo, useState } from "react";
 import { ArrowUpRight, BadgeCheck, CircleAlert, Newspaper, Radio, RefreshCw, Sparkles, Tv } from "lucide-react";
 import { trpc } from "@/lib/trpc";
-import { hasDistinctNewsSummary } from "@/lib/newsSummary";
 import { dedupeDisplayArticles } from "@/lib/articleDedup";
 import type { FavoriteTeam } from "@/lib/nflTeams";
 import { ArticleSummaryDialog } from "./ArticleSummaryDialog";
@@ -95,13 +94,14 @@ export function selectLatestNews(items: FeedItem[], hideFrom?: Date | null, hide
   }
   const selectedIds = new Set(selected.map((item) => item.id));
   for (const item of sorted) {
-    if (selected.length >= 5) break;
+    // ★ 表示件数を 5 から 7 に拡張
+    if (selected.length >= 7) break;
     if (!selectedIds.has(item.id)) {
       selectedIds.add(item.id);
       selected.push(item);
     }
   }
-  return selected.slice(0, 5);
+  return selected.slice(0, 7);
 }
 
 function displayDate(value: Date) {
@@ -163,9 +163,7 @@ export function OfficialTeamFeed({ favorite, spoilerMode = false, completedGame 
                         <Sparkles className="h-3 w-3" /> 要約
                       </span>
                     </span>
-                    {hasDistinctNewsSummary(item.title, item.summary) ? (
-                      <span className="mt-0.5 block text-[11px] leading-4 text-[#687587] line-clamp-2">{item.summary}</span>
-                    ) : null}
+                    {/* ★ 英語の簡単な内容紹介 (item.summary) の描画ブロックを削除しました */}
                     <span className="mt-1 block font-mono text-[8px] font-bold tracking-[.05em] text-[#94a3b8]">PUBLISHED · {displayDate(item.publishedAt)}</span>
                   </span>
                 </button>
