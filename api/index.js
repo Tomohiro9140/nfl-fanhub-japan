@@ -1828,7 +1828,7 @@ var scheduledTeamGroups = [
   ["NYJ", "PHI", "PIT", "SF", "SEA", "TB", "TEN", "WAS"]
 ];
 function needsOfficialNewsTopUp(items) {
-  return items.filter((item) => item.category === "news").length < 5;
+  return items.filter((item) => item.category === "news").length < 7;
 }
 function shouldSynchronouslyTopUpOfficialNews(items) {
   return items.length === 0;
