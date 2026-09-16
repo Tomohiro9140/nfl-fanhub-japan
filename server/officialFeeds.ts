@@ -1,10 +1,11 @@
 import { createHash } from "node:crypto";
+import { and, asc, eq, gte } from "drizzle-orm";
 import type { InsertOfficialFeedItem } from "../drizzle/schema";
-import { getOfficialFeedItems, upsertOfficialFeedItems, clearOfficialFeedInjuries } from "./db";
+import { officialGames } from "../drizzle/schema";
+import { clearOfficialFeedInjuries, getDb, getOfficialFeedItems, upsertOfficialFeedItems } from "./db";
 import { refreshOfficialTeamData, TEAM_NAMES } from "./officialTeamData";
 
-const NFL_OFFICIAL_INJURY_URL = "https://www.nfl.com/injuries/";
-const NFL_OFFICIAL_INACTIVES_URL = "https://www.nfl.com/injuries/";
+const NFL_OFFICIAL_INJURY_DEFAULT_URL = "https://www.nfl.com/injuries/";
 const refreshWindowMs = 15 * 60 * 1000;
 const nflInjuryMaxAgeMs = 45 * 24 * 60 * 60 * 1000;
 
@@ -128,12 +129,73 @@ export function classifyOfficialFeedItem(title: string, _summary: string, source
   return isTransactionRelated(title, sourceUrl) ? "transaction" : "news";
 }
 
+/**
+ * 該当チームの直近・次戦スケジュールから今週の週番号とシーズンを特定し、
+ * https://www.nfl.com/injuries/league/2026/reg2 のような実体URLを自動生成する
+ */
+export async function getOfficialInjuryUrl(teamCode?: string): Promise<string> {
+  try {
+    const db = await getDb();
+    if (db) {
+      const now = new Date();
+      const recentWindow = new Date(now.getTime() - 4 * 24 * 60 * 60 * 1000);
+
+      // まず該当チームの直近〜次の試合を取得
+      let games = teamCode
+        ? await db
+            .select({
+              kickoffAt: officialGames.kickoffAt,
+              weekLabel: officialGames.weekLabel,
+              seasonPhase: officialGames.seasonPhase,
+            })
+            .from(officialGames)
+            .where(and(eq(officialGames.teamCode, teamCode), gte(officialGames.kickoffAt, recentWindow)))
+            .orderBy(asc(officialGames.kickoffAt))
+            .limit(1)
+        : [];
+
+      // 見つからない場合は全チームの直近スケジュールから現在週を取得
+      if (!games.length) {
+        games = await db
+          .select({
+            kickoffAt: officialGames.kickoffAt,
+            weekLabel: officialGames.weekLabel,
+            seasonPhase: officialGames.seasonPhase,
+          })
+          .from(officialGames)
+          .where(gte(officialGames.kickoffAt, recentWindow))
+          .orderBy(asc(officialGames.kickoffAt))
+          .limit(1);
+      }
+
+      const targetGame = games[0];
+      if (targetGame?.weekLabel) {
+        const weekMatch = targetGame.weekLabel.match(/\d+/);
+        const weekNum = weekMatch ? parseInt(weekMatch[0], 10) : null;
+        const year = targetGame.kickoffAt ? targetGame.kickoffAt.getFullYear() : now.getFullYear();
+        const phase = targetGame.seasonPhase?.toLowerCase() === "pre"
+          ? "pre"
+          : targetGame.seasonPhase?.toLowerCase() === "post"
+          ? "post"
+          : "reg";
+
+        if (weekNum) {
+          return `https://www.nfl.com/injuries/league/${year}/${phase}${weekNum}`;
+        }
+      }
+    }
+  } catch (error) {
+    console.warn("[OfficialFeed] Failed to resolve dynamic injury URL:", error);
+  }
+  return NFL_OFFICIAL_INJURY_DEFAULT_URL;
+}
+
 export function getOfficialSources(teamCode: string): OfficialSource[] {
   const domain = teamDomains[teamCode];
   if (!domain) throw new Error(`Unsupported NFL team code: ${teamCode}`);
   return [
     { name: `${teamCode} Official News`, url: `https://www.${domain}/rss/news`, kind: "team_official" },
-    { name: "NFL Official Injury Report", url: NFL_OFFICIAL_INJURY_URL, kind: "nfl_official" },
+    { name: "NFL Official Injury Report", url: NFL_OFFICIAL_INJURY_DEFAULT_URL, kind: "nfl_official" },
   ];
 }
 
@@ -197,7 +259,12 @@ export function parseOfficialNflInjuryPage(html: string, teamCode: string, sourc
  * NFL公式の Injury Report ページから、確定ステータス（Out / Doubtful / Questionable）
  * および週間練習ステータス（DNP / Did Not Participate）の注目選手を抽出
  */
-export function parseOfficialNflInactivesPage(html: string, teamCode: string, now = new Date()): InsertOfficialFeedItem[] {
+export function parseOfficialNflInactivesPage(
+  html: string,
+  teamCode: string,
+  now = new Date(),
+  sourceUrl = NFL_OFFICIAL_INJURY_DEFAULT_URL
+): InsertOfficialFeedItem[] {
   const candidateNames = [
     TEAM_NAMES[teamCode],
     ...(teamAliases[teamCode] ?? []),
@@ -205,12 +272,31 @@ export function parseOfficialNflInactivesPage(html: string, teamCode: string, no
   if (candidateNames.length === 0) return [];
 
   const pattern = candidateNames.map((name) => name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|");
-  const headerRegex = new RegExp(`<div[^>]*class="[^"]*d3-o-section-sub-title[^"]*"[^>]*>\\s*<span[^>]*>\\s*(?:${pattern})\\s*<\\/span>`, "i");
-  const match = headerRegex.exec(html);
-  if (!match) return [];
 
-  const tableEnd = html.indexOf("</table>", match.index);
-  const tableHtml = html.slice(match.index, tableEnd !== -1 ? tableEnd : match.index + 12000);
+  // チーム名が含まれるセクションヘッダーを柔軟に検索
+  const sectionRegex = new RegExp(
+    `(?:<div[^>]*class="[^"]*(?:d3-o-section-sub-title|nfl-o-injury-report)[^"]*"[^>]*>|<h[2-4][^>]*>|<caption[^>]*>|<header[^>]*>)[\\s\\S]*?(?:${pattern})[\\s\\S]*?<\\/(?:div|h[2-4]|caption|header)>`,
+    "i"
+  );
+
+  let match = sectionRegex.exec(html);
+  let tableStartIndex = -1;
+
+  if (match) {
+    tableStartIndex = match.index;
+  } else {
+    // チーム名直後に table が続くシンプルなフォールバック
+    const fallbackRegex = new RegExp(`(?:${pattern})[\\s\\S]{0,400}?<table`, "i");
+    const fallbackMatch = fallbackRegex.exec(html);
+    if (fallbackMatch) {
+      tableStartIndex = fallbackMatch.index;
+    }
+  }
+
+  if (tableStartIndex === -1) return [];
+
+  const tableEnd = html.indexOf("</table>", tableStartIndex);
+  const tableHtml = html.slice(tableStartIndex, tableEnd !== -1 ? tableEnd : tableStartIndex + 15000);
 
   const rows = tableHtml.match(/<tr[\s\S]*?<\/tr>/gi) || [];
   const outPlayers: string[] = [];
@@ -219,28 +305,56 @@ export function parseOfficialNflInactivesPage(html: string, teamCode: string, no
   const dnpPlayers: string[] = [];
 
   for (const row of rows) {
-    const nameMatch = row.match(/<a[^>]*class="[^"]*nfl-o-cta--link[^"]*"[^>]*>([\s\S]*?)<\/a>/i)
+    const nameMatch = row.match(/<a[^>]+href=["'][^"']*\/players\/[^"']*["'][^>]*>([\s\S]*?)<\/a>/i)
+      || row.match(/<a[^>]*class="[^"]*nfl-o-cta--link[^"]*"[^>]*>([\s\S]*?)<\/a>/i)
       || row.match(/<td[^>]*scope="row"[^>]*>([\s\S]*?)<\/td>/i);
     if (!nameMatch) continue;
 
     const cleanName = stripMarkup(nameMatch[1]);
     if (!cleanName || cleanName.toLowerCase() === "player") continue;
 
-    // 1. 確定ステータス（Out, Doubtful, Questionable）
-    if (/<td[^>]*>\s*Out\s*<\/td>/i.test(row)) {
-      if (!outPlayers.some(p => p.startsWith(cleanName))) outPlayers.push(`${cleanName} (Out)`);
-    } else if (/<td[^>]*>\s*Doubtful\s*<\/td>/i.test(row)) {
-      if (!doubtfulPlayers.some(p => p.startsWith(cleanName))) doubtfulPlayers.push(`${cleanName} (Doubtful)`);
-    } else if (/<td[^>]*>\s*Questionable\s*<\/td>/i.test(row)) {
-      if (!questionablePlayers.some(p => p.startsWith(cleanName))) questionablePlayers.push(`${cleanName} (Questionable)`);
-    } 
-    // 2. 週間練習レポート（DNP: Did Not Participate）
-    else if (/<td[^>]*>\s*(?:DNP|Did Not Participate)\s*<\/td>/i.test(row) || /\b(?:DNP|Did Not Participate)\b/i.test(row)) {
-      if (!dnpPlayers.some(p => p.startsWith(cleanName))) dnpPlayers.push(`${cleanName} (DNP)`);
+    const tdMatches = Array.from(row.matchAll(/<td[^>]*>([\s\S]*?)<\/td>/gi));
+    const tdTexts = tdMatches.map((m) => stripMarkup(m[1]).trim());
+
+    let status: "Out" | "Doubtful" | "Questionable" | "DNP" | null = null;
+
+    // 1. 確定ステータス（Out / Doubtful / Questionable）を優先判定
+    for (const text of tdTexts) {
+      if (/^(?:Out|IR|Reserve\/Injured)$/i.test(text)) {
+        status = "Out";
+        break;
+      }
+      if (/^Doubtful$/i.test(text)) {
+        status = "Doubtful";
+        break;
+      }
+      if (/^Questionable$/i.test(text)) {
+        status = "Questionable";
+        break;
+      }
+    }
+
+    // 2. 確定ステータスがない場合、練習不参加（DNP）を判定
+    if (!status) {
+      for (const text of tdTexts) {
+        if (/^(?:DNP|Did Not Participate)$/i.test(text) || /\bDNP\b/i.test(text)) {
+          status = "DNP";
+          break;
+        }
+      }
+    }
+
+    if (status === "Out") {
+      if (!outPlayers.some((p) => p.startsWith(cleanName))) outPlayers.push(`${cleanName} (Out)`);
+    } else if (status === "Doubtful") {
+      if (!doubtfulPlayers.some((p) => p.startsWith(cleanName))) doubtfulPlayers.push(`${cleanName} (Doubtful)`);
+    } else if (status === "Questionable") {
+      if (!questionablePlayers.some((p) => p.startsWith(cleanName))) questionablePlayers.push(`${cleanName} (Questionable)`);
+    } else if (status === "DNP") {
+      if (!dnpPlayers.some((p) => p.startsWith(cleanName))) dnpPlayers.push(`${cleanName} (DNP)`);
     }
   }
 
-  // 優先度順に並べて最大5名まで抽出
   const reportedPlayers = [...outPlayers, ...doubtfulPlayers, ...questionablePlayers, ...dnpPlayers].slice(0, 5);
   if (reportedPlayers.length === 0) return [];
 
@@ -250,7 +364,7 @@ export function parseOfficialNflInactivesPage(html: string, teamCode: string, no
     teamCode,
     sourceKind: "nfl_official",
     sourceName: "NFL Official Injury Report",
-    sourceUrl: NFL_OFFICIAL_INJURY_URL,
+    sourceUrl,
     title: `NFL Official Injury Report · ${teamCode}`,
     summary: summary.slice(0, 560),
     category: "injury",
@@ -276,7 +390,13 @@ async function fetchNflArticlePublishedAt(url: string) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 12_000);
   try {
-    const response = await fetch(url, { signal: controller.signal, headers: { Accept: "text/html", "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" } });
+    const response = await fetch(url, {
+      signal: controller.signal,
+      headers: {
+        Accept: "text/html",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+      },
+    });
     if (!response.ok) return null;
     return parseNflArticlePublishedAt(await response.text());
   } catch {
@@ -330,7 +450,7 @@ async function fetchOfficialHtml(url: string) {
 }
 
 export async function refreshOfficialNflInactives(options: { fetchHtml?: (url: string) => Promise<string>; saveItems?: (items: InsertOfficialFeedItem[]) => Promise<void>; now?: () => Date } = {}) {
-  const html = await (options.fetchHtml ?? fetchOfficialHtml)(NFL_OFFICIAL_INACTIVES_URL);
+  const html = await (options.fetchHtml ?? fetchOfficialHtml)(NFL_OFFICIAL_INJURY_DEFAULT_URL);
   const now = options.now?.() ?? new Date();
   const items = supportedOfficialTeamCodes.flatMap((teamCode) => parseOfficialNflInactivesPage(html, teamCode, now));
   await (options.saveItems ?? upsertOfficialFeedItems)(items);
@@ -347,23 +467,32 @@ export async function refreshOfficialTeamNews(teamCode: string) {
 }
 
 export async function refreshOfficialTeamFeed(teamCode: string) {
-  const [teamSource, nflInjurySource] = getOfficialSources(teamCode);
+  const [teamSource] = getOfficialSources(teamCode);
+
+  // 対象チームの今週の試合情報から Week 2 などの実体URL（/injuries/league/2026/reg2）を動的に解決
+  const dynamicInjuryUrl = await getOfficialInjuryUrl(teamCode);
+  const nflInjurySource: OfficialSource = {
+    name: "NFL Official Injury Report",
+    url: dynamicInjuryUrl,
+    kind: "nfl_official",
+  };
+
   const [teamResult, injuryResult] = await Promise.allSettled([
     fetchRss(teamSource.url),
-    fetchOfficialHtml(nflInjurySource.url),
+    fetchOfficialHtml(dynamicInjuryUrl),
   ]);
   const teamItems = teamResult.status === "fulfilled" ? parseOfficialTeamRss(teamResult.value, teamCode, teamSource) : [];
-  
+
   let injuryItems: InsertOfficialFeedItem[] = [];
   if (injuryResult.status === "fulfilled") {
     const html = injuryResult.value;
     const injuryCandidates = parseOfficialNflInjuryPage(html, teamCode, nflInjurySource);
-    const inactives = parseOfficialNflInactivesPage(html, teamCode);
+    const inactives = parseOfficialNflInactivesPage(html, teamCode, new Date(), dynamicInjuryUrl);
     const freshInjuries = await retainFreshNflInjuryItems(injuryCandidates);
     injuryItems = [...freshInjuries, ...inactives];
   }
 
-  // ★ リフレッシュ時に過去の古い怪我情報を一旦クリア
+  // リフレッシュ時に該当チームの過去の古い怪我情報を一旦クリア
   await clearOfficialFeedInjuries(teamCode);
 
   const items = [...teamItems, ...injuryItems];
