@@ -193,6 +193,10 @@ export function parseOfficialNflInjuryPage(html: string, teamCode: string, sourc
   return results.slice(0, 3);
 }
 
+/**
+ * NFL公式の Injury Report ページから、確定ステータス（Out / Doubtful / Questionable）
+ * および週間練習ステータス（DNP / Did Not Participate）の注目選手を抽出
+ */
 export function parseOfficialNflInactivesPage(html: string, teamCode: string, now = new Date()): InsertOfficialFeedItem[] {
   const candidateNames = [
     TEAM_NAMES[teamCode],
@@ -206,34 +210,48 @@ export function parseOfficialNflInactivesPage(html: string, teamCode: string, no
   if (!match) return [];
 
   const tableEnd = html.indexOf("</table>", match.index);
-  const tableHtml = html.slice(match.index, tableEnd !== -1 ? tableEnd : match.index + 8000);
+  const tableHtml = html.slice(match.index, tableEnd !== -1 ? tableEnd : match.index + 12000);
 
   const rows = tableHtml.match(/<tr[\s\S]*?<\/tr>/gi) || [];
   const outPlayers: string[] = [];
+  const doubtfulPlayers: string[] = [];
+  const questionablePlayers: string[] = [];
+  const dnpPlayers: string[] = [];
 
   for (const row of rows) {
+    const nameMatch = row.match(/<a[^>]*class="[^"]*nfl-o-cta--link[^"]*"[^>]*>([\s\S]*?)<\/a>/i)
+      || row.match(/<td[^>]*scope="row"[^>]*>([\s\S]*?)<\/td>/i);
+    if (!nameMatch) continue;
+
+    const cleanName = stripMarkup(nameMatch[1]);
+    if (!cleanName || cleanName.toLowerCase() === "player") continue;
+
+    // 1. 週末の確定ステータス（Out, Doubtful, Questionable）
     if (/<td[^>]*>\s*Out\s*<\/td>/i.test(row)) {
-      const nameMatch = row.match(/<a[^>]*class="[^"]*nfl-o-cta--link[^"]*"[^>]*>([\s\S]*?)<\/a>/i)
-        || row.match(/<td[^>]*scope="row"[^>]*>([\s\S]*?)<\/td>/i);
-      if (nameMatch) {
-        const cleanName = stripMarkup(nameMatch[1]);
-        if (cleanName && !outPlayers.includes(cleanName)) {
-          outPlayers.push(cleanName);
-        }
-      }
+      if (!outPlayers.some(p => p.startsWith(cleanName))) outPlayers.push(`${cleanName} (Out)`);
+    } else if (/<td[^>]*>\s*Doubtful\s*<\/td>/i.test(row)) {
+      if (!doubtfulPlayers.some(p => p.startsWith(cleanName))) doubtfulPlayers.push(`${cleanName} (Doubtful)`);
+    } else if (/<td[^>]*>\s*Questionable\s*<\/td>/i.test(row)) {
+      if (!questionablePlayers.some(p => p.startsWith(cleanName))) questionablePlayers.push(`${cleanName} (Questionable)`);
+    } 
+    // 2. 週前半（水・木）の週間練習レポート（DNP: Did Not Participate）
+    else if (/<td[^>]*>\s*(?:DNP|Did Not Participate)\s*<\/td>/i.test(row) || /\b(?:DNP|Did Not Participate)\b/i.test(row)) {
+      if (!dnpPlayers.some(p => p.startsWith(cleanName))) dnpPlayers.push(`${cleanName} (DNP)`);
     }
   }
 
-  if (outPlayers.length === 0) return [];
+  // 優先度順に並べて最大5名まで抽出
+  const reportedPlayers = [...outPlayers, ...doubtfulPlayers, ...questionablePlayers, ...dnpPlayers].slice(0, 5);
+  if (reportedPlayers.length === 0) return [];
 
-  const summary = outPlayers.join(", ");
+  const summary = reportedPlayers.join(", ");
   return [{
-    externalId: createHash("sha256").update(`nfl-inactives:${teamCode}:${now.toISOString().slice(0, 10)}`).digest("hex"),
+    externalId: createHash("sha256").update(`nfl-injuries:${teamCode}:${now.toISOString().slice(0, 10)}`).digest("hex"),
     teamCode,
     sourceKind: "nfl_official",
-    sourceName: "NFL Official Inactives",
-    sourceUrl: NFL_OFFICIAL_INACTIVES_URL,
-    title: `NFL Official Inactives · ${teamCode}`,
+    sourceName: "NFL Official Injury Report",
+    sourceUrl: NFL_OFFICIAL_INJURY_URL,
+    title: `NFL Official Injury Report · ${teamCode}`,
     summary: summary.slice(0, 560),
     category: "injury",
     publishedAt: now,
