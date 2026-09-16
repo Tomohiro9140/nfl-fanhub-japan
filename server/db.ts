@@ -10,7 +10,6 @@ import { ENV } from './_core/env';
 
 let _db: ReturnType<typeof drizzle> | null = null;
 
-// Lazily create the drizzle instance so local tooling can run without a DB.
 export async function getDb() {
   if (!_db && process.env.DATABASE_URL) {
     try {
@@ -192,13 +191,11 @@ export async function replaceOfficialGamesForTeam(teamCode: string, items: Inser
   ]);
 }
 
-/** A partial official schedule page must never erase a matchup that is still on the current Japan calendar day. */
 export function isSameJstCalendarDay(left: Date, right: Date) {
   const formatter = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Tokyo", year: "numeric", month: "2-digit", day: "2-digit" });
   return formatter.format(left) === formatter.format(right);
 }
 
-/** A missing schedule row must not hide a current Japan-day official result after it flips from LIVE to FINAL. */
 export function shouldCreateScoreboardCalendarFallback(
   score: { gameState: string | null; kickoffAt: Date | null; fetchedAt: Date },
   hasScheduleRow: boolean,
@@ -289,13 +286,13 @@ export async function getOfficialTeamSnapshot(teamCode: string, skipGameUrl?: st
     db.select({ id: officialFeedItems.id, title: officialFeedItems.title, sourceName: officialFeedItems.sourceName, sourceKind: officialFeedItems.sourceKind, sourceUrl: officialFeedItems.sourceUrl, publishedAt: officialFeedItems.publishedAt, category: officialFeedItems.category, fetchedAt: officialFeedItems.fetchedAt }).from(officialFeedItems).where(and(eq(officialFeedItems.teamCode, teamCode), eq(officialFeedItems.category, "transaction"), gte(officialFeedItems.publishedAt, rosterMoveWindowStart))).orderBy(sql`case when ${officialFeedItems.sourceKind} = 'team_official' then 0 else 1 end`, desc(officialFeedItems.publishedAt)).limit(24),
     db.select({ id: officialFeedItems.id, title: officialFeedItems.title, summary: officialFeedItems.summary, sourceName: officialFeedItems.sourceName, sourceKind: officialFeedItems.sourceKind, sourceUrl: officialFeedItems.sourceUrl, publishedAt: officialFeedItems.publishedAt, fetchedAt: officialFeedItems.fetchedAt }).from(officialFeedItems).where(and(eq(officialFeedItems.teamCode, teamCode), eq(officialFeedItems.category, "news"))).orderBy(sql`case when ${officialFeedItems.sourceKind} = 'team_official' then 0 else 1 end`, desc(officialFeedItems.publishedAt)).limit(24),
     db.select({ id: externalAvailabilityInsights.id, playerName: externalAvailabilityInsights.playerName, statusLabel: externalAvailabilityInsights.statusLabel, headline: externalAvailabilityInsights.headline, sourceName: externalAvailabilityInsights.sourceName, sourceUrl: externalAvailabilityInsights.sourceUrl, publishedAt: externalAvailabilityInsights.publishedAt, fetchedAt: externalAvailabilityInsights.fetchedAt }).from(externalAvailabilityInsights).where(and(eq(externalAvailabilityInsights.teamCode, teamCode), gte(externalAvailabilityInsights.publishedAt, externalInsightWindowStart))).orderBy(desc(externalAvailabilityInsights.publishedAt)).limit(3),
-    // Game Ticket INJURIES用：nfl.com/injuries/ 由来の公式データのみに限定
+    // Game Ticket INJURIES用：nfl.com/injuries/ 由来の最新レポート候補
     db.select({ title: officialFeedItems.title, summary: officialFeedItems.summary, sourceUrl: officialFeedItems.sourceUrl, publishedAt: officialFeedItems.publishedAt }).from(officialFeedItems).where(and(
       eq(officialFeedItems.teamCode, teamCode),
       eq(officialFeedItems.sourceKind, "nfl_official"),
       sql`${officialFeedItems.sourceUrl} like 'https://www.nfl.com/injuries%'`,
       gte(officialFeedItems.publishedAt, new Date(now.getTime() - 7 * 24 * 60 * 60 * 1_000))
-    )).orderBy(desc(officialFeedItems.publishedAt)).limit(1),
+    )).orderBy(desc(officialFeedItems.publishedAt)).limit(5),
   ]);
   const injuries = dedupeOfficialFeedItems(injuryRows, 3);
   const rosterMoves = dedupeOfficialFeedItems(rosterMoveRows, 3);
@@ -306,7 +303,6 @@ export async function getOfficialTeamSnapshot(teamCode: string, skipGameUrl?: st
 
   const activeGame = activeGameRows[0];
 
-  // すでにスコアボードで FINAL が記録されている試合は、日程が未来であっても次の未消化試合（scheduledGame）から除外する
   const isGameCompleted = (game: typeof officialGames.$inferSelect) => {
     return completedScoreboardRows.some((score) => {
       if (!isOfficialFinal(score)) return false;
@@ -424,17 +420,45 @@ export async function getOfficialTeamSnapshot(teamCode: string, skipGameUrl?: st
     sourceUrl: nextGame.sourceUrl,
     fetchedAt: nextGame.fetchedAt,
   } : undefined;
-  const inactiveReport = buildSnapshotInactiveReport(inactiveAnnouncements);
+
+  // 前週試合の終了と次戦キックオフを考慮して最新のレポートを判定
+  const inactiveReport = buildSnapshotInactiveReport(inactiveAnnouncements, nextGame, latestCompletedGame);
+
   return { nextGame, gameDayStatus, canRestoreLastGame, byeWeek, roster, rosterCounts, injuries, rosterMoves, news, externalInsights, inactiveReport, sources: { schedule: nextGame?.sourceUrl ?? null, roster: roster[0]?.sourceUrl ?? null, injury: injuries[0]?.sourceUrl ?? null, moves: rosterMoves[0]?.sourceUrl ?? null, gameDay: nextGame?.sourceUrl ?? null }, lastUpdatedAt };
 }
 
-/** Converts the latest official cached announcement into the Game Day snapshot shape. */
-export function buildSnapshotInactiveReport<T extends { title: string; summary: string | null; sourceUrl: string; publishedAt: Date }>(announcements: T[]) {
-  const announcement = announcements[0];
-  return announcement ? { title: announcement.title, summary: announcement.summary, sourceUrl: announcement.sourceUrl, publishedAt: announcement.publishedAt } : null;
+/**
+ * 過去週のレポートを遮断し、最新の週間怪我人・インアクティブ情報を Game Ticket に届ける
+ */
+export function buildSnapshotInactiveReport<T extends { title: string; summary: string | null; sourceUrl: string; publishedAt: Date }>(
+  announcements: T[],
+  nextGame?: { kickoffAt: Date; finishedAt?: Date | null; gameState?: string | null } | null,
+  latestCompletedGame?: { kickoffAt: Date; finishedAt?: Date | null } | null
+) {
+  for (const announcement of announcements) {
+    if (!announcement || !announcement.summary) continue;
+
+    // 前週の試合（latestCompletedGame）終了以前に作成・発表された古いレポートは確実に除外
+    if (latestCompletedGame?.kickoffAt) {
+      const lastGameEnd = latestCompletedGame.finishedAt
+        ? new Date(latestCompletedGame.finishedAt).getTime()
+        : new Date(latestCompletedGame.kickoffAt).getTime() + 4 * 60 * 60 * 1_000;
+      if (new Date(announcement.publishedAt).getTime() <= lastGameEnd) {
+        continue;
+      }
+    }
+
+    return {
+      title: announcement.title,
+      summary: announcement.summary,
+      sourceUrl: announcement.sourceUrl,
+      publishedAt: announcement.publishedAt,
+    };
+  }
+
+  return null;
 }
 
-/** Avoids external score polling unless an official game is underway or has just ended. */
 export async function hasOfficialScorePulseWindow(now = new Date()) {
   const db = await getDb();
   if (!db) return false;
@@ -469,7 +493,6 @@ export async function replaceOfficialScoreboardGames(season: number, items: Inse
   }
 }
 
-/** Returns cached official kickoff times so an existing result is not fetched repeatedly. */
 export async function getOfficialScoreboardKickoffTimes(season: number, externalIds: string[]) {
   if (!externalIds.length) return new Map<string, Date>();
   const db = await getDb();
@@ -567,7 +590,6 @@ export async function getOfficialLeagueCalendar(teamCode: string) {
     ];
   });
 
-  // スコアボードに確定キックオフ日時が存在する場合は仮日時(秒=59)を上書き補正
   const synchronizedGames = games.map((game) => {
     const score = findOfficialScoreForGame(rawResults, game);
     if (score?.kickoffAt) {
