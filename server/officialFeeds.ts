@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { and, asc, eq, gte } from "drizzle-orm";
+import { and, asc, desc, eq, gte, lt } from "drizzle-orm";
 import type { InsertOfficialFeedItem } from "../drizzle/schema";
 import { officialGames } from "../drizzle/schema";
 import { clearOfficialFeedInjuries, getDb, getOfficialFeedItems, replaceOfficialInjuriesAllTeams, upsertOfficialFeedItems } from "./db";
@@ -19,7 +19,6 @@ const teamDomains: Record<string, string> = {
   PIT: "steelers.com", SF: "49ers.com", SEA: "seahawks.com", TB: "buccaneers.com", TEN: "titansonline.com", WAS: "commanders.com",
 };
 
-/** 全32チームの愛称・短縮名マッピング（NFL公式のテーブル見出しに完全合致させる） */
 const TEAM_NICKNAMES: Record<string, string[]> = {
   ARI: ["Arizona Cardinals", "Cardinals"],
   ATL: ["Atlanta Falcons", "Falcons"],
@@ -193,37 +192,65 @@ export function parseOfficialTeamRss(xml: string, teamCode: string, source: Offi
   return results.sort((left, right) => right.publishedAt.getTime() - left.publishedAt.getTime()).slice(0, 24);
 }
 
-/** 現在進行中のシーズン・週に対応する実体URLを自動計算 */
+/** 1月〜2月の年またぎ試合でもNFLのシーズン年を正確に返すヘルパー */
+function resolveNflSeasonYear(date: Date): number {
+  const year = date.getFullYear();
+  const month = date.getMonth() + 1;
+  return month <= 2 ? year - 1 : year;
+}
+
+/**
+ * 現在進行中、またはこれから行われる直近の試合から今週のシーズン年と週番号を自動特定し、
+ * https://www.nfl.com/injuries/league/2026/reg2 のような実体URLを動的に生成する
+ */
 export async function getOfficialCurrentLeagueInjuryUrl(): Promise<string> {
   try {
     const db = await getDb();
     if (db) {
       const now = new Date();
-      const recentWindow = new Date(now.getTime() - 4 * 24 * 60 * 60 * 1000);
-      const games = await db
+      // 過去試合を引きずらないよう、直近6時間前〜未来の試合（昇順）を対象とする
+      const activeWindowStart = new Date(now.getTime() - 6 * 60 * 60 * 1000);
+      const upcomingGames = await db
         .select({
           kickoffAt: officialGames.kickoffAt,
           weekLabel: officialGames.weekLabel,
           seasonPhase: officialGames.seasonPhase,
         })
         .from(officialGames)
-        .where(gte(officialGames.kickoffAt, recentWindow))
+        .where(gte(officialGames.kickoffAt, activeWindowStart))
         .orderBy(asc(officialGames.kickoffAt))
         .limit(1);
 
-      const targetGame = games[0];
+      let targetGame = upcomingGames[0];
+
+      // 未来の試合がない場合（シーズン終了後など）のみ、直近終了した最後の試合をフォールバック
+      if (!targetGame) {
+        const pastGames = await db
+          .select({
+            kickoffAt: officialGames.kickoffAt,
+            weekLabel: officialGames.weekLabel,
+            seasonPhase: officialGames.seasonPhase,
+          })
+          .from(officialGames)
+          .where(lt(officialGames.kickoffAt, now))
+          .orderBy(desc(officialGames.kickoffAt))
+          .limit(1);
+        targetGame = pastGames[0];
+      }
+
       if (targetGame?.weekLabel) {
         const weekMatch = targetGame.weekLabel.match(/\d+/);
         const weekNum = weekMatch ? parseInt(weekMatch[0], 10) : null;
-        const year = targetGame.kickoffAt ? targetGame.kickoffAt.getFullYear() : now.getFullYear();
-        const phase = targetGame.seasonPhase?.toLowerCase() === "pre"
-          ? "pre"
-          : targetGame.seasonPhase?.toLowerCase() === "post"
-          ? "post"
-          : "reg";
+        const kickoff = targetGame.kickoffAt ?? now;
+        const seasonYear = resolveNflSeasonYear(kickoff);
+
+        let phase = "reg";
+        const rawPhase = (targetGame.seasonPhase ?? "").toLowerCase();
+        if (rawPhase.includes("pre")) phase = "pre";
+        else if (rawPhase.includes("post") || rawPhase.includes("playoff")) phase = "post";
 
         if (weekNum) {
-          return `https://www.nfl.com/injuries/league/${year}/${phase}${weekNum}`;
+          return `https://www.nfl.com/injuries/league/${seasonYear}/${phase}${weekNum}`;
         }
       }
     }
@@ -353,7 +380,6 @@ export function ensureOfficialInjuriesFresh() {
   }
 }
 
-/** ★ officialLeagueData.ts が必要とする export（ビルドエラー解消） */
 export async function refreshOfficialNflInactives(options: { fetchHtml?: (url: string) => Promise<string>; saveItems?: (items: InsertOfficialFeedItem[]) => Promise<void>; now?: () => Date } = {}) {
   const count = await refreshAllOfficialInjuries();
   return { reports: count };
@@ -437,7 +463,6 @@ export async function refreshOfficialTeamFeed(teamCode: string) {
     await upsertOfficialFeedItems(teamItems);
   }
 
-  // リーグ全体の最新怪我情報を一括更新してDBの古いレコードを洗い流す
   await refreshAllOfficialInjuries();
   return teamItems.length;
 }
