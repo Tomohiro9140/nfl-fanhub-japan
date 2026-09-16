@@ -75,7 +75,7 @@ export type AgentOfficialFeedItem = {
 };
 
 export function needsOfficialNewsTopUp(items: Array<{ category: string }>) {
-  return items.filter((item) => item.category === "news").length < 5;
+  return items.filter((item) => item.category === "news").length < 7;
 }
 
 export function shouldSynchronouslyTopUpOfficialNews(items: Array<{ category: string }>) {
