@@ -132,7 +132,29 @@ export async function saveOfficialFeedEnglishSummary(id: number, englishSummary:
   await db.update(officialFeedItems).set({ englishSummary, englishSummaryFetchedAt: new Date() }).where(eq(officialFeedItems.id, id));
 }
 
-/** リフレッシュ時に該当チームの古い怪我情報を一旦クリアする */
+/** 全チームの古い怪我情報を一括パージし、最新取得データで置き換える */
+export async function replaceOfficialInjuriesAllTeams(items: InsertOfficialFeedItem[]) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is not available");
+
+  // 1. 既存の怪我レポートを全チーム一括削除
+  await db.delete(officialFeedItems).where(eq(officialFeedItems.category, "injury"));
+
+  // 2. 今回パースできた最新レポートのみを挿入
+  if (items.length > 0) {
+    for (const item of items) {
+      await db.insert(officialFeedItems).values(item).onDuplicateKeyUpdate({
+        set: {
+          title: item.title,
+          summary: item.summary,
+          publishedAt: item.publishedAt,
+          fetchedAt: item.fetchedAt,
+        },
+      });
+    }
+  }
+}
+
 export async function clearOfficialFeedInjuries(teamCode: string) {
   const db = await getDb();
   if (!db) return;
@@ -295,7 +317,7 @@ export async function getOfficialTeamSnapshot(teamCode: string, skipGameUrl?: st
     db.select({ id: officialFeedItems.id, title: officialFeedItems.title, sourceName: officialFeedItems.sourceName, sourceKind: officialFeedItems.sourceKind, sourceUrl: officialFeedItems.sourceUrl, publishedAt: officialFeedItems.publishedAt, category: officialFeedItems.category, fetchedAt: officialFeedItems.fetchedAt }).from(officialFeedItems).where(and(eq(officialFeedItems.teamCode, teamCode), eq(officialFeedItems.category, "transaction"), gte(officialFeedItems.publishedAt, rosterMoveWindowStart))).orderBy(sql`case when ${officialFeedItems.sourceKind} = 'team_official' then 0 else 1 end`, desc(officialFeedItems.publishedAt)).limit(24),
     db.select({ id: officialFeedItems.id, title: officialFeedItems.title, summary: officialFeedItems.summary, sourceName: officialFeedItems.sourceName, sourceKind: officialFeedItems.sourceKind, sourceUrl: officialFeedItems.sourceUrl, publishedAt: officialFeedItems.publishedAt, fetchedAt: officialFeedItems.fetchedAt }).from(officialFeedItems).where(and(eq(officialFeedItems.teamCode, teamCode), eq(officialFeedItems.category, "news"))).orderBy(sql`case when ${officialFeedItems.sourceKind} = 'team_official' then 0 else 1 end`, desc(officialFeedItems.publishedAt)).limit(24),
     db.select({ id: externalAvailabilityInsights.id, playerName: externalAvailabilityInsights.playerName, statusLabel: externalAvailabilityInsights.statusLabel, headline: externalAvailabilityInsights.headline, sourceName: externalAvailabilityInsights.sourceName, sourceUrl: externalAvailabilityInsights.sourceUrl, publishedAt: externalAvailabilityInsights.publishedAt, fetchedAt: externalAvailabilityInsights.fetchedAt }).from(externalAvailabilityInsights).where(and(eq(externalAvailabilityInsights.teamCode, teamCode), gte(externalAvailabilityInsights.publishedAt, externalInsightWindowStart))).orderBy(desc(externalAvailabilityInsights.publishedAt)).limit(3),
-    // Game Ticket INJURIES用：DB内の最新の公式レポートを取得
+    // Game Ticket INJURIES用：DB内の該当チームの最新怪我レポートを取得
     db.select({
       title: officialFeedItems.title,
       summary: officialFeedItems.summary,
@@ -303,8 +325,7 @@ export async function getOfficialTeamSnapshot(teamCode: string, skipGameUrl?: st
       publishedAt: officialFeedItems.publishedAt,
     }).from(officialFeedItems).where(and(
       eq(officialFeedItems.teamCode, teamCode),
-      eq(officialFeedItems.sourceKind, "nfl_official"),
-      sql`${officialFeedItems.sourceUrl} like 'https://www.nfl.com/injuries%'`
+      eq(officialFeedItems.category, "injury"),
     )).orderBy(desc(officialFeedItems.publishedAt)).limit(1),
   ]);
   const injuries = dedupeOfficialFeedItems(injuryRows, 3);
@@ -439,7 +460,6 @@ export async function getOfficialTeamSnapshot(teamCode: string, skipGameUrl?: st
   return { nextGame, gameDayStatus, canRestoreLastGame, byeWeek, roster, rosterCounts, injuries, rosterMoves, news, externalInsights, inactiveReport, sources: { schedule: nextGame?.sourceUrl ?? null, roster: roster[0]?.sourceUrl ?? null, injury: injuries[0]?.sourceUrl ?? null, moves: rosterMoves[0]?.sourceUrl ?? null, gameDay: nextGame?.sourceUrl ?? null }, lastUpdatedAt };
 }
 
-/** DBから取得した最新の公式レポートをそのまま返却するシンプルな形に整理 */
 export function buildSnapshotInactiveReport<T extends { title: string; summary: string | null; sourceUrl: string; publishedAt: Date }>(
   announcements: T[]
 ) {
