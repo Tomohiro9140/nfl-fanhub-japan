@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import type { InsertOfficialFeedItem } from "../drizzle/schema";
-import { getOfficialFeedItems, upsertOfficialFeedItems } from "./db";
+import { getOfficialFeedItems, upsertOfficialFeedItems, clearOfficialFeedInjuries } from "./db";
 import { refreshOfficialTeamData, TEAM_NAMES } from "./officialTeamData";
 
 const NFL_OFFICIAL_INJURY_URL = "https://www.nfl.com/injuries/";
@@ -226,7 +226,7 @@ export function parseOfficialNflInactivesPage(html: string, teamCode: string, no
     const cleanName = stripMarkup(nameMatch[1]);
     if (!cleanName || cleanName.toLowerCase() === "player") continue;
 
-    // 1. 週末の確定ステータス（Out, Doubtful, Questionable）
+    // 1. 確定ステータス（Out, Doubtful, Questionable）
     if (/<td[^>]*>\s*Out\s*<\/td>/i.test(row)) {
       if (!outPlayers.some(p => p.startsWith(cleanName))) outPlayers.push(`${cleanName} (Out)`);
     } else if (/<td[^>]*>\s*Doubtful\s*<\/td>/i.test(row)) {
@@ -234,7 +234,7 @@ export function parseOfficialNflInactivesPage(html: string, teamCode: string, no
     } else if (/<td[^>]*>\s*Questionable\s*<\/td>/i.test(row)) {
       if (!questionablePlayers.some(p => p.startsWith(cleanName))) questionablePlayers.push(`${cleanName} (Questionable)`);
     } 
-    // 2. 週前半（水・木）の週間練習レポート（DNP: Did Not Participate）
+    // 2. 週間練習レポート（DNP: Did Not Participate）
     else if (/<td[^>]*>\s*(?:DNP|Did Not Participate)\s*<\/td>/i.test(row) || /\b(?:DNP|Did Not Participate)\b/i.test(row)) {
       if (!dnpPlayers.some(p => p.startsWith(cleanName))) dnpPlayers.push(`${cleanName} (DNP)`);
     }
@@ -362,6 +362,9 @@ export async function refreshOfficialTeamFeed(teamCode: string) {
     const freshInjuries = await retainFreshNflInjuryItems(injuryCandidates);
     injuryItems = [...freshInjuries, ...inactives];
   }
+
+  // ★ リフレッシュ時に過去の古い怪我情報を一旦クリア
+  await clearOfficialFeedInjuries(teamCode);
 
   const items = [...teamItems, ...injuryItems];
   if (items.length === 0) throw new Error(`No feed items found for ${teamCode}`);
