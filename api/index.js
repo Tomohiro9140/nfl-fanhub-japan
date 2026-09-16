@@ -29,7 +29,7 @@ var decodeOAuthState = (state) => {
 import { parse as parseCookieHeader2 } from "cookie";
 
 // server/db.ts
-import { and, asc, desc, eq, gt, gte, inArray, lt, ne, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, gte, inArray, lt, ne, sql, or } from "drizzle-orm";
 
 // server/gameStatus.ts
 function matchupKey(firstTeam, secondTeam) {
@@ -160,7 +160,6 @@ function dedupeOfficialFeedItems(items, limit) {
 }
 
 // server/db.ts
-import { or } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 
 // drizzle/schema.ts
@@ -524,6 +523,23 @@ async function saveOfficialFeedEnglishSummary(id, englishSummary) {
   if (!db) throw new Error("Database is not available for English summary cache");
   await db.update(officialFeedItems).set({ englishSummary, englishSummaryFetchedAt: /* @__PURE__ */ new Date() }).where(eq(officialFeedItems.id, id));
 }
+async function replaceOfficialInjuriesAllTeams(items) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is not available");
+  await db.delete(officialFeedItems).where(eq(officialFeedItems.category, "injury"));
+  if (items.length > 0) {
+    for (const item of items) {
+      await db.insert(officialFeedItems).values(item).onDuplicateKeyUpdate({
+        set: {
+          title: item.title,
+          summary: item.summary,
+          publishedAt: item.publishedAt,
+          fetchedAt: item.fetchedAt
+        }
+      });
+    }
+  }
+}
 async function upsertOfficialFeedItems(items) {
   if (items.length === 0) return;
   const db = await getDb();
@@ -655,12 +671,15 @@ async function getOfficialTeamSnapshot(teamCode, skipGameUrl, forceLastGame = fa
     db.select({ id: officialFeedItems.id, title: officialFeedItems.title, sourceName: officialFeedItems.sourceName, sourceKind: officialFeedItems.sourceKind, sourceUrl: officialFeedItems.sourceUrl, publishedAt: officialFeedItems.publishedAt, category: officialFeedItems.category, fetchedAt: officialFeedItems.fetchedAt }).from(officialFeedItems).where(and(eq(officialFeedItems.teamCode, teamCode), eq(officialFeedItems.category, "transaction"), gte(officialFeedItems.publishedAt, rosterMoveWindowStart))).orderBy(sql`case when ${officialFeedItems.sourceKind} = 'team_official' then 0 else 1 end`, desc(officialFeedItems.publishedAt)).limit(24),
     db.select({ id: officialFeedItems.id, title: officialFeedItems.title, summary: officialFeedItems.summary, sourceName: officialFeedItems.sourceName, sourceKind: officialFeedItems.sourceKind, sourceUrl: officialFeedItems.sourceUrl, publishedAt: officialFeedItems.publishedAt, fetchedAt: officialFeedItems.fetchedAt }).from(officialFeedItems).where(and(eq(officialFeedItems.teamCode, teamCode), eq(officialFeedItems.category, "news"))).orderBy(sql`case when ${officialFeedItems.sourceKind} = 'team_official' then 0 else 1 end`, desc(officialFeedItems.publishedAt)).limit(24),
     db.select({ id: externalAvailabilityInsights.id, playerName: externalAvailabilityInsights.playerName, statusLabel: externalAvailabilityInsights.statusLabel, headline: externalAvailabilityInsights.headline, sourceName: externalAvailabilityInsights.sourceName, sourceUrl: externalAvailabilityInsights.sourceUrl, publishedAt: externalAvailabilityInsights.publishedAt, fetchedAt: externalAvailabilityInsights.fetchedAt }).from(externalAvailabilityInsights).where(and(eq(externalAvailabilityInsights.teamCode, teamCode), gte(externalAvailabilityInsights.publishedAt, externalInsightWindowStart))).orderBy(desc(externalAvailabilityInsights.publishedAt)).limit(3),
-    // Game Ticket INJURIES用：nfl.com/injuries/ 由来の公式データのみに限定
-    db.select({ title: officialFeedItems.title, summary: officialFeedItems.summary, sourceUrl: officialFeedItems.sourceUrl, publishedAt: officialFeedItems.publishedAt }).from(officialFeedItems).where(and(
+    // Game Ticket INJURIES用：DB内の該当チームの最新怪我レポートを取得
+    db.select({
+      title: officialFeedItems.title,
+      summary: officialFeedItems.summary,
+      sourceUrl: officialFeedItems.sourceUrl,
+      publishedAt: officialFeedItems.publishedAt
+    }).from(officialFeedItems).where(and(
       eq(officialFeedItems.teamCode, teamCode),
-      eq(officialFeedItems.sourceKind, "nfl_official"),
-      sql`${officialFeedItems.sourceUrl} like 'https://www.nfl.com/injuries%'`,
-      gte(officialFeedItems.publishedAt, new Date(now.getTime() - 7 * 24 * 60 * 60 * 1e3))
+      eq(officialFeedItems.category, "injury")
     )).orderBy(desc(officialFeedItems.publishedAt)).limit(1)
   ]);
   const injuries = dedupeOfficialFeedItems(injuryRows, 3);
@@ -776,7 +795,13 @@ async function getOfficialTeamSnapshot(teamCode, skipGameUrl, forceLastGame = fa
 }
 function buildSnapshotInactiveReport(announcements) {
   const announcement = announcements[0];
-  return announcement ? { title: announcement.title, summary: announcement.summary, sourceUrl: announcement.sourceUrl, publishedAt: announcement.publishedAt } : null;
+  if (!announcement || !announcement.summary) return null;
+  return {
+    title: announcement.title,
+    summary: announcement.summary,
+    sourceUrl: announcement.sourceUrl,
+    publishedAt: announcement.publishedAt
+  };
 }
 async function hasOfficialScorePulseWindow(now = /* @__PURE__ */ new Date()) {
   const db = await getDb();
@@ -1397,6 +1422,7 @@ var systemRouter = router({
 
 // server/officialFeeds.ts
 import { createHash as createHash2 } from "node:crypto";
+import { asc as asc2, desc as desc2, gte as gte2, lt as lt2 } from "drizzle-orm";
 
 // server/officialTeamData.ts
 import { createHash } from "node:crypto";
@@ -1723,8 +1749,7 @@ async function refreshOfficialTeamData(teamCode) {
 }
 
 // server/officialFeeds.ts
-var NFL_OFFICIAL_INJURY_URL = "https://www.nfl.com/injuries/";
-var NFL_OFFICIAL_INACTIVES_URL = "https://www.nfl.com/injuries/";
+var NFL_OFFICIAL_INJURY_DEFAULT_URL = "https://www.nfl.com/injuries/";
 var refreshWindowMs = 15 * 60 * 1e3;
 var nflInjuryMaxAgeMs = 45 * 24 * 60 * 60 * 1e3;
 var teamDomains = {
@@ -1761,39 +1786,39 @@ var teamDomains = {
   TEN: "titansonline.com",
   WAS: "commanders.com"
 };
-var teamAliases = {
-  ARI: ["cardinals", "arizona"],
-  ATL: ["falcons", "atlanta"],
-  BAL: ["ravens", "baltimore"],
-  BUF: ["bills", "buffalo"],
-  CAR: ["panthers", "carolina"],
-  CHI: ["bears", "chicago"],
-  CIN: ["bengals", "cincinnati"],
-  CLE: ["browns", "cleveland"],
-  DAL: ["cowboys", "dallas"],
-  DEN: ["broncos", "denver"],
-  DET: ["lions", "detroit"],
-  GB: ["packers", "green bay"],
-  HOU: ["texans", "houston"],
-  IND: ["colts", "indianapolis"],
-  JAX: ["jaguars", "jacksonville"],
-  KC: ["chiefs", "kansas city"],
-  LAC: ["chargers"],
-  LAR: ["rams"],
-  LV: ["raiders", "las vegas"],
-  MIA: ["dolphins", "miami"],
-  MIN: ["vikings", "minnesota"],
-  NE: ["patriots", "new england"],
-  NO: ["saints", "new orleans"],
-  NYG: ["giants"],
-  NYJ: ["jets"],
-  PHI: ["eagles", "philadelphia"],
-  PIT: ["steelers", "pittsburgh"],
-  SF: ["49ers", "niners", "san francisco"],
-  SEA: ["seahawks", "seattle"],
-  TB: ["buccaneers", "tampa bay"],
-  TEN: ["titans", "tennessee"],
-  WAS: ["commanders", "washington"]
+var TEAM_NICKNAMES2 = {
+  ARI: ["Arizona Cardinals", "Cardinals"],
+  ATL: ["Atlanta Falcons", "Falcons"],
+  BAL: ["Baltimore Ravens", "Ravens"],
+  BUF: ["Buffalo Bills", "Bills"],
+  CAR: ["Carolina Panthers", "Panthers"],
+  CHI: ["Chicago Bears", "Bears"],
+  CIN: ["Cincinnati Bengals", "Bengals"],
+  CLE: ["Cleveland Browns", "Browns"],
+  DAL: ["Dallas Cowboys", "Cowboys"],
+  DEN: ["Denver Broncos", "Broncos"],
+  DET: ["Detroit Lions", "Lions"],
+  GB: ["Green Bay Packers", "Packers"],
+  HOU: ["Houston Texans", "Texans"],
+  IND: ["Indianapolis Colts", "Colts"],
+  JAX: ["Jacksonville Jaguars", "Jaguars"],
+  KC: ["Kansas City Chiefs", "Chiefs"],
+  LAC: ["Los Angeles Chargers", "Chargers"],
+  LAR: ["Los Angeles Rams", "Rams"],
+  LV: ["Las Vegas Raiders", "Raiders"],
+  MIA: ["Miami Dolphins", "Dolphins"],
+  MIN: ["Minnesota Vikings", "Vikings"],
+  NE: ["New England Patriots", "Patriots"],
+  NO: ["New Orleans Saints", "Saints"],
+  NYG: ["New York Giants", "Giants"],
+  NYJ: ["New York Jets", "Jets"],
+  PHI: ["Philadelphia Eagles", "Eagles"],
+  PIT: ["Pittsburgh Steelers", "Steelers"],
+  SF: ["San Francisco 49ers", "49ers", "Niners"],
+  SEA: ["Seattle Seahawks", "Seahawks"],
+  TB: ["Tampa Bay Buccaneers", "Buccaneers", "Bucs"],
+  TEN: ["Tennessee Titans", "Titans"],
+  WAS: ["Washington Commanders", "Commanders"]
 };
 var supportedOfficialTeamCodes = Object.keys(teamDomains);
 var scheduledTeamGroups = [
@@ -1860,7 +1885,7 @@ function getOfficialSources(teamCode) {
   if (!domain) throw new Error(`Unsupported NFL team code: ${teamCode}`);
   return [
     { name: `${teamCode} Official News`, url: `https://www.${domain}/rss/news`, kind: "team_official" },
-    { name: "NFL Official Injury Report", url: NFL_OFFICIAL_INJURY_URL, kind: "nfl_official" }
+    { name: "NFL Official Injury Report", url: NFL_OFFICIAL_INJURY_DEFAULT_URL, kind: "nfl_official" }
   ];
 }
 function parseOfficialTeamRss(xml, teamCode, source) {
@@ -1892,101 +1917,144 @@ function parseOfficialTeamRss(xml, teamCode, source) {
   }
   return results.sort((left, right) => right.publishedAt.getTime() - left.publishedAt.getTime()).slice(0, 24);
 }
-function parseOfficialNflInjuryPage(html, teamCode, source) {
-  const aliases = teamAliases[teamCode] ?? [];
-  const now = /* @__PURE__ */ new Date();
-  const results = [];
-  const matches = Array.from(html.matchAll(/<a[^>]+href=["']([^"']*(?:injury|injured|injuries)[^"']*)["'][^>]*>([\s\S]*?)<\/a>/gi));
-  for (const match of matches) {
-    const title = stripMarkup(match[2]);
-    if (!title || !aliases.some((alias) => title.toLowerCase().includes(alias))) continue;
-    const sourceUrl = match[1].startsWith("http") ? match[1] : `https://www.nfl.com${match[1]}`;
-    results.push({
-      externalId: createHash2("sha256").update(`${teamCode}:${sourceUrl}`).digest("hex"),
-      teamCode,
-      sourceKind: "nfl_official",
-      sourceName: source.name,
-      sourceUrl,
-      title,
-      summary: null,
-      category: "injury",
-      publishedAt: now,
-      fetchedAt: now
-    });
-  }
-  return results.slice(0, 3);
+function resolveNflSeasonYear(date) {
+  const year = date.getFullYear();
+  const month = date.getMonth() + 1;
+  return month <= 2 ? year - 1 : year;
 }
-function parseOfficialNflInactivesPage(html, teamCode, now = /* @__PURE__ */ new Date()) {
-  const candidateNames = [
-    TEAM_NAMES[teamCode],
-    ...teamAliases[teamCode] ?? []
-  ].filter((name) => Boolean(name));
-  if (candidateNames.length === 0) return [];
-  const pattern = candidateNames.map((name) => name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|");
-  const headerRegex = new RegExp(`<div[^>]*class="[^"]*d3-o-section-sub-title[^"]*"[^>]*>\\s*<span[^>]*>\\s*(?:${pattern})\\s*<\\/span>`, "i");
-  const match = headerRegex.exec(html);
-  if (!match) return [];
-  const tableEnd = html.indexOf("</table>", match.index);
-  const tableHtml = html.slice(match.index, tableEnd !== -1 ? tableEnd : match.index + 8e3);
-  const rows = tableHtml.match(/<tr[\s\S]*?<\/tr>/gi) || [];
-  const outPlayers = [];
-  for (const row of rows) {
-    if (/<td[^>]*>\s*Out\s*<\/td>/i.test(row)) {
-      const nameMatch = row.match(/<a[^>]*class="[^"]*nfl-o-cta--link[^"]*"[^>]*>([\s\S]*?)<\/a>/i) || row.match(/<td[^>]*scope="row"[^>]*>([\s\S]*?)<\/td>/i);
-      if (nameMatch) {
-        const cleanName = stripMarkup(nameMatch[1]);
-        if (cleanName && !outPlayers.includes(cleanName)) {
-          outPlayers.push(cleanName);
+async function getOfficialCurrentLeagueInjuryUrl() {
+  try {
+    const db = await getDb();
+    if (db) {
+      const now = /* @__PURE__ */ new Date();
+      const activeWindowStart = new Date(now.getTime() - 6 * 60 * 60 * 1e3);
+      const upcomingGames = await db.select({
+        kickoffAt: officialGames.kickoffAt,
+        weekLabel: officialGames.weekLabel,
+        seasonPhase: officialGames.seasonPhase
+      }).from(officialGames).where(gte2(officialGames.kickoffAt, activeWindowStart)).orderBy(asc2(officialGames.kickoffAt)).limit(1);
+      let targetGame = upcomingGames[0];
+      if (!targetGame) {
+        const pastGames = await db.select({
+          kickoffAt: officialGames.kickoffAt,
+          weekLabel: officialGames.weekLabel,
+          seasonPhase: officialGames.seasonPhase
+        }).from(officialGames).where(lt2(officialGames.kickoffAt, now)).orderBy(desc2(officialGames.kickoffAt)).limit(1);
+        targetGame = pastGames[0];
+      }
+      if (targetGame?.weekLabel) {
+        const weekMatch = targetGame.weekLabel.match(/\d+/);
+        const weekNum = weekMatch ? parseInt(weekMatch[0], 10) : null;
+        const kickoff = targetGame.kickoffAt ?? now;
+        const seasonYear = resolveNflSeasonYear(kickoff);
+        let phase = "reg";
+        const rawPhase = (targetGame.seasonPhase ?? "").toLowerCase();
+        if (rawPhase.includes("pre")) phase = "pre";
+        else if (rawPhase.includes("post") || rawPhase.includes("playoff")) phase = "post";
+        if (weekNum) {
+          return `https://www.nfl.com/injuries/league/${seasonYear}/${phase}${weekNum}`;
         }
       }
     }
+  } catch (error) {
+    console.warn("[OfficialFeed] Failed to resolve current injury URL:", error);
   }
-  if (outPlayers.length === 0) return [];
-  const summary = outPlayers.join(", ");
-  return [{
-    externalId: createHash2("sha256").update(`nfl-inactives:${teamCode}:${now.toISOString().slice(0, 10)}`).digest("hex"),
-    teamCode,
-    sourceKind: "nfl_official",
-    sourceName: "NFL Official Inactives",
-    sourceUrl: NFL_OFFICIAL_INACTIVES_URL,
-    title: `NFL Official Inactives \xB7 ${teamCode}`,
-    summary: summary.slice(0, 560),
-    category: "injury",
-    publishedAt: now,
-    fetchedAt: now
-  }];
+  return NFL_OFFICIAL_INJURY_DEFAULT_URL;
 }
-function parseNflArticlePublishedAt(html) {
-  const raw = html.match(/"datePublished"\s*:\s*"([^"]+)"/)?.[1] ?? html.match(/datePublished\\"\s*:\s*\\"([^\\]+)\\"/)?.[1];
-  if (!raw) return null;
-  const parsed = new Date(raw);
-  return Number.isNaN(parsed.getTime()) ? null : parsed;
-}
-function isFreshNflInjuryArticle(publishedAt, now = /* @__PURE__ */ new Date()) {
-  const age = now.getTime() - publishedAt.getTime();
-  return age >= -24 * 60 * 60 * 1e3 && age <= nflInjuryMaxAgeMs;
-}
-async function fetchNflArticlePublishedAt(url) {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 12e3);
-  try {
-    const response = await fetch(url, { signal: controller.signal, headers: { Accept: "text/html", "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" } });
-    if (!response.ok) return null;
-    return parseNflArticlePublishedAt(await response.text());
-  } catch {
-    return null;
-  } finally {
-    clearTimeout(timeout);
-  }
-}
-async function retainFreshNflInjuryItems(items) {
+function parseLeagueInjuriesByTeam(html, sourceUrl) {
   const now = /* @__PURE__ */ new Date();
-  const retained = [];
-  for (const item of items) {
-    const publishedAt = await fetchNflArticlePublishedAt(item.sourceUrl);
-    if (publishedAt && isFreshNflInjuryArticle(publishedAt, now)) retained.push({ ...item, publishedAt, fetchedAt: now });
+  const cleaned = html.replace(/<(?:header|nav|footer)[\s\S]*?<\/(?:header|nav|footer)>/gi, "");
+  const nameToCode = /* @__PURE__ */ new Map();
+  for (const [code, names] of Object.entries(TEAM_NICKNAMES2)) {
+    for (const name of names) {
+      nameToCode.set(name.toLowerCase(), code);
+    }
   }
-  return retained;
+  const allNamePatterns = Array.from(nameToCode.keys()).sort((a, b) => b.length - a.length).map((name) => name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|");
+  const headerRegex = new RegExp(
+    `(?:<div[^>]*class="[^"]*(?:sub-title|team-name|section-header)[^"]*"[^>]*>|<h[2-4][^>]*>|<caption[^>]*>)[^<]*(?:<span[^>]*>)?[^<]*\\b(${allNamePatterns})\\b[^<]*(?:</span>)?[^<]*</(?:div|h[2-4]|caption)>`,
+    "gi"
+  );
+  const matches = Array.from(cleaned.matchAll(headerRegex));
+  const results = [];
+  for (let i = 0; i < matches.length; i++) {
+    const match = matches[i];
+    const teamNameFound = match[1]?.trim().toLowerCase();
+    const teamCode = nameToCode.get(teamNameFound);
+    if (!teamCode) continue;
+    const startPos = match.index + match[0].length;
+    const endPos = i + 1 < matches.length ? matches[i + 1].index : cleaned.length;
+    const chunk = cleaned.slice(startPos, endPos);
+    const tableMatch = chunk.match(/<table[\s\S]*?<\/table>/i);
+    if (!tableMatch) continue;
+    const tableHtml = tableMatch[0];
+    const rows = tableHtml.match(/<tr[\s\S]*?<\/tr>/gi) || [];
+    const outList = [];
+    const doubtfulList = [];
+    const questionableList = [];
+    const dnpList = [];
+    for (const row of rows) {
+      const nameMatch = row.match(/<a[^>]+href=["'][^"']*\/players\/[^"']*["'][^>]*>([\s\S]*?)<\/a>/i) || row.match(/<td[^>]*scope="row"[^>]*>([\s\S]*?)<\/td>/i) || row.match(/<a[^>]*class="[^"]*nfl-o-cta--link[^"]*"[^>]*>([\s\S]*?)<\/a>/i);
+      if (!nameMatch) continue;
+      const cleanName = stripMarkup(nameMatch[1]);
+      if (!cleanName || cleanName.toLowerCase() === "player") continue;
+      const tdMatches = Array.from(row.matchAll(/<td[^>]*>([\s\S]*?)<\/td>/gi));
+      const cells = tdMatches.map((m) => stripMarkup(m[1]).trim());
+      const isOut = cells.some((c) => /^(?:Out|IR|Reserve\/Injured)$/i.test(c));
+      const isDoubtful = cells.some((c) => /^Doubtful$/i.test(c));
+      const isQuestionable = cells.some((c) => /^Questionable$/i.test(c));
+      const isDnp = cells.some((c) => /^(?:DNP|Did Not Participate In Practice)$/i.test(c) || /\bDNP\b/i.test(c));
+      if (isOut) {
+        outList.push(`${cleanName} (Out)`);
+      } else if (isDoubtful) {
+        doubtfulList.push(`${cleanName} (Doubtful)`);
+      } else if (isQuestionable) {
+        questionableList.push(`${cleanName} (Questionable)`);
+      } else if (isDnp) {
+        dnpList.push(`${cleanName} (DNP)`);
+      }
+    }
+    const allReported = [...outList, ...doubtfulList, ...questionableList, ...dnpList].slice(0, 6);
+    if (allReported.length > 0) {
+      const summary = allReported.join(", ");
+      results.push({
+        externalId: createHash2("sha256").update(`nfl-injuries:${teamCode}:${now.toISOString().slice(0, 10)}`).digest("hex"),
+        teamCode,
+        sourceKind: "nfl_official",
+        sourceName: "NFL Official Injury Report",
+        sourceUrl,
+        title: `NFL Official Injury Report \xB7 ${teamCode}`,
+        summary: summary.slice(0, 560),
+        category: "injury",
+        publishedAt: now,
+        fetchedAt: now
+      });
+    }
+  }
+  return results;
+}
+var lastLeagueInjuriesRefreshedAt = 0;
+var LEAGUE_INJURIES_CACHE_TTL_MS = 30 * 60 * 1e3;
+async function refreshAllOfficialInjuries() {
+  const url = await getOfficialCurrentLeagueInjuryUrl();
+  const html = await fetchOfficialHtml2(url);
+  const items = parseLeagueInjuriesByTeam(html, url);
+  await replaceOfficialInjuriesAllTeams(items);
+  lastLeagueInjuriesRefreshedAt = Date.now();
+  return items.length;
+}
+function ensureOfficialInjuriesFresh() {
+  const now = Date.now();
+  if (now - lastLeagueInjuriesRefreshedAt > LEAGUE_INJURIES_CACHE_TTL_MS) {
+    lastLeagueInjuriesRefreshedAt = now;
+    void refreshAllOfficialInjuries().catch((error) => {
+      console.warn("[Official Injuries] Background sync failed:", error);
+    });
+  }
+}
+async function refreshOfficialNflInactives(options = {}) {
+  const count = await refreshAllOfficialInjuries();
+  return { reports: count };
 }
 async function fetchRss(url) {
   const controller = new AbortController();
@@ -2019,34 +2087,18 @@ async function fetchOfficialHtml2(url) {
     clearTimeout(timeout);
   }
 }
-async function refreshOfficialNflInactives(options = {}) {
-  const html = await (options.fetchHtml ?? fetchOfficialHtml2)(NFL_OFFICIAL_INACTIVES_URL);
-  const now = options.now?.() ?? /* @__PURE__ */ new Date();
-  const items = supportedOfficialTeamCodes.flatMap((teamCode) => parseOfficialNflInactivesPage(html, teamCode, now));
-  await (options.saveItems ?? upsertOfficialFeedItems)(items);
-  return { reports: items.length };
-}
 async function refreshOfficialTeamFeed(teamCode) {
-  const [teamSource, nflInjurySource] = getOfficialSources(teamCode);
-  const [teamResult, injuryResult] = await Promise.allSettled([
-    fetchRss(teamSource.url),
-    fetchOfficialHtml2(nflInjurySource.url)
-  ]);
-  const teamItems = teamResult.status === "fulfilled" ? parseOfficialTeamRss(teamResult.value, teamCode, teamSource) : [];
-  let injuryItems = [];
-  if (injuryResult.status === "fulfilled") {
-    const html = injuryResult.value;
-    const injuryCandidates = parseOfficialNflInjuryPage(html, teamCode, nflInjurySource);
-    const inactives = parseOfficialNflInactivesPage(html, teamCode);
-    const freshInjuries = await retainFreshNflInjuryItems(injuryCandidates);
-    injuryItems = [...freshInjuries, ...inactives];
+  const [teamSource] = getOfficialSources(teamCode);
+  const xml = await fetchRss(teamSource.url);
+  const teamItems = parseOfficialTeamRss(xml, teamCode, teamSource);
+  if (teamItems.length > 0) {
+    await upsertOfficialFeedItems(teamItems);
   }
-  const items = [...teamItems, ...injuryItems];
-  if (items.length === 0) throw new Error(`No feed items found for ${teamCode}`);
-  await upsertOfficialFeedItems(items);
-  return items.length;
+  await refreshAllOfficialInjuries();
+  return teamItems.length;
 }
 async function getFreshOfficialTeamFeed(teamCode) {
+  ensureOfficialInjuriesFresh();
   let items = await getOfficialFeedItems(teamCode);
   if (shouldSynchronouslyTopUpOfficialNews(items)) {
     try {
@@ -2295,7 +2347,7 @@ var CACHE_TTL = {
   stats: 12 * 60 * 60 * 1e3,
   contracts: 24 * 60 * 60 * 1e3
 };
-var teamAliases2 = {
+var teamAliases = {
   ARZ: "ARI",
   AZ: "ARI",
   BLT: "BAL",
@@ -2458,7 +2510,7 @@ async function teamDirectory() {
   });
 }
 function teamFor(code, directory) {
-  const normalizedCode = teamAliases2[code ?? ""] ?? code ?? "FA";
+  const normalizedCode = teamAliases[code ?? ""] ?? code ?? "FA";
   return directory.get(normalizedCode) ?? {
     abbreviation: normalizedCode,
     name: normalizedCode === "FA" ? "Free Agent" : fallbackTeamNames[normalizedCode] ?? normalizedCode,
@@ -2734,11 +2786,11 @@ async function atlasCareerUncached(playerId) {
   const recentSeasons = await mapInBatches(seasons, 1, async (season) => {
     try {
       const rosterRows = await rosterForSeason(season).catch(() => []);
-      const rosterTeams = rosterRows.filter((row) => row.gsis_id === playerId).map((row) => teamAliases2[row.team] ?? row.team).filter(Boolean);
+      const rosterTeams = rosterRows.filter((row) => row.gsis_id === playerId).map((row) => teamAliases[row.team] ?? row.team).filter(Boolean);
       let statTeams = [];
       try {
         const statRows = await fetchPlayerWeeklyOrSummary(season, playerId);
-        statTeams = statRows.map((r) => teamAliases2[r.recent_team || r.posteam || ""] || r.recent_team || r.posteam || teamAliases2[r.team || ""] || r.team).filter(Boolean);
+        statTeams = statRows.map((r) => teamAliases[r.recent_team || r.posteam || ""] || r.recent_team || r.posteam || teamAliases[r.team || ""] || r.team).filter(Boolean);
       } catch {
       }
       const mergedTeams = Array.from(/* @__PURE__ */ new Set([...rosterTeams, ...statTeams]));
@@ -2875,7 +2927,7 @@ function summarizeAtlasStats(rows, playerId, position) {
   }).forEach((row) => {
     const season = number(row.season);
     const rawTeam = row.recent_team || row.posteam || row.team || "FA";
-    const team = teamAliases2[rawTeam] ?? rawTeam;
+    const team = teamAliases[rawTeam] ?? rawTeam;
     if (!season) return;
     const teams = bySeason.get(season) ?? /* @__PURE__ */ new Map();
     teams.set(team, [...teams.get(team) ?? [], row]);
@@ -3309,7 +3361,7 @@ searchUniverse().catch((err) => {
 
 // server/fieldlineData.ts
 import { asyncBufferFromUrl, parquetReadObjects } from "hyparquet";
-import { and as and2, eq as eq2, gt as gt2, inArray as inArray2, max } from "drizzle-orm";
+import { and as and3, eq as eq3, gt as gt2, inArray as inArray2, max } from "drizzle-orm";
 
 // server/fieldlineCache.ts
 var ShortLivedPromiseCache = class {
@@ -3588,7 +3640,7 @@ async function getFieldlineFreshness(seasons) {
   const [imports, schedules, weeks] = await Promise.all([
     db.select({ season: seasonImports.season, status: seasonImports.status, lastReadyAt: seasonImports.lastReadyAt }).from(seasonImports).where(inArray2(seasonImports.season, requested)),
     db.select({ season: seasonRefreshSchedules.season, lastStatus: seasonRefreshSchedules.lastStatus }).from(seasonRefreshSchedules).where(inArray2(seasonRefreshSchedules.season, requested)),
-    db.select({ season: teamWeekStats.season, latestWeek: max(teamWeekStats.week) }).from(teamWeekStats).where(and2(inArray2(teamWeekStats.season, requested), gt2(teamWeekStats.games, 0))).groupBy(teamWeekStats.season)
+    db.select({ season: teamWeekStats.season, latestWeek: max(teamWeekStats.week) }).from(teamWeekStats).where(and3(inArray2(teamWeekStats.season, requested), gt2(teamWeekStats.games, 0))).groupBy(teamWeekStats.season)
   ]);
   const importsBySeason = new Map(imports.map((row) => [row.season, row]));
   const schedulesBySeason = new Map(schedules.map((row) => [row.season, row]));
@@ -3616,9 +3668,9 @@ async function getFieldlineWeeks(season, team, venue = "all") {
       weekLabel: officialGames.weekLabel,
       opponentCode: officialGames.opponentCode,
       homeAway: officialGames.homeAway
-    }).from(officialGames).where(and2(
-      eq2(officialGames.teamCode, normalizedTeamCode),
-      eq2(officialGames.seasonPhase, "regular")
+    }).from(officialGames).where(and3(
+      eq3(officialGames.teamCode, normalizedTeamCode),
+      eq3(officialGames.seasonPhase, "regular")
     ));
     const scheduleByWeek = /* @__PURE__ */ new Map();
     for (const game of scheduledGames) {
@@ -3636,9 +3688,9 @@ async function getFieldlineWeeks(season, team, venue = "all") {
     const statsRows = await db.select({
       week: teamWeekStats.week,
       games: teamWeekStats.games
-    }).from(teamWeekStats).where(and2(
-      eq2(teamWeekStats.season, season),
-      eq2(teamWeekStats.team, normalizedTeamCode)
+    }).from(teamWeekStats).where(and3(
+      eq3(teamWeekStats.season, season),
+      eq3(teamWeekStats.team, normalizedTeamCode)
     ));
     const statsByWeek = /* @__PURE__ */ new Map();
     for (const row of statsRows) {
@@ -3650,9 +3702,9 @@ async function getFieldlineWeeks(season, team, venue = "all") {
         week: teamWeekMatchups.week,
         opponent: teamWeekMatchups.opponent,
         isHome: teamWeekMatchups.isHome
-      }).from(teamWeekMatchups).where(and2(
-        eq2(teamWeekMatchups.season, season),
-        eq2(teamWeekMatchups.team, normalizedTeamCode)
+      }).from(teamWeekMatchups).where(and3(
+        eq3(teamWeekMatchups.season, season),
+        eq3(teamWeekMatchups.team, normalizedTeamCode)
       ));
       for (const row of matchupsRows) {
         matchupsByWeek.set(row.week, {
@@ -3705,8 +3757,8 @@ async function compareFieldlineSelections(inputs) {
     const requestedWeeks = Array.from(new Set(normalized.flatMap((item) => item.weeks)));
     const [imports, matchups, rows] = await Promise.all([
       db.select().from(seasonImports).where(inArray2(seasonImports.season, seasons)),
-      db.select({ season: teamWeekMatchups.season, team: teamWeekMatchups.team, week: teamWeekMatchups.week, isHome: teamWeekMatchups.isHome }).from(teamWeekMatchups).where(and2(inArray2(teamWeekMatchups.season, seasons), inArray2(teamWeekMatchups.week, requestedWeeks))),
-      db.select().from(teamWeekStats).where(and2(inArray2(teamWeekStats.season, seasons), inArray2(teamWeekStats.week, requestedWeeks)))
+      db.select({ season: teamWeekMatchups.season, team: teamWeekMatchups.team, week: teamWeekMatchups.week, isHome: teamWeekMatchups.isHome }).from(teamWeekMatchups).where(and3(inArray2(teamWeekMatchups.season, seasons), inArray2(teamWeekMatchups.week, requestedWeeks))),
+      db.select().from(teamWeekStats).where(and3(inArray2(teamWeekStats.season, seasons), inArray2(teamWeekStats.week, requestedWeeks)))
     ]);
     const importsBySeason = new Map(imports.map((item) => [item.season, item]));
     return normalized.map((input) => {
@@ -3846,16 +3898,16 @@ async function importFieldlineSeasonFromNflverse(season, importedBy) {
       { season, week: game.week, team: game.home, opponent: game.away, isHome: true, gameId },
       { season, week: game.week, team: game.away, opponent: game.home, isHome: false, gameId }
     ]);
-    await db.delete(teamWeekStats).where(eq2(teamWeekStats.season, season));
-    await db.delete(teamWeekMatchups).where(eq2(teamWeekMatchups.season, season));
+    await db.delete(teamWeekStats).where(eq3(teamWeekStats.season, season));
+    await db.delete(teamWeekMatchups).where(eq3(teamWeekMatchups.season, season));
     for (let index2 = 0; index2 < records.length; index2 += 100) await db.insert(teamWeekStats).values(records.slice(index2, index2 + 100));
     for (let index2 = 0; index2 < matchups.length; index2 += 100) await db.insert(teamWeekMatchups).values(matchups.slice(index2, index2 + 100));
-    await db.update(seasonImports).set({ status: "ready", gamesImported: gameScores.size, rowsImported: pbp.length, errorMessage: null, lastReadyAt: /* @__PURE__ */ new Date() }).where(eq2(seasonImports.season, season));
+    await db.update(seasonImports).set({ status: "ready", gamesImported: gameScores.size, rowsImported: pbp.length, errorMessage: null, lastReadyAt: /* @__PURE__ */ new Date() }).where(eq3(seasonImports.season, season));
     clearFieldlineCaches();
     return { season, gamesImported: gameScores.size, rowsImported: pbp.length };
   } catch (error) {
     const message = error instanceof Error ? error.message : "\u4E0D\u660E\u306A\u30A8\u30E9\u30FC";
-    await db.update(seasonImports).set({ status: "failed", errorMessage: message }).where(eq2(seasonImports.season, season));
+    await db.update(seasonImports).set({ status: "failed", errorMessage: message }).where(eq3(seasonImports.season, season));
     throw new Error(message);
   }
 }
@@ -4043,7 +4095,7 @@ async function getOfficialGameStats(gameUrl) {
 
 // server/playoffRouter.ts
 import { z as z2 } from "zod";
-import { and as and3, eq as eq3 } from "drizzle-orm";
+import { and as and4, eq as eq4 } from "drizzle-orm";
 var playoffRouter = router({
   /**
    * レギュラーシーズン公式スケジュール（全272試合）と消化済み勝敗を取得
@@ -4065,9 +4117,9 @@ var playoffRouter = router({
       weekLabel: officialGames.weekLabel,
       kickoffAt: officialGames.kickoffAt
     }).from(officialGames).where(
-      and3(
-        eq3(officialGames.seasonPhase, "regular"),
-        eq3(officialGames.homeAway, "home")
+      and4(
+        eq4(officialGames.seasonPhase, "regular"),
+        eq4(officialGames.homeAway, "home")
       )
     );
     const statsRows = await db.select({
@@ -4076,7 +4128,7 @@ var playoffRouter = router({
       games: teamWeekStats.games,
       pointsFor: teamWeekStats.pointsFor,
       pointsAgainst: teamWeekStats.pointsAgainst
-    }).from(teamWeekStats).where(eq3(teamWeekStats.season, season));
+    }).from(teamWeekStats).where(eq4(teamWeekStats.season, season));
     const statsMap = /* @__PURE__ */ new Map();
     for (const row of statsRows) {
       statsMap.set(`${row.team}_W${row.week}`, {
@@ -4955,18 +5007,18 @@ async function receiveOfficialFeedAgentHandler(req, res) {
 }
 
 // server/fieldlineScheduler.ts
-import { and as and4, eq as eq4 } from "drizzle-orm";
+import { and as and5, eq as eq5 } from "drizzle-orm";
 async function refreshFieldlineSeasonHandler(req, res) {
   try {
     const user = await sdk.authenticateRequest(req);
     if (!user.isCron || !user.taskUid) return res.status(403).json({ error: "cron-only" });
     const db = await getDb();
     if (!db) throw new Error("Database unavailable");
-    const schedule = (await db.select().from(seasonRefreshSchedules).where(and4(eq4(seasonRefreshSchedules.scheduleCronTaskUid, user.taskUid), eq4(seasonRefreshSchedules.isEnabled, true))).limit(1))[0];
+    const schedule = (await db.select().from(seasonRefreshSchedules).where(and5(eq5(seasonRefreshSchedules.scheduleCronTaskUid, user.taskUid), eq5(seasonRefreshSchedules.isEnabled, true))).limit(1))[0];
     if (!schedule) return res.json({ ok: true, skipped: "orphan", taskUid: user.taskUid });
-    await db.update(seasonRefreshSchedules).set({ lastStatus: "running", lastRunAt: /* @__PURE__ */ new Date(), lastError: null }).where(eq4(seasonRefreshSchedules.id, schedule.id));
+    await db.update(seasonRefreshSchedules).set({ lastStatus: "running", lastRunAt: /* @__PURE__ */ new Date(), lastError: null }).where(eq5(seasonRefreshSchedules.id, schedule.id));
     const result = await importFieldlineSeasonFromNflverse(schedule.season);
-    await db.update(seasonRefreshSchedules).set({ lastStatus: "ready", lastSuccessAt: /* @__PURE__ */ new Date(), lastError: null }).where(eq4(seasonRefreshSchedules.id, schedule.id));
+    await db.update(seasonRefreshSchedules).set({ lastStatus: "ready", lastSuccessAt: /* @__PURE__ */ new Date(), lastError: null }).where(eq5(seasonRefreshSchedules.id, schedule.id));
     res.json({ ok: true, taskUid: user.taskUid, ...result, timestamp: (/* @__PURE__ */ new Date()).toISOString() });
   } catch (error) {
     const details = error instanceof Error ? { message: error.message, stack: error.stack } : { message: String(error) };
