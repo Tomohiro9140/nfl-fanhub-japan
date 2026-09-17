@@ -2221,6 +2221,7 @@ Analyze the following article carefully and provide a comprehensive, substantive
 - DO NOT write meta-introductions or table-of-contents phrases such as "\u301C\u306B\u3064\u3044\u3066\u306E\u8A18\u4E8B", "\u301C\u3092\u63B2\u8F09\u3057\u3066\u3044\u308B", "\u301C\u3092\u5206\u6790\u3057\u3066\u3044\u308B", or "\u301C\u306E\u30EC\u30D3\u30E5\u30FC".
 - Directly describe WHAT happened, WHO performed well/poorly, tactical adjustments made, and key takeaways.
 - Provide concrete substance, player names, or strategic context.
+- [Formatting] Break the summary into 2 or 3 distinct paragraphs based on topic or context, separated by a blank line (double newline: \\n\\n). DO NOT output a single continuous block of text. Avoid bullet points; use cohesive prose.
 
 Article Title: ${title}
 Article Body:
@@ -2241,7 +2242,7 @@ ${articleBody}`;
               properties: {
                 japaneseSummary: {
                   type: "STRING",
-                  description: "350\u301C450\u5B57\u306E\u5177\u4F53\u7684\u306A\u4E8B\u5B9F\u30FB\u5206\u6790\u30FB\u8A66\u5408\u5C55\u958B\u3092\u8A18\u8FF0\u3057\u305F\u65E5\u672C\u8A9E\u8981\u7D04"
+                  description: "350\u301C450\u5B57\u3067\u3001\u6587\u8108\u3054\u3068\u306B2\u301C3\u3064\u306E\u6BB5\u843D\uFF08\u7A7A\u884C\u533A\u5207\u308A\uFF09\u306B\u5206\u3051\u305F\u5177\u4F53\u7684\u306A\u4E8B\u5B9F\u30FB\u5206\u6790\u30FB\u8A66\u5408\u5C55\u958B\u3092\u8A18\u8FF0\u3057\u305F\u65E5\u672C\u8A9E\u8981\u7D04"
                 }
               },
               required: ["japaneseSummary"]
