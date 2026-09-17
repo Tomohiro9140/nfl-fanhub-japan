@@ -24,6 +24,7 @@ Analyze the following article carefully and provide a comprehensive, substantive
 - DO NOT write meta-introductions or table-of-contents phrases such as "〜についての記事", "〜を掲載している", "〜を分析している", or "〜のレビュー".
 - Directly describe WHAT happened, WHO performed well/poorly, tactical adjustments made, and key takeaways.
 - Provide concrete substance, player names, or strategic context.
+- [Formatting] Break the summary into 2 or 3 distinct paragraphs based on topic or context, separated by a blank line (double newline: \\n\\n). DO NOT output a single continuous block of text. Avoid bullet points; use cohesive prose.
 
 Article Title: ${title}
 Article Body:
@@ -46,7 +47,7 @@ ${articleBody}`;
               properties: {
                 japaneseSummary: {
                   type: "STRING",
-                  description: "350〜450字の具体的な事実・分析・試合展開を記述した日本語要約",
+                  description: "350〜450字で、文脈ごとに2〜3つの段落（空行区切り）に分けた具体的な事実・分析・試合展開を記述した日本語要約",
                 },
               },
               required: ["japaneseSummary"],
