@@ -101,7 +101,11 @@ export function selectLatestNews(items: FeedItem[], hideFrom?: Date | null, hide
       selected.push(item);
     }
   }
-  return selected.slice(0, 7);
+
+  // ★ 枠取りされた最大7件を、最終的に公開日時の降順（最新順）でソート
+  return selected
+    .slice(0, 7)
+    .sort((left, right) => new Date(right.publishedAt).getTime() - new Date(left.publishedAt).getTime());
 }
 
 function displayDate(value: Date) {
@@ -163,7 +167,6 @@ export function OfficialTeamFeed({ favorite, spoilerMode = false, completedGame 
                         <Sparkles className="h-3 w-3" /> 要約
                       </span>
                     </span>
-                    {/* ★ 英語の簡単な内容紹介 (item.summary) の描画ブロックを削除しました */}
                     <span className="mt-1 block font-mono text-[8px] font-bold tracking-[.05em] text-[#94a3b8]">PUBLISHED · {displayDate(item.publishedAt)}</span>
                   </span>
                 </button>
