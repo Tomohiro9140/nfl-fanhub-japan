@@ -27,6 +27,73 @@ interface ArticleSummaryDialogProps {
   onClose: () => void;
 }
 
+/**
+ * 要約テキストを解析し、改行がない場合でも文脈・句点に応じて
+ * 自動的に読みやすい段落（空行）に分割してレンダリングするフォーマッター
+ */
+function FormattedSummaryContent({ content }: { content?: string | null }) {
+  if (!content) {
+    return <p className="text-sm text-[#64748b]">要約がありません。「もう一度要約を試す」を押してください。</p>;
+  }
+
+  // 1. すでに改行コード（\n）が含まれている場合は、改行ごとに段落化
+  if (content.includes("\n")) {
+    const paragraphs = content
+      .split(/\n+/)
+      .map((p) => p.trim())
+      .filter(Boolean);
+
+    return (
+      <div className="space-y-3.5">
+        {paragraphs.map((para, idx) => (
+          <p key={idx} className="leading-relaxed">
+            {para}
+          </p>
+        ))}
+      </div>
+    );
+  }
+
+  // 2. 改行がないベタテキストの場合：句点（。）で文を分割し、1〜2文（80〜120文字程度）ごとに自然な段落を作る
+  const rawSentences = content.match(/[^。！？]+[。！？]?/g) || [content];
+  const sentences = rawSentences.map((s) => s.trim()).filter(Boolean);
+
+  if (sentences.length <= 1) {
+    return <p className="leading-relaxed">{content}</p>;
+  }
+
+  const paragraphs: string[] = [];
+  let currentParagraph = "";
+
+  for (let i = 0; i < sentences.length; i++) {
+    const s = sentences[i];
+    if (!currentParagraph) {
+      currentParagraph = s;
+    } else {
+      // 現在の段落が一定の長さ（約80文字以上）に達したら新しい段落へ分ける
+      if (currentParagraph.length >= 80) {
+        paragraphs.push(currentParagraph);
+        currentParagraph = s;
+      } else {
+        currentParagraph += s;
+      }
+    }
+  }
+  if (currentParagraph) {
+    paragraphs.push(currentParagraph);
+  }
+
+  return (
+    <div className="space-y-3.5">
+      {paragraphs.map((para, idx) => (
+        <p key={idx} className="leading-relaxed">
+          {para}
+        </p>
+      ))}
+    </div>
+  );
+}
+
 export function ArticleSummaryDialog({
   article,
   open,
@@ -108,7 +175,7 @@ export function ArticleSummaryDialog({
         </div>
 
         {/* 要約本文エリア */}
-        <div className="p-5 max-h-[45vh] min-h-[140px] overflow-y-auto">
+        <div className="p-5 max-h-[48vh] min-h-[140px] overflow-y-auto">
           {isGenerating ? (
             <div className="flex flex-col items-center justify-center py-8 text-center space-y-2">
               <Loader2 className="w-6 h-6 animate-spin text-[#e85d2a]" />
@@ -133,8 +200,8 @@ export function ArticleSummaryDialog({
               </Button>
             </div>
           ) : (
-            <div className="text-sm leading-relaxed text-[#334155] whitespace-pre-wrap font-sans">
-              {currentSummary || "要約がありません。「もう一度要約を試す」を押してください。"}
+            <div className="text-sm text-[#334155] font-sans">
+              <FormattedSummaryContent content={currentSummary} />
             </div>
           )}
         </div>
