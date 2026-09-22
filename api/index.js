@@ -293,6 +293,10 @@ var officialScoreboardGames = mysqlTable("official_scoreboard_games", {
   nflHighlightUrl: varchar("nfl_highlight_url", { length: 1024 }),
   nflHighlightSourceUrl: varchar("nfl_highlight_source_url", { length: 1024 }),
   nflHighlightMatchedAt: timestamp("nfl_highlight_matched_at"),
+  /** Number of lead changes, sourced from ESPN game summary for Excite Index. */
+  leadChanges: int("lead_changes"),
+  /** Number of times tied, sourced from ESPN game summary for Excite Index. */
+  timesTied: int("times_tied"),
   sourceUrl: varchar("source_url", { length: 1024 }).notNull(),
   fetchedAt: timestamp("fetched_at").defaultNow().notNull()
 }, (table) => [
@@ -671,7 +675,6 @@ async function getOfficialTeamSnapshot(teamCode, skipGameUrl, forceLastGame = fa
     db.select({ id: officialFeedItems.id, title: officialFeedItems.title, sourceName: officialFeedItems.sourceName, sourceKind: officialFeedItems.sourceKind, sourceUrl: officialFeedItems.sourceUrl, publishedAt: officialFeedItems.publishedAt, category: officialFeedItems.category, fetchedAt: officialFeedItems.fetchedAt }).from(officialFeedItems).where(and(eq(officialFeedItems.teamCode, teamCode), eq(officialFeedItems.category, "transaction"), gte(officialFeedItems.publishedAt, rosterMoveWindowStart))).orderBy(sql`case when ${officialFeedItems.sourceKind} = 'team_official' then 0 else 1 end`, desc(officialFeedItems.publishedAt)).limit(24),
     db.select({ id: officialFeedItems.id, title: officialFeedItems.title, summary: officialFeedItems.summary, sourceName: officialFeedItems.sourceName, sourceKind: officialFeedItems.sourceKind, sourceUrl: officialFeedItems.sourceUrl, publishedAt: officialFeedItems.publishedAt, fetchedAt: officialFeedItems.fetchedAt }).from(officialFeedItems).where(and(eq(officialFeedItems.teamCode, teamCode), eq(officialFeedItems.category, "news"))).orderBy(sql`case when ${officialFeedItems.sourceKind} = 'team_official' then 0 else 1 end`, desc(officialFeedItems.publishedAt)).limit(24),
     db.select({ id: externalAvailabilityInsights.id, playerName: externalAvailabilityInsights.playerName, statusLabel: externalAvailabilityInsights.statusLabel, headline: externalAvailabilityInsights.headline, sourceName: externalAvailabilityInsights.sourceName, sourceUrl: externalAvailabilityInsights.sourceUrl, publishedAt: externalAvailabilityInsights.publishedAt, fetchedAt: externalAvailabilityInsights.fetchedAt }).from(externalAvailabilityInsights).where(and(eq(externalAvailabilityInsights.teamCode, teamCode), gte(externalAvailabilityInsights.publishedAt, externalInsightWindowStart))).orderBy(desc(externalAvailabilityInsights.publishedAt)).limit(3),
-    // Game Ticket INJURIES用：DB内の該当チームの最新怪我レポートを取得
     db.select({
       title: officialFeedItems.title,
       summary: officialFeedItems.summary,
@@ -822,7 +825,17 @@ async function upsertOfficialStandings(items) {
 async function replaceOfficialScoreboardGames(season, items) {
   const db = await getDb();
   if (!db) throw new Error("Database is not available for official scoreboard cache");
-  const existingLinks = await db.select({ externalId: officialScoreboardGames.externalId, gameDate: officialScoreboardGames.gameDate, kickoffAt: officialScoreboardGames.kickoffAt, nflHighlightUrl: officialScoreboardGames.nflHighlightUrl, nflHighlightSourceUrl: officialScoreboardGames.nflHighlightSourceUrl, nflHighlightMatchedAt: officialScoreboardGames.nflHighlightMatchedAt, finalRecordedAt: officialScoreboardGames.finalRecordedAt }).from(officialScoreboardGames).where(eq(officialScoreboardGames.season, season));
+  const existingLinks = await db.select({
+    externalId: officialScoreboardGames.externalId,
+    gameDate: officialScoreboardGames.gameDate,
+    kickoffAt: officialScoreboardGames.kickoffAt,
+    nflHighlightUrl: officialScoreboardGames.nflHighlightUrl,
+    nflHighlightSourceUrl: officialScoreboardGames.nflHighlightSourceUrl,
+    nflHighlightMatchedAt: officialScoreboardGames.nflHighlightMatchedAt,
+    finalRecordedAt: officialScoreboardGames.finalRecordedAt,
+    leadChanges: officialScoreboardGames.leadChanges,
+    timesTied: officialScoreboardGames.timesTied
+  }).from(officialScoreboardGames).where(eq(officialScoreboardGames.season, season));
   const existingByExternalId = new Map(existingLinks.map((link) => [link.externalId, link]));
   if (!items.length) return;
   for (const item of items) {
@@ -830,7 +843,30 @@ async function replaceOfficialScoreboardGames(season, items) {
     const finalRecordedAt = isOfficialFinal(item) ? existing?.finalRecordedAt ?? item.fetchedAt : null;
     const gameDate = item.gameDate ?? existing?.gameDate ?? null;
     const kickoffAt = item.kickoffAt ?? existing?.kickoffAt ?? null;
-    await db.insert(officialScoreboardGames).values({ ...item, ...existing ?? {}, gameDate, kickoffAt, finalRecordedAt }).onDuplicateKeyUpdate({ set: { awayScore: item.awayScore, homeScore: item.homeScore, gameState: item.gameState, gameDate, kickoffAt, finalRecordedAt, sourceUrl: item.sourceUrl, fetchedAt: item.fetchedAt } });
+    const leadChanges = item.leadChanges ?? existing?.leadChanges ?? null;
+    const timesTied = item.timesTied ?? existing?.timesTied ?? null;
+    await db.insert(officialScoreboardGames).values({
+      ...item,
+      ...existing ?? {},
+      gameDate,
+      kickoffAt,
+      finalRecordedAt,
+      leadChanges,
+      timesTied
+    }).onDuplicateKeyUpdate({
+      set: {
+        awayScore: item.awayScore,
+        homeScore: item.homeScore,
+        gameState: item.gameState,
+        leadChanges,
+        timesTied,
+        gameDate,
+        kickoffAt,
+        finalRecordedAt,
+        sourceUrl: item.sourceUrl,
+        fetchedAt: item.fetchedAt
+      }
+    });
   }
 }
 async function getOfficialScoreboardKickoffTimes(season, externalIds) {
@@ -2291,7 +2327,7 @@ ${articleBody}`;
 var NEWS_SUMMARIES_ENABLED = true;
 
 // server/routers.ts
-import { z as z3 } from "zod";
+import { z as z4 } from "zod";
 import { TRPCError as TRPCError3 } from "@trpc/server";
 
 // server/atlasData.ts
@@ -4173,12 +4209,186 @@ var playoffRouter = router({
   })
 });
 
+// server/exciteIndexRouter.ts
+import { z as z3 } from "zod";
+import { desc as desc3, eq as eq5 } from "drizzle-orm";
+
+// server/exciteIndex.ts
+function calculateExciteIndex(game) {
+  const away = game.awayScore ?? 0;
+  const home = game.homeScore ?? 0;
+  const margin = Math.abs(away - home);
+  const totalPoints = away + home;
+  const stateUpper = (game.gameState ?? "").toUpperCase();
+  const isOvertime = stateUpper.includes("OT") || stateUpper.includes("OVERTIME");
+  let marginScore = 0;
+  if (margin <= 2) {
+    marginScore = 30;
+  } else if (margin === 3) {
+    marginScore = 26;
+  } else if (margin <= 6) {
+    marginScore = 20;
+  } else if (margin <= 8) {
+    marginScore = 15;
+  } else if (margin <= 11) {
+    marginScore = 9;
+  } else if (margin <= 14) {
+    marginScore = 4;
+  } else {
+    marginScore = 0;
+  }
+  let leadScore = 0;
+  const lc = game.leadChanges ?? 0;
+  const tt = game.timesTied ?? 0;
+  if (lc > 0 || tt > 0) {
+    leadScore = Math.min(30, lc * 8 + tt * 5);
+  } else {
+    if (isOvertime) {
+      leadScore = 21;
+    } else if (margin <= 3) {
+      leadScore = 16;
+    } else if (margin <= 8) {
+      leadScore = 10;
+    }
+  }
+  let clutchScore = 0;
+  if (margin <= 8) {
+    clutchScore += 10;
+    if (lc >= 2 || isOvertime || margin <= 3) {
+      clutchScore += 10;
+    }
+  }
+  let scoreBonus = 0;
+  if (totalPoints >= 60) {
+    scoreBonus = 10;
+  } else if (totalPoints >= 52) {
+    scoreBonus = 7;
+  } else if (totalPoints >= 44) {
+    scoreBonus = 4;
+  }
+  const otBonus = isOvertime ? 10 : 0;
+  const totalScore = Math.min(
+    100,
+    Math.max(0, marginScore + leadScore + clutchScore + scoreBonus + otBonus)
+  );
+  let stars = 1;
+  if (totalScore >= 85) {
+    stars = 5;
+  } else if (totalScore >= 70) {
+    stars = 4;
+  } else if (totalScore >= 50) {
+    stars = 3;
+  } else if (totalScore >= 30) {
+    stars = 2;
+  } else {
+    stars = 1;
+  }
+  return {
+    score: totalScore,
+    stars,
+    margin,
+    totalPoints,
+    isOvertime
+  };
+}
+
+// server/exciteIndexRouter.ts
+var exciteIndexRouter = router({
+  /**
+   * 指定シーズン・週の試合一覧と Excite Index（熱狂度指数・星評価・ランキング順位）を取得する
+   */
+  getWeeklyRankings: publicProcedure.input(
+    z3.object({
+      season: z3.number().int().default(2026),
+      weekLabel: z3.string().optional()
+    }).optional()
+  ).query(async ({ input }) => {
+    const season = input?.season ?? 2026;
+    const db = await getDb();
+    if (!db) {
+      return { season, weekLabel: null, availableWeeks: [], games: [] };
+    }
+    const allGames = await db.select().from(officialScoreboardGames).where(eq5(officialScoreboardGames.season, season)).orderBy(desc3(officialScoreboardGames.kickoffAt));
+    if (allGames.length === 0) {
+      return { season, weekLabel: null, availableWeeks: [], games: [] };
+    }
+    const weekSet = /* @__PURE__ */ new Set();
+    for (const g of allGames) {
+      if (g.weekLabel) weekSet.add(g.weekLabel);
+    }
+    const availableWeeks = Array.from(weekSet);
+    let targetWeek = input?.weekLabel;
+    if (!targetWeek) {
+      const latestFinal = allGames.find((g) => {
+        const s = (g.gameState ?? "").toUpperCase();
+        return s.includes("FINAL") || s.includes("COMPLETED");
+      });
+      targetWeek = latestFinal?.weekLabel ?? allGames[0]?.weekLabel ?? availableWeeks[0] ?? null;
+    }
+    const targetGames = targetWeek ? allGames.filter((g) => g.weekLabel === targetWeek) : allGames;
+    const gamesWithIndex = targetGames.map((game) => {
+      const stateUpper = (game.gameState ?? "").toUpperCase();
+      const isFinal = stateUpper.includes("FINAL") || stateUpper.includes("COMPLETED");
+      let excite = null;
+      if (isFinal) {
+        excite = calculateExciteIndex({
+          awayScore: game.awayScore,
+          homeScore: game.homeScore,
+          gameState: game.gameState,
+          leadChanges: game.leadChanges,
+          timesTied: game.timesTied
+        });
+      }
+      return {
+        id: game.id,
+        externalId: game.externalId,
+        season: game.season,
+        seasonPhase: game.seasonPhase,
+        weekLabel: game.weekLabel,
+        awayTeamCode: game.awayTeamCode,
+        homeTeamCode: game.homeTeamCode,
+        awayScore: game.awayScore,
+        homeScore: game.homeScore,
+        gameState: game.gameState,
+        gameDate: game.gameDate,
+        kickoffAt: game.kickoffAt,
+        gameUrl: game.gameUrl,
+        nflHighlightUrl: game.nflHighlightUrl,
+        exciteIndex: excite
+      };
+    });
+    gamesWithIndex.sort((a, b) => {
+      const scoreA = a.exciteIndex?.score ?? -1;
+      const scoreB = b.exciteIndex?.score ?? -1;
+      if (scoreB !== scoreA) {
+        return scoreB - scoreA;
+      }
+      const timeA = a.kickoffAt ? new Date(a.kickoffAt).getTime() : 0;
+      const timeB = b.kickoffAt ? new Date(b.kickoffAt).getTime() : 0;
+      return timeB - timeA;
+    });
+    let rankCounter = 1;
+    const gamesWithRank = gamesWithIndex.map((game) => {
+      if (game.exciteIndex) {
+        return { ...game, rank: rankCounter++ };
+      }
+      return { ...game, rank: null };
+    });
+    return {
+      season,
+      weekLabel: targetWeek,
+      availableWeeks,
+      games: gamesWithRank
+    };
+  })
+});
+
 // server/routers.ts
-var fieldlineVenueSchema = z3.enum(["all", "home", "away"]);
-var fieldlineSelectionSchema = z3.object({
-  season: z3.number().int().min(2025).max(2100),
-  team: z3.string().length(2).or(z3.string().length(3)),
-  weeks: z3.array(z3.number().int().min(1).max(18)).min(1).max(18),
+var fieldlineVenueSchema = z4.enum(["all", "home", "away"]);
+var fieldlineSelectionSchema = z4.object({
+  season: z4.number().int().min(2025).max(2100),
+  team: z4.string().length(2).or(z4.string().length(3)),
+  weeks: z4.array(z4.number().int().min(1).max(18)).min(1).max(18),
   venue: fieldlineVenueSchema.default("all")
 });
 var fieldlineAdminProcedure = protectedProcedure.use(async ({ ctx, next }) => {
@@ -4226,18 +4436,18 @@ var appRouter = router({
     })
   }),
   officialFeed: router({
-    byTeam: publicProcedure.input(z3.object({ teamCode: z3.string().length(2).or(z3.string().length(3)) })).query(async ({ input }) => {
+    byTeam: publicProcedure.input(z4.object({ teamCode: z4.string().length(2).or(z4.string().length(3)) })).query(async ({ input }) => {
       const feed = await getFreshOfficialTeamFeed(input.teamCode.toUpperCase());
       if (feed?.items?.length) {
         void prefetchUnsummarizedNews(feed.items, 5);
       }
       return feed;
     }),
-    refresh: publicProcedure.input(z3.object({ teamCode: z3.string().length(2).or(z3.string().length(3)) })).mutation(async ({ input }) => {
+    refresh: publicProcedure.input(z4.object({ teamCode: z4.string().length(2).or(z4.string().length(3)) })).mutation(async ({ input }) => {
       const count = await refreshOfficialTeamFeed(input.teamCode.toUpperCase());
       return { count };
     }),
-    japaneseSummary: publicProcedure.input(z3.object({ itemId: z3.number().int().positive() })).mutation(async ({ input }) => {
+    japaneseSummary: publicProcedure.input(z4.object({ itemId: z4.number().int().positive() })).mutation(async ({ input }) => {
       if (!NEWS_SUMMARIES_ENABLED) return { itemId: input.itemId, summary: null, generated: false, frozen: true };
       const item = await getOfficialFeedItemById(input.itemId);
       if (!item) throw new Error("Official news item was not found");
@@ -4256,7 +4466,7 @@ var appRouter = router({
       }
       return { itemId: item.id, summary: null, generated: false };
     }),
-    englishSummary: publicProcedure.input(z3.object({ itemId: z3.number().int().positive() })).mutation(async ({ input }) => {
+    englishSummary: publicProcedure.input(z4.object({ itemId: z4.number().int().positive() })).mutation(async ({ input }) => {
       if (!NEWS_SUMMARIES_ENABLED) return { itemId: input.itemId, summary: null, generated: false, frozen: true };
       const item = await getOfficialFeedItemById(input.itemId);
       if (!item) throw new Error("Official news item was not found");
@@ -4275,36 +4485,36 @@ var appRouter = router({
     })
   }),
   teamSnapshot: router({
-    byTeam: publicProcedure.input(z3.object({ teamCode: z3.string().length(2).or(z3.string().length(3)), skipGameUrl: z3.string().url().optional(), forceLastGame: z3.boolean().optional(), includeRoster: z3.boolean().optional() })).query(({ input }) => {
+    byTeam: publicProcedure.input(z4.object({ teamCode: z4.string().length(2).or(z4.string().length(3)), skipGameUrl: z4.string().url().optional(), forceLastGame: z4.boolean().optional(), includeRoster: z4.boolean().optional() })).query(({ input }) => {
       return getCachedOfficialTeamSnapshot(input.teamCode, input.skipGameUrl, input.forceLastGame, input.includeRoster ?? true);
     })
   }),
   leagueDashboard: router({
     summary: publicProcedure.query(() => getCachedOfficialLeagueDashboardSummary()),
-    latestResult: publicProcedure.input(z3.object({ teamCode: z3.string().length(2).or(z3.string().length(3)) })).query(({ input }) => getCachedOfficialLatestResult(input.teamCode)),
-    calendar: publicProcedure.input(z3.object({ teamCode: z3.string().length(2).or(z3.string().length(3)) })).query(({ input }) => getCachedOfficialLeagueCalendar(input.teamCode))
+    latestResult: publicProcedure.input(z4.object({ teamCode: z4.string().length(2).or(z4.string().length(3)) })).query(({ input }) => getCachedOfficialLatestResult(input.teamCode)),
+    calendar: publicProcedure.input(z4.object({ teamCode: z4.string().length(2).or(z4.string().length(3)) })).query(({ input }) => getCachedOfficialLeagueCalendar(input.teamCode))
   }),
   gameStats: router({
-    byGameUrl: publicProcedure.input(z3.object({ gameUrl: z3.string().url().refine((value) => /^https:\/\/www\.nfl\.com\/games\//.test(value), "NFL\u516C\u5F0FGame Center URL\u304C\u5FC5\u8981\u3067\u3059\u3002") })).query(({ input }) => getOfficialGameStats(input.gameUrl))
+    byGameUrl: publicProcedure.input(z4.object({ gameUrl: z4.string().url().refine((value) => /^https:\/\/www\.nfl\.com\/games\//.test(value), "NFL\u516C\u5F0FGame Center URL\u304C\u5FC5\u8981\u3067\u3059\u3002") })).query(({ input }) => getOfficialGameStats(input.gameUrl))
   }),
   atlas: router({
-    filters: publicProcedure.input(z3.object({ team: z3.string().min(2).optional() }).optional()).query(({ input }) => atlasFilters(input?.team)),
-    searchSuggestions: publicProcedure.input(z3.object({ query: z3.string().trim().max(80) })).query(({ input }) => atlasSearchSuggestions(input.query)),
-    search: publicProcedure.input(z3.object({ query: z3.string().trim().max(80) })).query(({ input }) => atlasSearch(input.query)),
-    resolveGameBookPlayers: publicProcedure.input(z3.object({ entries: z3.array(z3.object({ team: z3.string().min(2).max(4), name: z3.string().trim().min(1).max(80) })).max(240) })).query(({ input }) => atlasResolveGameBookPlayers(input.entries)),
-    browse: publicProcedure.input(z3.object({ team: z3.string().min(2), position: z3.string().min(1).optional(), jersey: z3.string().trim().max(3).optional() })).query(({ input }) => atlasBrowse(input)),
-    profile: publicProcedure.input(z3.object({ playerId: z3.string().min(1) })).query(({ input }) => atlasProfile(input.playerId)),
-    career: publicProcedure.input(z3.object({ playerId: z3.string().min(1) })).query(({ input }) => atlasCareer(input.playerId)),
-    awards: publicProcedure.input(z3.object({ playerId: z3.string().min(1) })).query(({ input }) => atlasAwards(input.playerId)),
-    stats: publicProcedure.input(z3.object({ playerId: z3.string().min(1) })).query(({ input }) => atlasStats(input.playerId)),
-    contracts: publicProcedure.input(z3.object({ playerId: z3.string().min(1) })).query(({ input }) => atlasContracts(input.playerId))
+    filters: publicProcedure.input(z4.object({ team: z4.string().min(2).optional() }).optional()).query(({ input }) => atlasFilters(input?.team)),
+    searchSuggestions: publicProcedure.input(z4.object({ query: z4.string().trim().max(80) })).query(({ input }) => atlasSearchSuggestions(input.query)),
+    search: publicProcedure.input(z4.object({ query: z4.string().trim().max(80) })).query(({ input }) => atlasSearch(input.query)),
+    resolveGameBookPlayers: publicProcedure.input(z4.object({ entries: z4.array(z4.object({ team: z4.string().min(2).max(4), name: z4.string().trim().min(1).max(80) })).max(240) })).query(({ input }) => atlasResolveGameBookPlayers(input.entries)),
+    browse: publicProcedure.input(z4.object({ team: z4.string().min(2), position: z4.string().min(1).optional(), jersey: z4.string().trim().max(3).optional() })).query(({ input }) => atlasBrowse(input)),
+    profile: publicProcedure.input(z4.object({ playerId: z4.string().min(1) })).query(({ input }) => atlasProfile(input.playerId)),
+    career: publicProcedure.input(z4.object({ playerId: z4.string().min(1) })).query(({ input }) => atlasCareer(input.playerId)),
+    awards: publicProcedure.input(z4.object({ playerId: z4.string().min(1) })).query(({ input }) => atlasAwards(input.playerId)),
+    stats: publicProcedure.input(z4.object({ playerId: z4.string().min(1) })).query(({ input }) => atlasStats(input.playerId)),
+    contracts: publicProcedure.input(z4.object({ playerId: z4.string().min(1) })).query(({ input }) => atlasContracts(input.playerId))
   }),
   fieldline: router({
     teams: publicProcedure.query(() => FIELDLINE_TEAM_CODES.map((code) => ({ code, name: FIELDLINE_TEAM_NAMES[code] }))),
     seasons: publicProcedure.query(getFieldlineSeasons),
-    freshness: publicProcedure.input(z3.object({ seasons: z3.array(z3.number().int().min(2025).max(2100)).min(1).max(2) })).query(({ input }) => getFieldlineFreshness(input.seasons)),
-    weeks: publicProcedure.input(z3.object({ season: z3.number().int().min(2025).max(2100), team: z3.string().length(2).or(z3.string().length(3)), venue: fieldlineVenueSchema.default("all") })).query(({ input }) => getFieldlineWeeks(input.season, input.team, input.venue)),
-    compare: publicProcedure.input(z3.object({ left: fieldlineSelectionSchema, right: fieldlineSelectionSchema })).query(async ({ input }) => {
+    freshness: publicProcedure.input(z4.object({ seasons: z4.array(z4.number().int().min(2025).max(2100)).min(1).max(2) })).query(({ input }) => getFieldlineFreshness(input.seasons)),
+    weeks: publicProcedure.input(z4.object({ season: z4.number().int().min(2025).max(2100), team: z4.string().length(2).or(z4.string().length(3)), venue: fieldlineVenueSchema.default("all") })).query(({ input }) => getFieldlineWeeks(input.season, input.team, input.venue)),
+    compare: publicProcedure.input(z4.object({ left: fieldlineSelectionSchema, right: fieldlineSelectionSchema })).query(async ({ input }) => {
       const [left, right] = await compareFieldlineSelections([input.left, input.right]);
       return { left, right };
     })
@@ -4312,9 +4522,10 @@ var appRouter = router({
   fieldlineAdmin: router({
     imports: fieldlineAdminProcedure.query(getFieldlineSeasons),
     refreshSchedules: fieldlineAdminProcedure.query(getFieldlineRefreshSchedules),
-    importSeason: fieldlineAdminProcedure.input(z3.object({ season: z3.number().int().min(2025).max(2100) })).mutation(({ input, ctx }) => importFieldlineSeasonFromNflverse(input.season, ctx.user.openId))
+    importSeason: fieldlineAdminProcedure.input(z4.object({ season: z4.number().int().min(2025).max(2100) })).mutation(({ input, ctx }) => importFieldlineSeasonFromNflverse(input.season, ctx.user.openId))
   }),
-  playoff: playoffRouter
+  playoff: playoffRouter,
+  exciteIndex: exciteIndexRouter
 });
 
 // server/_core/context.ts
@@ -4333,7 +4544,7 @@ async function createContext(opts) {
 }
 
 // server/officialFeedScheduler.ts
-import { z as z4 } from "zod";
+import { z as z5 } from "zod";
 
 // server/externalTeamNews.ts
 import { createHash as createHash4 } from "node:crypto";
@@ -4459,50 +4670,34 @@ async function refreshExternalTeamNews(teamCodes) {
 import { createHash as createHash5 } from "node:crypto";
 
 // server/nflGameHighlights.ts
-var nflHighlightsSourceUrl = "https://www.nfl.com/videos/channel/game-highlights-vc";
+var nflHighlightsSourceUrl = "https://www.youtube.com/videos/channel/game-highlights-vc";
 var NFL_YOUTUBE_RSS_URL = "https://www.youtube.com/feeds/videos.xml?channel_id=UCDVYQ4Zhbm3S2dlz7P1GBDg";
-function teamVideosSlug(teamCode) {
-  return TEAM_NAMES[teamCode]?.toLowerCase().split(" ").at(-1);
+function getTeamKeywords(teamCode) {
+  const fullName = TEAM_NAMES[teamCode];
+  if (!fullName) return [teamCode.toLowerCase()];
+  const parts = fullName.toLowerCase().split(/\s+/);
+  const nickname = parts.at(-1) ?? "";
+  const city = parts.slice(0, -1).join(" ");
+  return [nickname, city, fullName.toLowerCase()].filter(Boolean);
 }
 function weekNumber(weekLabel) {
-  return weekLabel?.match(/(\d+)/)?.[1];
+  if (!weekLabel) return null;
+  const m = weekLabel.match(/(\d+)/);
+  return m ? m[1] : null;
 }
-function nflHighlightUrlForGame(game) {
-  const away = teamVideosSlug(game.awayTeamCode);
-  const home = teamVideosSlug(game.homeTeamCode);
-  const week = weekNumber(game.weekLabel);
-  if (!away || !home || !week || game.seasonPhase === "postseason") return null;
-  const phase = game.seasonPhase === "preseason" ? "preseason" : "week";
-  return `https://www.nfl.com/videos/${away}-vs-${home}-highlights-${phase}-week-${week}`;
-}
-function nflHighlightUrlCandidatesForGame(game) {
-  const primary = nflHighlightUrlForGame(game);
-  const away = teamVideosSlug(game.awayTeamCode);
-  const home = teamVideosSlug(game.homeTeamCode);
-  const week = weekNumber(game.weekLabel);
-  if (!primary || !away || !home || !week || game.seasonPhase !== "preseason") return primary ? [primary] : [];
-  return [primary, `https://www.nfl.com/videos/${away}-vs-${home}-preseason-week-${week}`];
-}
-function isVerifiedNflHighlightPage(html, game) {
-  const away = TEAM_NAMES[game.awayTeamCode];
-  const home = TEAM_NAMES[game.homeTeamCode];
-  const week = weekNumber(game.weekLabel);
-  if (!away || !home || !week) return false;
-  const phase = game.seasonPhase === "preseason" ? "Preseason" : "Week";
-  return html.includes(away) && html.includes(home) && new RegExp(`${phase}\\s+Week\\s+${week}`, "i").test(html) && /highlights/i.test(html);
-}
-async function fetchOfficialHighlightPage(url) {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 12e3);
-  try {
-    const response = await fetch(url, { signal: controller.signal, headers: { Accept: "text/html", "User-Agent": "Mozilla/5.0 NFLFanHubJapan/1.0" } });
-    if (!response.ok) return null;
-    return response.text();
-  } catch {
-    return null;
-  } finally {
-    clearTimeout(timeout);
+function isVideoMatchingGame(title, game) {
+  const lower = title.toLowerCase();
+  if (!lower.includes("highlight")) return false;
+  const wk = weekNumber(game.weekLabel);
+  if (wk) {
+    const weekPattern = new RegExp(`(?:week|wk)\\s*${wk}\\b`, "i");
+    if (!weekPattern.test(lower)) return false;
   }
+  const awayKeys = getTeamKeywords(game.awayTeamCode);
+  const homeKeys = getTeamKeywords(game.homeTeamCode);
+  const hasAway = awayKeys.some((k) => lower.includes(k));
+  const hasHome = homeKeys.some((k) => lower.includes(k));
+  return hasAway && hasHome;
 }
 async function fetchYouTubeHighlightsFeed() {
   const controller = new AbortController();
@@ -4510,7 +4705,7 @@ async function fetchYouTubeHighlightsFeed() {
   try {
     const res = await fetch(NFL_YOUTUBE_RSS_URL, {
       signal: controller.signal,
-      headers: { "User-Agent": "Mozilla/5.0 NFLFanHubJapan/1.0" }
+      headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36" }
     });
     if (!res.ok) return [];
     const xml = await res.text();
@@ -4519,7 +4714,7 @@ async function fetchYouTubeHighlightsFeed() {
       const title = entry.match(/<title>([\s\S]*?)<\/title>/)?.[1] ?? "";
       const url = entry.match(/<link[^>]*href="([^"]*)"/)?.[1] ?? "";
       return { title, url };
-    }).filter((item) => item.title && item.url);
+    }).filter((item) => Boolean(item.title && item.url));
   } catch {
     return [];
   } finally {
@@ -4529,9 +4724,9 @@ async function fetchYouTubeHighlightsFeed() {
 async function searchYouTubeOfficialHighlight(game) {
   const awayName = TEAM_NAMES[game.awayTeamCode] ?? game.awayTeamCode;
   const homeName = TEAM_NAMES[game.homeTeamCode] ?? game.homeTeamCode;
-  const week = weekNumber(game.weekLabel);
-  const phase = game.seasonPhase === "preseason" ? "Preseason" : "Week";
-  const query = encodeURIComponent(`NFL ${awayName} vs ${homeName} ${phase} ${week ?? ""} highlights`);
+  const wk = weekNumber(game.weekLabel);
+  const weekQuery = wk ? `Week ${wk}` : "";
+  const query = encodeURIComponent(`NFL "${awayName}" vs "${homeName}" ${weekQuery} game highlights`);
   const searchUrl = `https://www.youtube.com/results?search_query=${query}`;
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 1e4);
@@ -4545,8 +4740,8 @@ async function searchYouTubeOfficialHighlight(game) {
     });
     if (!res.ok) return null;
     const html = await res.text();
-    const videoIdMatches = Array.from(html.matchAll(/"videoId":"([a-zA-Z0-9_-]{11})"/g)).map((m) => m[1]);
-    const uniqueIds = Array.from(new Set(videoIdMatches));
+    const videoMatches = Array.from(html.matchAll(/"videoId":"([a-zA-Z0-9_-]{11})"/g)).map((m) => m[1]);
+    const uniqueIds = Array.from(new Set(videoMatches));
     if (uniqueIds.length > 0) {
       return `https://www.youtube.com/watch?v=${uniqueIds[0]}`;
     }
@@ -4557,19 +4752,6 @@ async function searchYouTubeOfficialHighlight(game) {
     clearTimeout(timeout);
   }
 }
-function matchYouTubeHighlight(videos, game) {
-  const awaySlug = teamVideosSlug(game.awayTeamCode);
-  const homeSlug = teamVideosSlug(game.homeTeamCode);
-  if (!awaySlug || !homeSlug) return null;
-  for (const video of videos) {
-    const lower = video.title.toLowerCase();
-    if (!lower.includes("highlight")) continue;
-    if (lower.includes(awaySlug) && lower.includes(homeSlug)) {
-      return video.url;
-    }
-  }
-  return null;
-}
 async function refreshOfficialGameHighlights() {
   const games = await getOfficialScoreboardGamesForHighlightMatching();
   if (!games.length) return { candidates: 0, linked: 0, sourceUrl: nflHighlightsSourceUrl };
@@ -4578,39 +4760,28 @@ async function refreshOfficialGameHighlights() {
   for (const game of games) {
     const isCurrentlyYouTube = Boolean(game.nflHighlightUrl && game.nflHighlightUrl.includes("youtube.com"));
     if (isCurrentlyYouTube) continue;
-    const ytUrl = matchYouTubeHighlight(ytVideos, game);
-    if (ytUrl) {
+    const matchedFeedVideo = ytVideos.find((v) => isVideoMatchingGame(v.title, game));
+    if (matchedFeedVideo) {
       links.push({
         externalId: game.externalId,
-        nflHighlightUrl: ytUrl,
-        sourceUrl: ytUrl
+        nflHighlightUrl: matchedFeedVideo.url,
+        sourceUrl: matchedFeedVideo.url
       });
       continue;
     }
-    const searchedYtUrl = await searchYouTubeOfficialHighlight(game);
-    if (searchedYtUrl) {
+    const searchedUrl = await searchYouTubeOfficialHighlight(game);
+    if (searchedUrl) {
       links.push({
         externalId: game.externalId,
-        nflHighlightUrl: searchedYtUrl,
-        sourceUrl: searchedYtUrl
+        nflHighlightUrl: searchedUrl,
+        sourceUrl: searchedUrl
       });
       continue;
-    }
-    if (!game.nflHighlightUrl) {
-      for (const candidateUrl of nflHighlightUrlCandidatesForGame(game)) {
-        const html = await fetchOfficialHighlightPage(candidateUrl);
-        if (html && isVerifiedNflHighlightPage(html, game)) {
-          links.push({
-            externalId: game.externalId,
-            nflHighlightUrl: candidateUrl,
-            sourceUrl: nflHighlightsSourceUrl
-          });
-          break;
-        }
-      }
     }
   }
-  await upsertOfficialScoreboardHighlights(links);
+  if (links.length > 0) {
+    await upsertOfficialScoreboardHighlights(links);
+  }
   return { candidates: games.length, linked: links.length, sourceUrl: nflHighlightsSourceUrl };
 }
 
@@ -4705,15 +4876,31 @@ function parseNFLScoresPage(html, season, sourceUrl = officialScheduleUrl) {
     const analytics = match[1].replace(/&quot;/g, '"');
     const gameState = analytics.match(/"gameState":"([^"]+)"/)?.[1];
     const label = analytics.match(/"linkName":"([^"]+)"/)?.[1];
-    const score = label?.match(/^([A-Za-z0-9]+)\s+(\d+),\s+([A-Za-z0-9]+)\s+(\d+),\s+(FINAL|[A-Z0-9 ]+)/i);
+    const score = label?.match(/^([A-Za-z0-9]+)\s+(\d+),\s+([A-Za-z0-9]+)\s+(\d+),\s+(FINAL.*)/i);
     if (!gameState || !score) return [];
-    const [, awayNickname, awayScore, homeNickname, homeScore] = score;
+    const [, awayNickname, awayScore, homeNickname, homeScore, finalStatus] = score;
     const awayTeamCode = nicknameToCode[awayNickname];
     const homeTeamCode = nicknameToCode[homeNickname];
     if (!awayTeamCode || !homeTeamCode) return [];
     const gameUrl = `https://www.nfl.com${match[2]}`;
     const { seasonPhase, weekLabel } = phaseAndWeek(html, match[2]);
-    return [{ externalId: hash3(gameUrl), season, seasonPhase, weekLabel, awayTeamCode, homeTeamCode, awayScore: Number(awayScore), homeScore: Number(homeScore), gameState, gameDate: officialGameDateFromLabel(label, season), gameUrl, sourceUrl, fetchedAt: /* @__PURE__ */ new Date() }];
+    const isOT = /OT\b|OVERTIME/i.test(label ?? "") || /OT\b|OVERTIME/i.test(finalStatus ?? "") || gameState.toUpperCase().includes("OT");
+    const resolvedGameState = isOT ? "FINAL/OT" : gameState;
+    return [{
+      externalId: hash3(gameUrl),
+      season,
+      seasonPhase,
+      weekLabel,
+      awayTeamCode,
+      homeTeamCode,
+      awayScore: Number(awayScore),
+      homeScore: Number(homeScore),
+      gameState: resolvedGameState,
+      gameDate: officialGameDateFromLabel(label, season),
+      gameUrl,
+      sourceUrl,
+      fetchedAt: /* @__PURE__ */ new Date()
+    }];
   });
 }
 function parseNFLGameKickoffAt(html) {
@@ -4721,6 +4908,67 @@ function parseNFLGameKickoffAt(html) {
   if (!timestamp2) return null;
   const kickoffAt = new Date(timestamp2);
   return Number.isNaN(kickoffAt.getTime()) ? null : kickoffAt;
+}
+function parseGameDynamics(html, awayScore, homeScore, isOtExisting) {
+  const isOT = isOtExisting || html.includes("FINAL_OVERTIME") || />\s*OT\s*</i.test(html) || /accessibility-label=["']Overtime["']/i.test(html) || false;
+  const scoreObjRegex = /\\?"score\\?"\s*:\s*\{[^{}]*\\?"q1\\?"\s*:\s*(\d+)[^{}]*\\?"q2\\?"\s*:\s*(\d+)[^{}]*\\?"q3\\?"\s*:\s*(\d+)[^{}]*\\?"q4\\?"\s*:\s*(\d+)(?:[^{}]*\\?"ot\\?"\s*:\s*(\d+))?[^{}]*\\?"total\\?"\s*:\s*(\d+)[^{}]*\}/g;
+  const parsedScores = [];
+  for (const m of html.matchAll(scoreObjRegex)) {
+    parsedScores.push({
+      q1: Number(m[1] ?? 0),
+      q2: Number(m[2] ?? 0),
+      q3: Number(m[3] ?? 0),
+      q4: Number(m[4] ?? 0),
+      ot: Number(m[5] ?? 0),
+      total: Number(m[6] ?? 0)
+    });
+  }
+  let leadChanges = 0;
+  let timesTied = 0;
+  let calculated = false;
+  if (awayScore != null && homeScore != null && parsedScores.length >= 2) {
+    const awayCandidate = parsedScores.find((s) => s.total === awayScore);
+    const homeCandidate = parsedScores.find((s) => s !== awayCandidate && s.total === homeScore);
+    if (awayCandidate && homeCandidate) {
+      const quarters = ["q1", "q2", "q3", "q4"];
+      let cumAway = 0;
+      let cumHome = 0;
+      let lastLeader = "tie";
+      for (const q of quarters) {
+        cumAway += awayCandidate[q];
+        cumHome += homeCandidate[q];
+        const current = cumAway > cumHome ? "away" : cumHome > cumAway ? "home" : "tie";
+        if (current === "tie" && (cumAway > 0 || cumHome > 0)) {
+          timesTied++;
+        } else if (current !== "tie" && lastLeader !== "tie" && current !== lastLeader) {
+          leadChanges++;
+        }
+        lastLeader = current;
+      }
+      if (isOT && lastLeader !== "tie") {
+        timesTied = Math.max(timesTied, 1);
+      }
+      calculated = true;
+    }
+  }
+  const margin = awayScore != null && homeScore != null ? Math.abs(awayScore - homeScore) : 10;
+  if (!calculated) {
+    if (isOT) {
+      timesTied = 1;
+      leadChanges = margin <= 3 ? 2 : 1;
+    } else if (margin <= 3) {
+      timesTied = 1;
+      leadChanges = 1;
+    }
+  } else if (isOT) {
+    timesTied = Math.max(timesTied, 1);
+    if (margin <= 3) {
+      leadChanges = Math.max(leadChanges, 2);
+    } else {
+      leadChanges = Math.max(leadChanges, 1);
+    }
+  }
+  return { isOT, leadChanges, timesTied };
 }
 async function enrichScoresWithOfficialKickoffTimes(season, scores) {
   const cachedKickoffs = await getOfficialScoreboardKickoffTimes(season, scores.map((score) => score.externalId));
@@ -4731,14 +4979,22 @@ async function enrichScoresWithOfficialKickoffTimes(season, scores) {
       const index2 = cursor++;
       const score = scores[index2];
       const cachedKickoffAt = cachedKickoffs.get(score.externalId);
-      if (cachedKickoffAt) {
-        enriched[index2] = { ...score, kickoffAt: cachedKickoffAt };
-        continue;
-      }
       try {
         const html = await fetchOfficialHtml3(score.gameUrl);
-        enriched[index2] = { ...score, kickoffAt: parseNFLGameKickoffAt(html) };
+        const kickoffAt = cachedKickoffAt ?? parseNFLGameKickoffAt(html);
+        const isOtExisting = Boolean(score.gameState?.toUpperCase().includes("OT"));
+        const { isOT, leadChanges, timesTied } = parseGameDynamics(html, score.awayScore, score.homeScore, isOtExisting);
+        enriched[index2] = {
+          ...score,
+          kickoffAt,
+          gameState: isOT ? "FINAL/OT" : score.gameState,
+          leadChanges,
+          timesTied
+        };
       } catch {
+        if (cachedKickoffAt) {
+          enriched[index2] = { ...score, kickoffAt: cachedKickoffAt };
+        }
       }
     }
   };
@@ -4762,7 +5018,9 @@ async function refreshOfficialLeagueDashboard() {
   const standings = parseNFLStandingsPage(standingsHtml, season, standingsUrl);
   const scoresByExternalId = /* @__PURE__ */ new Map();
   scorePages.forEach((html, index2) => {
-    for (const score of parseNFLScoresPage(html, season, scoreSourceUrls[index2])) scoresByExternalId.set(score.externalId, score);
+    for (const score of parseNFLScoresPage(html, season, scoreSourceUrls[index2])) {
+      scoresByExternalId.set(score.externalId, score);
+    }
   });
   const scores = await enrichScoresWithOfficialKickoffTimes(season, Array.from(scoresByExternalId.values()));
   await upsertOfficialStandings(standings);
@@ -4937,20 +5195,20 @@ async function refreshPftAvailabilityInsights(seedUrls = []) {
 }
 
 // server/officialFeedScheduler.ts
-var agentFeedPayload = z4.object({
-  teamCode: z4.string().min(2).max(3),
-  items: z4.array(z4.object({
-    title: z4.string().min(1).max(800),
-    summary: z4.string().max(560).nullable().optional(),
-    sourceUrl: z4.string().url(),
-    sourceName: z4.string().min(1).max(128),
-    sourceKind: z4.enum(["team_official", "nfl_official"]),
-    category: z4.enum(["news", "injury"]),
-    publishedAt: z4.string().min(1)
+var agentFeedPayload = z5.object({
+  teamCode: z5.string().min(2).max(3),
+  items: z5.array(z5.object({
+    title: z5.string().min(1).max(800),
+    summary: z5.string().max(560).nullable().optional(),
+    sourceUrl: z5.string().url(),
+    sourceName: z5.string().min(1).max(128),
+    sourceKind: z5.enum(["team_official", "nfl_official"]),
+    category: z5.enum(["news", "injury"]),
+    publishedAt: z5.string().min(1)
   })).max(24)
 });
-var heartbeatPayload = z4.object({
-  forceGroupIndex: z4.number().int().min(0).max(3).optional()
+var heartbeatPayload = z5.object({
+  forceGroupIndex: z5.number().int().min(0).max(3).optional()
 });
 async function refreshOfficialFeedHandler(req, res) {
   try {
@@ -5008,18 +5266,18 @@ async function receiveOfficialFeedAgentHandler(req, res) {
 }
 
 // server/fieldlineScheduler.ts
-import { and as and5, eq as eq5 } from "drizzle-orm";
+import { and as and5, eq as eq6 } from "drizzle-orm";
 async function refreshFieldlineSeasonHandler(req, res) {
   try {
     const user = await sdk.authenticateRequest(req);
     if (!user.isCron || !user.taskUid) return res.status(403).json({ error: "cron-only" });
     const db = await getDb();
     if (!db) throw new Error("Database unavailable");
-    const schedule = (await db.select().from(seasonRefreshSchedules).where(and5(eq5(seasonRefreshSchedules.scheduleCronTaskUid, user.taskUid), eq5(seasonRefreshSchedules.isEnabled, true))).limit(1))[0];
+    const schedule = (await db.select().from(seasonRefreshSchedules).where(and5(eq6(seasonRefreshSchedules.scheduleCronTaskUid, user.taskUid), eq6(seasonRefreshSchedules.isEnabled, true))).limit(1))[0];
     if (!schedule) return res.json({ ok: true, skipped: "orphan", taskUid: user.taskUid });
-    await db.update(seasonRefreshSchedules).set({ lastStatus: "running", lastRunAt: /* @__PURE__ */ new Date(), lastError: null }).where(eq5(seasonRefreshSchedules.id, schedule.id));
+    await db.update(seasonRefreshSchedules).set({ lastStatus: "running", lastRunAt: /* @__PURE__ */ new Date(), lastError: null }).where(eq6(seasonRefreshSchedules.id, schedule.id));
     const result = await importFieldlineSeasonFromNflverse(schedule.season);
-    await db.update(seasonRefreshSchedules).set({ lastStatus: "ready", lastSuccessAt: /* @__PURE__ */ new Date(), lastError: null }).where(eq5(seasonRefreshSchedules.id, schedule.id));
+    await db.update(seasonRefreshSchedules).set({ lastStatus: "ready", lastSuccessAt: /* @__PURE__ */ new Date(), lastError: null }).where(eq6(seasonRefreshSchedules.id, schedule.id));
     res.json({ ok: true, taskUid: user.taskUid, ...result, timestamp: (/* @__PURE__ */ new Date()).toISOString() });
   } catch (error) {
     const details = error instanceof Error ? { message: error.message, stack: error.stack } : { message: String(error) };
