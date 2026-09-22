@@ -164,6 +164,10 @@ export const officialScoreboardGames = mysqlTable("official_scoreboard_games", {
   nflHighlightUrl: varchar("nfl_highlight_url", { length: 1024 }),
   nflHighlightSourceUrl: varchar("nfl_highlight_source_url", { length: 1024 }),
   nflHighlightMatchedAt: timestamp("nfl_highlight_matched_at"),
+  /** Number of lead changes, sourced from ESPN game summary for Excite Index. */
+  leadChanges: int("lead_changes"),
+  /** Number of times tied, sourced from ESPN game summary for Excite Index. */
+  timesTied: int("times_tied"),
   sourceUrl: varchar("source_url", { length: 1024 }).notNull(),
   fetchedAt: timestamp("fetched_at").defaultNow().notNull(),
 }, (table) => [
