@@ -58,7 +58,7 @@ export const exciteIndexRouter = router({
         ? allGames.filter((g) => g.weekLabel === targetWeek)
         : allGames;
 
-      // Excite Index の計算
+      // Excite Index の計算（チームコード・週ラベルを渡し、DB の gameState に依存せず自律判定）
       const gamesWithIndex = targetGames.map((game) => {
         const stateUpper = (game.gameState ?? "").toUpperCase();
         const isFinal = stateUpper.includes("FINAL") || stateUpper.includes("COMPLETED");
@@ -71,6 +71,9 @@ export const exciteIndexRouter = router({
             gameState: game.gameState,
             leadChanges: game.leadChanges,
             timesTied: game.timesTied,
+            awayTeamCode: game.awayTeamCode,
+            homeTeamCode: game.homeTeamCode,
+            weekLabel: game.weekLabel,
           });
         }
 
