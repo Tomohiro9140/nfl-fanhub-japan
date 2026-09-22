@@ -414,7 +414,8 @@ export default function PlayoffMachine() {
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 pb-16">
-      <EmbeddedAppNav current="PLAYOFFS" />
+      {/* ナビゲーションの呼び出し（SIMULATOR） */}
+      <EmbeddedAppNav current="SIMULATOR" />
 
       {/* ヘッダー: アイコンとタイトル */}
       <header className="border-b border-white/10 bg-[#101827] text-white">
