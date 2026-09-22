@@ -2,11 +2,12 @@ import { Menu, X } from "lucide-react";
 import { useState } from "react";
 
 type EmbeddedAppNavProps = {
-  current: "ATLAS" | "FIELDLINE" | "COACHING TREE";
+  current: "ATLAS" | "FIELDLINE" | "COACHING TREE" | "SIMULATOR" | "PLAYOFFS";
 };
 
 const destinations = [
   { label: "HOME", href: "/" },
+  { label: "SIMULATOR", href: "/simulator" },
   { label: "ATLAS", href: "/atlas/" },
   { label: "COACHING TREE", href: "/coaching-tree/" },
   { label: "FIELDLINE", href: "/fieldline/" },
