@@ -53,19 +53,19 @@ export function calculateExciteIndex(game: ExciteGameInput): ExciteIndexResult {
 
   // 2. シーソーゲーム展開（最大30点）
   let leadScore = 0;
-  const hasDynamics = game.leadChanges != null || game.timesTied != null;
-  if (hasDynamics) {
-    const lc = game.leadChanges ?? 0;
-    const tt = game.timesTied ?? 0;
+  const lc = game.leadChanges ?? 0;
+  const tt = game.timesTied ?? 0;
+
+  if (lc > 0 || tt > 0) {
     leadScore = Math.min(30, lc * 8 + tt * 5);
   } else {
-    // データ未取得時のフォールバック（接戦・OTなら手厚く暫定加点）
+    // データ未取得時のフォールバック
     if (isOvertime) {
-      leadScore = 20;
+      leadScore = 21;
     } else if (margin <= 3) {
-      leadScore = 18;
+      leadScore = 16;
     } else if (margin <= 8) {
-      leadScore = 12;
+      leadScore = 10;
     }
   }
 
@@ -73,7 +73,6 @@ export function calculateExciteIndex(game: ExciteGameInput): ExciteIndexResult {
   let clutchScore = 0;
   if (margin <= 8) {
     clutchScore += 10;
-    const lc = game.leadChanges ?? 0;
     if (lc >= 2 || isOvertime || margin <= 3) {
       clutchScore += 10;
     }
@@ -83,10 +82,10 @@ export function calculateExciteIndex(game: ExciteGameInput): ExciteIndexResult {
   let scoreBonus = 0;
   if (totalPoints >= 60) {
     scoreBonus = 10;
-  } else if (totalPoints >= 50) {
-    scoreBonus = 6;
-  } else if (totalPoints >= 42) {
-    scoreBonus = 3;
+  } else if (totalPoints >= 52) {
+    scoreBonus = 7;
+  } else if (totalPoints >= 44) {
+    scoreBonus = 4;
   }
 
   // 5. 延長戦ボーナス（10点）
