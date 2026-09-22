@@ -13,6 +13,7 @@ import { atlasAwards, atlasBrowse, atlasCareer, atlasContracts, atlasFilters, at
 import { compareFieldlineSelections, FIELDLINE_TEAM_CODES, FIELDLINE_TEAM_NAMES, getFieldlineFreshness, getFieldlineRefreshSchedules, getFieldlineSeasons, getFieldlineWeeks, importFieldlineSeasonFromNflverse } from "./fieldlineData";
 import { getOfficialGameStats } from "./officialGameStats";
 import { playoffRouter } from "./playoffRouter";
+import { exciteIndexRouter } from "./exciteIndexRouter";
 
 const fieldlineVenueSchema = z.enum(["all", "home", "away"]);
 const fieldlineSelectionSchema = z.object({
@@ -182,6 +183,7 @@ export const appRouter = router({
     importSeason: fieldlineAdminProcedure.input(z.object({ season: z.number().int().min(2025).max(2100) })).mutation(({ input, ctx }) => importFieldlineSeasonFromNflverse(input.season, ctx.user.openId)),
   }),
   playoff: playoffRouter,
+  exciteIndex: exciteIndexRouter,
 });
 
 export type AppRouter = typeof appRouter;
