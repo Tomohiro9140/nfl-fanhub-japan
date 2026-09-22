@@ -25,38 +25,6 @@ function formatWeekDisplay(weekStr: string): string {
   return weekStr;
 }
 
-/** 熱狂度スコアに応じた見どころタグの生成（ネタバレなし） */
-function getExciteTags(game: {
-  exciteIndex: {
-    score: number;
-    margin: number;
-    totalPoints: number;
-    isOvertime: boolean;
-  } | null;
-}) {
-  const tags: string[] = [];
-  if (!game.exciteIndex) return tags;
-
-  if (game.exciteIndex.isOvertime) {
-    tags.push("延長戦突入 (OT)");
-  }
-  if (game.exciteIndex.margin <= 3) {
-    tags.push("ワンポゼッション決着");
-  } else if (game.exciteIndex.margin <= 7) {
-    tags.push("大接戦");
-  }
-  if (game.exciteIndex.totalPoints >= 55) {
-    tags.push("ハイスコア激闘");
-  }
-  if (game.exciteIndex.score >= 85) {
-    tags.push("屈指の名勝負");
-  } else if (game.exciteIndex.score >= 70) {
-    tags.push("見応え十分");
-  }
-
-  return tags.slice(0, 3);
-}
-
 /** 星評価（1〜5）の描画 */
 function StarRating({ stars }: { stars: number }) {
   return (
@@ -167,14 +135,12 @@ export function ExciteIndexDialog({
                     <Trophy className="h-3.5 w-3.5 text-[#ffc1a7]" />
                     MUST-WATCH GAMES / TOP 3
                   </h3>
-                  <span className="font-mono text-[9px] text-[#a5b3c9]">見逃し配信推奨</span>
                 </div>
 
                 <div className="grid gap-3">
                   {top3Games.map((game) => {
                     const away = getTeamByCode(game.awayTeamCode);
                     const home = getTeamByCode(game.homeTeamCode);
-                    const tags = getExciteTags(game);
                     const rank = game.rank ?? 1;
 
                     return (
@@ -206,16 +172,6 @@ export function ExciteIndexDialog({
                                 <span className="text-white/40 font-mono text-sm">@</span>{" "}
                                 {home?.name ?? game.homeTeamCode}
                               </div>
-                              <div className="mt-1 flex flex-wrap gap-1.5">
-                                {tags.map((t) => (
-                                  <span
-                                    key={t}
-                                    className="rounded bg-white/10 px-1.5 py-0.5 font-mono text-[8px] font-bold text-[#ffc1a7]"
-                                  >
-                                    {t}
-                                  </span>
-                                ))}
-                              </div>
                             </div>
                           </div>
 
@@ -231,15 +187,8 @@ export function ExciteIndexDialog({
                           </div>
                         </div>
 
-                        {/* 下部アクション */}
-                        <div className="mt-3 flex items-center justify-between border-t border-white/10 pt-2.5">
-                          <span className="font-mono text-[8px] font-medium text-[#a5b3c9]">
-                            {game.exciteIndex?.stars === 5
-                              ? "★★★★★ 歴史的名戦・必見"
-                              : game.exciteIndex?.stars === 4
-                              ? "★★★★☆ 白熱の好ゲーム"
-                              : "★★★☆☆ 安定した展開"}
-                          </span>
+                        {/* 右下ハイライトアクション（横線なし） */}
+                        <div className="mt-2.5 flex justify-end">
                           {game.nflHighlightUrl ? (
                             <a
                               href={game.nflHighlightUrl}
@@ -250,7 +199,7 @@ export function ExciteIndexDialog({
                               <Tv className="h-3 w-3" /> WATCH HIGHLIGHTS <ArrowUpRight className="h-3 w-3" />
                             </a>
                           ) : (
-                            <span className="font-mono text-[8px] text-[#a5b3c9]">
+                            <span className="font-mono text-[8px] text-[#a5b3c9]/60">
                               ハイライト準備中
                             </span>
                           )}
@@ -289,7 +238,7 @@ export function ExciteIndexDialog({
                                 {home?.name ?? game.homeTeamCode}
                               </p>
                               <p className="font-mono text-[9px] text-[#a5b3c9]">
-                                熱狂度: {game.exciteIndex?.score}点 · ★{game.exciteIndex?.stars}
+                                Excite Index: {game.exciteIndex?.score}点 · ★{game.exciteIndex?.stars}
                               </p>
                             </div>
                           </div>
