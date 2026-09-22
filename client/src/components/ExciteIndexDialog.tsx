@@ -137,7 +137,7 @@ export function ExciteIndexDialog({
                   </h3>
                 </div>
 
-                <div className="grid gap-3">
+                <div className="grid gap-2.5">
                   {top3Games.map((game) => {
                     const away = getTeamByCode(game.awayTeamCode);
                     const home = getTeamByCode(game.homeTeamCode);
@@ -146,17 +146,17 @@ export function ExciteIndexDialog({
                     return (
                       <div
                         key={game.id}
-                        className={`relative overflow-hidden rounded-xl border p-4 transition ${
+                        className={`relative overflow-hidden rounded-xl border p-3 sm:p-3.5 transition ${
                           rank === 1
                             ? "border-[#e85d2a]/60 bg-gradient-to-r from-white/[0.08] to-transparent shadow-lg shadow-[#e85d2a]/10"
                             : "border-white/15 bg-white/[0.04]"
                         }`}
                       >
-                        <div className="flex items-start justify-between gap-3">
-                          {/* 順位 & 対戦カード */}
-                          <div className="flex items-center gap-3">
+                        <div className="flex items-center justify-between gap-3">
+                          {/* 左側：順位 ＋ 対戦カード ＋ 直下のハイライトリンク */}
+                          <div className="flex items-center gap-3 min-w-0">
                             <span
-                              className={`grid h-8 w-8 place-items-center rounded-lg font-display text-base font-black ${
+                              className={`grid h-8 w-8 shrink-0 place-items-center rounded-lg font-display text-base font-black ${
                                 rank === 1
                                   ? "bg-[#e85d2a] text-white"
                                   : rank === 2
@@ -166,16 +166,32 @@ export function ExciteIndexDialog({
                             >
                               {rank}
                             </span>
-                            <div>
-                              <div className="font-display text-lg font-bold leading-tight text-white">
+                            <div className="min-w-0">
+                              <div className="font-display text-base sm:text-lg font-bold leading-tight text-white truncate">
                                 {away?.name ?? game.awayTeamCode}{" "}
                                 <span className="text-white/40 font-mono text-sm">@</span>{" "}
                                 {home?.name ?? game.homeTeamCode}
                               </div>
+                              <div className="mt-1 flex items-center">
+                                {game.nflHighlightUrl ? (
+                                  <a
+                                    href={game.nflHighlightUrl}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="inline-flex items-center gap-1 font-mono text-[9px] font-bold text-[#ffc1a7] underline underline-offset-2 hover:text-white"
+                                  >
+                                    <Tv className="h-3 w-3" /> WATCH HIGHLIGHTS <ArrowUpRight className="h-3 w-3" />
+                                  </a>
+                                ) : (
+                                  <span className="font-mono text-[8px] text-[#a5b3c9]/60">
+                                    ハイライト準備中
+                                  </span>
+                                )}
+                              </div>
                             </div>
                           </div>
 
-                          {/* 熱狂度スコア */}
+                          {/* 右側：熱狂度スコア ＋ 星評価 */}
                           <div className="text-right shrink-0">
                             <div className="font-display text-2xl font-black leading-none text-[#ffc1a7]">
                               {game.exciteIndex?.score}
@@ -185,24 +201,6 @@ export function ExciteIndexDialog({
                               <StarRating stars={game.exciteIndex?.stars ?? 1} />
                             </div>
                           </div>
-                        </div>
-
-                        {/* 右下ハイライトアクション（横線なし） */}
-                        <div className="mt-2.5 flex justify-end">
-                          {game.nflHighlightUrl ? (
-                            <a
-                              href={game.nflHighlightUrl}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="inline-flex items-center gap-1 font-mono text-[9px] font-bold text-[#ffc1a7] underline underline-offset-2 hover:text-white"
-                            >
-                              <Tv className="h-3 w-3" /> WATCH HIGHLIGHTS <ArrowUpRight className="h-3 w-3" />
-                            </a>
-                          ) : (
-                            <span className="font-mono text-[8px] text-[#a5b3c9]/60">
-                              ハイライト準備中
-                            </span>
-                          )}
                         </div>
                       </div>
                     );
