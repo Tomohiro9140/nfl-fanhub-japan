@@ -4,7 +4,6 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { EmbeddedAppNav } from "@/components/EmbeddedAppNav";
 import { trpc } from "@/lib/trpc";
-import { fieldlineTeamBrand } from "@/lib/fieldlineTeams";
 import { NFL_TEAMS } from "@/lib/tiebreaker/nflTeams";
 import { calculateAllStandings } from "@/lib/tiebreaker/playoffEngine";
 import { generateRootingGuide } from "@/lib/tiebreaker/rootingGuide";
@@ -21,25 +20,42 @@ import {
   Sparkles,
   Trophy,
   Award,
-  Shield,
   X,
 } from "lucide-react";
 import { memo, useMemo, useState, useEffect } from "react";
 
+// ESPN CDN ロゴコード変換用マップ（略称の表記揺れ対応）
+const ESPN_LOGO_CODES: Record<string, string> = {
+  WAS: "wsh",
+  WSH: "wsh",
+  LAR: "lar",
+  LAC: "lac",
+  LV: "lv",
+};
+
+/** ESPN公式高解像度CDNからロゴを安全に表示（エラー時はテキストにフォールバック） */
 function TeamMark({ code, size = "md" }: { code: string; size?: "sm" | "md" | "lg" }) {
-  const brand = fieldlineTeamBrand[code];
+  const [hasError, setHasError] = useState(false);
   const dimension = size === "lg" ? "h-10 w-10" : size === "md" ? "h-7 w-7" : "h-5 w-5";
-  return brand ? (
+  const espnCode = ESPN_LOGO_CODES[code.toUpperCase()] ?? code.toLowerCase();
+  const logoUrl = `https://a.espncdn.com/i/teamlogos/nfl/500/${espnCode}.png`;
+
+  if (hasError) {
+    return (
+      <span className={`${dimension} inline-flex shrink-0 items-center justify-center rounded-full bg-slate-200 text-[10px] font-bold text-slate-700`}>
+        {code}
+      </span>
+    );
+  }
+
+  return (
     <img
-      src={brand.logo}
+      src={logoUrl}
       alt={`${code} logo`}
+      onError={() => setHasError(true)}
       className={`${dimension} shrink-0 object-contain drop-shadow-xs`}
-      style={{ mixBlendMode: "multiply" }}
+      loading="lazy"
     />
-  ) : (
-    <span className={`${dimension} inline-flex items-center justify-center rounded-full bg-slate-200 text-[10px] font-bold text-slate-700`}>
-      {code}
-    </span>
   );
 }
 const MemoTeamMark = memo(TeamMark);
@@ -64,7 +80,7 @@ export default function PlayoffMachine() {
   const [activeTab, setActiveTab] = useState<"simulator" | "rooting">("simulator");
   const [explanationModalSeed, setExplanationModalSeed] = useState<PlayoffSeed | null>(null);
 
-  // 一括シミュレーションのUI状態
+  // 一括シミュレーションのステート
   const [presetDropdownOpen, setPresetDropdownOpen] = useState(false);
   const [fillMode, setFillMode] = useState<"fill_remaining" | "overwrite_all">("fill_remaining");
 
@@ -93,7 +109,7 @@ export default function PlayoffMachine() {
     }
   }, [officialScheduleQuery.data]);
 
-  // 未消化試合の勝敗個別トグル（一括プリセット後も何度でも変更可能）
+  // 未消化試合の勝敗個別トグル（一括プリセット適用後も何度でも自由に変更可能）
   const toggleOutcome = (gameId: number, target: "home" | "away" | "tie") => {
     setGames((prev) =>
       prev.map((g) => {
@@ -117,17 +133,38 @@ export default function PlayoffMachine() {
 
   // 全32チームのリアルタイム成績（ドラフト・プリセット用）
   const allTeamRecords = useMemo(() => {
-    const records: Record<string, {
-      wins: number; losses: number; ties: number; pct: number;
-      confWins: number; confLosses: number; confTies: number; confPct: number;
-      divWins: number; divLosses: number; divTies: number; divPct: number;
-    }> = {};
+    const records: Record<
+      string,
+      {
+        wins: number;
+        losses: number;
+        ties: number;
+        pct: number;
+        confWins: number;
+        confLosses: number;
+        confTies: number;
+        confPct: number;
+        divWins: number;
+        divLosses: number;
+        divTies: number;
+        divPct: number;
+      }
+    > = {};
 
     for (const code of Object.keys(NFL_TEAMS)) {
       records[code] = {
-        wins: 0, losses: 0, ties: 0, pct: 0,
-        confWins: 0, confLosses: 0, confTies: 0, confPct: 0,
-        divWins: 0, divLosses: 0, divTies: 0, divPct: 0,
+        wins: 0,
+        losses: 0,
+        ties: 0,
+        pct: 0,
+        confWins: 0,
+        confLosses: 0,
+        confTies: 0,
+        confPct: 0,
+        divWins: 0,
+        divLosses: 0,
+        divTies: 0,
+        divPct: 0,
       };
     }
 
@@ -137,9 +174,13 @@ export default function PlayoffMachine() {
       if (!awayInfo || !homeInfo) continue;
 
       const outcome = g.isFinished
-        ? (g.homeScore !== undefined && g.awayScore !== undefined
-            ? (g.homeScore > g.awayScore ? "home" : g.homeScore < g.awayScore ? "away" : "tie")
-            : g.outcome)
+        ? g.homeScore !== undefined && g.awayScore !== undefined
+          ? g.homeScore > g.awayScore
+            ? "home"
+            : g.homeScore < g.awayScore
+            ? "away"
+            : "tie"
+          : g.outcome
         : g.outcome;
 
       if (!outcome) continue;
@@ -150,18 +191,36 @@ export default function PlayoffMachine() {
       if (outcome === "home") {
         records[g.homeTeam].wins++;
         records[g.awayTeam].losses++;
-        if (isConf) { records[g.homeTeam].confWins++; records[g.awayTeam].confLosses++; }
-        if (isDiv) { records[g.homeTeam].divWins++; records[g.awayTeam].divLosses++; }
+        if (isConf) {
+          records[g.homeTeam].confWins++;
+          records[g.awayTeam].confLosses++;
+        }
+        if (isDiv) {
+          records[g.homeTeam].divWins++;
+          records[g.awayTeam].divLosses++;
+        }
       } else if (outcome === "away") {
         records[g.awayTeam].wins++;
         records[g.homeTeam].losses++;
-        if (isConf) { records[g.awayTeam].confWins++; records[g.homeTeam].confLosses++; }
-        if (isDiv) { records[g.awayTeam].divWins++; records[g.homeTeam].divLosses++; }
+        if (isConf) {
+          records[g.awayTeam].confWins++;
+          records[g.homeTeam].confLosses++;
+        }
+        if (isDiv) {
+          records[g.awayTeam].divWins++;
+          records[g.homeTeam].divLosses++;
+        }
       } else if (outcome === "tie") {
         records[g.homeTeam].ties++;
         records[g.awayTeam].ties++;
-        if (isConf) { records[g.homeTeam].confTies++; records[g.awayTeam].confTies++; }
-        if (isDiv) { records[g.homeTeam].divTies++; records[g.awayTeam].divTies++; }
+        if (isConf) {
+          records[g.homeTeam].confTies++;
+          records[g.awayTeam].confTies++;
+        }
+        if (isDiv) {
+          records[g.homeTeam].divTies++;
+          records[g.awayTeam].divTies++;
+        }
       }
     }
 
@@ -177,7 +236,7 @@ export default function PlayoffMachine() {
     return records;
   }, [games]);
 
-  // 一括シミュレーション（プリセット適用）ハンドラー
+  // 一括シミュレーション（プリセット適用）
   const applyPreset = (preset: "better_record" | "home_wins" | "run_the_table" | "underdogs") => {
     setPresetDropdownOpen(false);
 
@@ -227,9 +286,8 @@ export default function PlayoffMachine() {
     return set;
   }, [standings]);
 
-  // Tankathon連動 ドラフト指名順（Pick #1〜#18）の算出
+  // Tankathon連動 ドラフト指名順（Pick #1〜#18）のリアルタイム算出
   const draftOrder = useMemo<DraftPickItem[]>(() => {
-    // 1. プレーオフ進出チームを除いた18チームを抽出
     const nonPlayoff = Object.keys(NFL_TEAMS)
       .filter((code) => !playoffTeamCodes.has(code))
       .map((code) => ({
@@ -238,7 +296,7 @@ export default function PlayoffMachine() {
         record: allTeamRecords[code],
       }));
 
-    // 2. 対戦相手合計勝率（SOS）を算出
+    // 対戦相手合計勝率（SOS）を算出
     const sosMap: Record<string, number> = {};
     for (const t of nonPlayoff) {
       const teamGames = games.filter((g) => g.awayTeam === t.code || g.homeTeam === t.code);
@@ -259,25 +317,21 @@ export default function PlayoffMachine() {
       sosMap[t.code] = totalOpp > 0 ? (oppWins + oppTies * 0.5) / totalOpp : 0.5;
     }
 
-    // 3. 弱い順（勝率が低い順、同率ならSOSが低い順）にソート
+    // 弱い順（勝率が低い順、同率ならSOSが低い＝弱い日程だった順）にソート
     const sorted = [...nonPlayoff].sort((a, b) => {
-      // 基準1: 全体勝率（低い方が上位）
       if (Math.abs(a.record.pct - b.record.pct) >= 0.0001) {
         return a.record.pct - b.record.pct;
       }
-      // 基準2: SOS（対戦相手勝率が低い方が上位）
       const aSos = sosMap[a.code] ?? 0.5;
       const bSos = sosMap[b.code] ?? 0.5;
       if (Math.abs(aSos - bSos) >= 0.0001) {
         return aSos - bSos;
       }
-      // 基準3: 同一地区内
       if (a.info.conference === b.info.conference && a.info.division === b.info.division) {
         if (Math.abs(a.record.divPct - b.record.divPct) >= 0.0001) {
           return a.record.divPct - b.record.divPct;
         }
       }
-      // 基準4: 同一カンファレンス内
       if (a.info.conference === b.info.conference) {
         if (Math.abs(a.record.confPct - b.record.confPct) >= 0.0001) {
           return a.record.confPct - b.record.confPct;
@@ -293,8 +347,9 @@ export default function PlayoffMachine() {
 
       const prev = sorted[idx - 1];
       const next = sorted[idx + 1];
-      const isTied = (prev && Math.abs(prev.record.pct - t.record.pct) < 0.0001) ||
-                     (next && Math.abs(next.record.pct - t.record.pct) < 0.0001);
+      const isTied =
+        (prev && Math.abs(prev.record.pct - t.record.pct) < 0.0001) ||
+        (next && Math.abs(next.record.pct - t.record.pct) < 0.0001);
 
       if (isTied) {
         const compareTarget = prev && Math.abs(prev.record.pct - t.record.pct) < 0.0001 ? prev : next;
@@ -376,8 +431,7 @@ export default function PlayoffMachine() {
       {/* コントロールバー: 応援チーム、一括シミュレーション、Week選択、リセット */}
       <div className="border-b border-slate-200 bg-white shadow-xs">
         <div className="container mx-auto flex flex-col gap-4 px-4 py-4 sm:px-6 md:flex-row md:items-end md:justify-between">
-          
-          {/* 左側: 応援チーム選択 ＆ 一括シミュレーション */}
+          {/* 応援チーム選択 ＆ 一括シミュレーション */}
           <div className="flex flex-wrap items-end gap-3">
             {/* 応援チーム選択（ABC順） */}
             <div className="w-full sm:w-56">
@@ -489,7 +543,7 @@ export default function PlayoffMachine() {
             </div>
           </div>
 
-          {/* 右側: 対象 Week 選択 ＆ 予想リセットボタン */}
+          {/* 対象 Week 選択 ＆ 予想リセットボタン */}
           <div className="flex-1 md:max-w-xl">
             <div className="flex items-center justify-between">
               <Label className="text-xs font-semibold text-slate-600">対象 Week</Label>
@@ -521,18 +575,15 @@ export default function PlayoffMachine() {
               ))}
             </div>
           </div>
-
         </div>
       </div>
 
       {/* メインレイアウト */}
       <main className="container mx-auto mt-6 px-4 sm:px-6">
         <div className="grid gap-6 lg:grid-cols-12">
-          
           {/* 左カラム: シード順位表 ⇔ ドラフト指名順（タブ切り替え） */}
           <div className="space-y-6 lg:col-span-7">
             <Card className="border-slate-200 shadow-xs">
-              
               {/* カードヘッダー: プレーオフ ⇔ ドラフト順位の切り替えタブ */}
               <CardHeader className="flex flex-col gap-3 border-b border-slate-100 pb-3 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-100 p-1">
@@ -583,7 +634,7 @@ export default function PlayoffMachine() {
 
               <CardContent className="p-0">
                 {mainViewMode === "playoffs" ? (
-                  /* 1. 既存のプレーオフシード表 */
+                  /* 1. プレーオフシード表 */
                   <div>
                     {/* 地区首位（#1〜#4） */}
                     <div className="border-b border-slate-100 bg-slate-50/70 px-4 py-2 text-[11px] font-bold tracking-wider text-slate-500">
