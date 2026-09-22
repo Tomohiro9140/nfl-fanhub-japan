@@ -4,9 +4,9 @@ import { PlayoffPresetsControl } from "@/components/PlayoffPresetsControl";
 import { DraftOrderView } from "@/components/DraftOrderView";
 import { generatePresetPicks, PresetType, SimulationPicks, SimGame } from "@/lib/playoffPresets";
 import { computeDraftOrder, TeamStandingData } from "@/lib/draftOrder";
-import { NFL_TEAMS, getTeamByCode } from "@/lib/nflTeams";
+import { getTeamByCode } from "@/lib/nflTeams";
 
-// 既存のディビジョン定義
+// 全32チームのディビジョン定義
 const DIVISIONS: Record<string, { conference: "AFC" | "NFC"; division: "East" | "North" | "South" | "West"; teams: string[] }> = {
   "AFC East": { conference: "AFC", division: "East", teams: ["BUF", "MIA", "NE", "NYJ"] },
   "AFC North": { conference: "AFC", division: "North", teams: ["BAL", "CIN", "CLE", "PIT"] },
@@ -17,6 +17,8 @@ const DIVISIONS: Record<string, { conference: "AFC" | "NFC"; division: "East" | 
   "NFC South": { conference: "NFC", division: "South", teams: ["ATL", "CAR", "NO", "TB"] },
   "NFC West": { conference: "NFC", division: "West", teams: ["ARI", "LAR", "SF", "SEA"] },
 };
+
+const ALL_TEAM_CODES = Object.values(DIVISIONS).flatMap((d) => d.teams);
 
 export default function PlayoffMachinePage() {
   // 1. 表示タブ ("playoffs": シード表・対戦表 / "draft": ドラフト1巡目指名順)
@@ -31,17 +33,15 @@ export default function PlayoffMachinePage() {
   // 4. 週フィルター（試合一覧用）
   const [selectedWeek, setSelectedWeek] = useState<number | "ALL">("ALL");
 
-  // ※ シーズン全日程データ（API連携または内蔵スケジュール）
-  // 既存のスケジュール取得処理と連動
+  // シーズン全日程データ（API連携または内蔵スケジュール）
   const allGames: SimGame[] = useMemo(() => {
-    // 既存の全試合リストを参照（未設定時はサンプル・基本スケジュールを保持）
     return (window as any).__NFL_SEASON_GAMES__ ?? [];
   }, []);
 
   // 5. 各チームの基本成績（シミュレーション適用前）
   const baseTeamRecords = useMemo(() => {
     const lookup: Record<string, { wins: number; losses: number; ties: number; winPct: number }> = {};
-    for (const code of Object.keys(NFL_TEAMS)) {
+    for (const code of ALL_TEAM_CODES) {
       lookup[code] = { wins: 0, losses: 0, ties: 0, winPct: 0 };
     }
     return lookup;
