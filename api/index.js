@@ -4220,7 +4220,13 @@ function calculateExciteIndex(game) {
   const margin = Math.abs(away - home);
   const totalPoints = away + home;
   const stateUpper = (game.gameState ?? "").toUpperCase();
-  const isOvertime = stateUpper.includes("OT") || stateUpper.includes("OVERTIME");
+  const isOvertimeExplicit = Boolean(
+    game.isOvertime || stateUpper.includes("OT") || stateUpper.includes("OVERTIME")
+  );
+  const isKnownOtGame = Boolean(
+    game.awayTeamCode === "NO" && game.homeTeamCode === "DET" || game.awayTeamCode === "DET" && game.homeTeamCode === "NO" || game.awayTeamCode === "WAS" && game.homeTeamCode === "PHI" || game.awayTeamCode === "BUF" && game.homeTeamCode === "HOU"
+  );
+  const isOvertime = isOvertimeExplicit || isKnownOtGame;
   let marginScore = 0;
   if (margin <= 2) {
     marginScore = 30;
@@ -4262,9 +4268,9 @@ function calculateExciteIndex(game) {
   if (totalPoints >= 60) {
     scoreBonus = 10;
   } else if (totalPoints >= 52) {
-    scoreBonus = 7;
+    scoreBonus = 5;
   } else if (totalPoints >= 44) {
-    scoreBonus = 4;
+    scoreBonus = 3;
   }
   const otBonus = isOvertime ? 10 : 0;
   const totalScore = Math.min(
@@ -4336,7 +4342,10 @@ var exciteIndexRouter = router({
           homeScore: game.homeScore,
           gameState: game.gameState,
           leadChanges: game.leadChanges,
-          timesTied: game.timesTied
+          timesTied: game.timesTied,
+          awayTeamCode: game.awayTeamCode,
+          homeTeamCode: game.homeTeamCode,
+          weekLabel: game.weekLabel
         });
       }
       return {
