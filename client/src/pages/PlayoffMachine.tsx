@@ -423,7 +423,7 @@ export default function PlayoffMachine() {
             <div className="grid h-9 w-9 place-items-center rounded-xl bg-gradient-to-br from-[#f2bc62] to-[#e85d2a] shadow-lg">
               <Trophy className="h-5 w-5 text-[#101827]" />
             </div>
-            <h1 className="font-display text-xl font-bold tracking-tight">Playoff Machine</h1>
+            <h1 className="font-display text-xl font-bold tracking-tight">NFL Season Simulator</h1>
           </div>
         </div>
       </header>
