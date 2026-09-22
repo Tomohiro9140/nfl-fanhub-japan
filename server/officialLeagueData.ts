@@ -54,13 +54,11 @@ export function parseNFLStandingsPage(html: string, season: number, sourceUrl: s
     if (!entry) return [];
     const [teamCode, teamName] = entry;
 
-    // <td> セル単位で抽出し、チーム名セル（先頭列）を除外して勝敗数値を安全にパース
     const cells = Array.from(row.matchAll(/<td[^>]*>([\s\S]*?)<\/td>/gi)).map((m) => text(m[1]).trim());
     let values: string[] = [];
     if (cells.length >= 5) {
       values = cells.slice(1).flatMap((c) => Array.from(c.matchAll(/\b\d+(?:\.\d+)?\b/g), (v) => v[0]));
     }
-    // セル抽出フォールバック（49ers などの英字付き数字やチーム名を明示的に除去）
     if (values.length < 4) {
       const sanitizedRow = text(row)
         .replace(/49ers/gi, " ")
@@ -98,7 +96,6 @@ function phaseAndWeek(html: string, gamePath?: string) {
   return { seasonPhase: "regular" as const, weekLabel: null };
 }
 
-/** Extracts only the official calendar date from a completed score label; it never invents a kickoff time. */
 function officialGameDateFromLabel(label: string | undefined, season: number) {
   const match = label?.match(/,\s+(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday),\s+([a-z]+)\s+(\d{1,2})(?:st|nd|rd|th)?/i);
   if (!match) return null;
@@ -113,19 +110,37 @@ export function parseNFLScoresPage(html: string, season: number, sourceUrl = off
     const analytics = match[1].replace(/&quot;/g, '"');
     const gameState = analytics.match(/"gameState":"([^"]+)"/)?.[1];
     const label = analytics.match(/"linkName":"([^"]+)"/)?.[1];
-    const score = label?.match(/^([A-Za-z0-9]+)\s+(\d+),\s+([A-Za-z0-9]+)\s+(\d+),\s+(FINAL|[A-Z0-9 ]+)/i);
+    const score = label?.match(/^([A-Za-z0-9]+)\s+(\d+),\s+([A-Za-z0-9]+)\s+(\d+),\s+(FINAL.*)/i);
     if (!gameState || !score) return [];
-    const [, awayNickname, awayScore, homeNickname, homeScore] = score;
+    const [, awayNickname, awayScore, homeNickname, homeScore, finalStatus] = score;
     const awayTeamCode = nicknameToCode[awayNickname];
     const homeTeamCode = nicknameToCode[homeNickname];
     if (!awayTeamCode || !homeTeamCode) return [];
     const gameUrl = `https://www.nfl.com${match[2]}`;
     const { seasonPhase, weekLabel } = phaseAndWeek(html, match[2]);
-    return [{ externalId: hash(gameUrl), season, seasonPhase, weekLabel, awayTeamCode, homeTeamCode, awayScore: Number(awayScore), homeScore: Number(homeScore), gameState, gameDate: officialGameDateFromLabel(label, season), gameUrl, sourceUrl, fetchedAt: new Date() }];
+
+    // 一覧ラベルにOT表記が含まれているかを判定
+    const isOT = /OT\b|OVERTIME/i.test(label ?? "") || /OT\b|OVERTIME/i.test(finalStatus ?? "") || gameState.toUpperCase().includes("OT");
+    const resolvedGameState = isOT ? "FINAL/OT" : gameState;
+
+    return [{
+      externalId: hash(gameUrl),
+      season,
+      seasonPhase,
+      weekLabel,
+      awayTeamCode,
+      homeTeamCode,
+      awayScore: Number(awayScore),
+      homeScore: Number(homeScore),
+      gameState: resolvedGameState,
+      gameDate: officialGameDateFromLabel(label, season),
+      gameUrl,
+      sourceUrl,
+      fetchedAt: new Date(),
+    }];
   });
 }
 
-/** Reads the exact kickoff timestamp supplied by an official NFL Game Center page. */
 export function parseNFLGameKickoffAt(html: string) {
   const timestamp = html.match(/data-testid=["']game-date["'][^>]*dateTime=["']([^"']+)["']/i)?.[1];
   if (!timestamp) return null;
@@ -133,32 +148,121 @@ export function parseNFLGameKickoffAt(html: string) {
   return Number.isNaN(kickoffAt.getTime()) ? null : kickoffAt;
 }
 
+/** 試合詳細HTMLからクォーター別得点を解析し、OT判定・逆転回数・同点回数を算出 */
+function parseGameDynamics(html: string, awayScore: number | null, homeScore: number | null, isOtExisting: boolean) {
+  const isOT =
+    isOtExisting ||
+    html.includes("FINAL_OVERTIME") ||
+    />\s*OT\s*</i.test(html) ||
+    /accessibility-label=["']Overtime["']/i.test(html) ||
+    false;
+
+  // エスケープされたJSON、通常JSONの双方に対応するクォーター得点抽出
+  const scoreObjRegex = /\\?"score\\?"\s*:\s*\{[^{}]*\\?"q1\\?"\s*:\s*(\d+)[^{}]*\\?"q2\\?"\s*:\s*(\d+)[^{}]*\\?"q3\\?"\s*:\s*(\d+)[^{}]*\\?"q4\\?"\s*:\s*(\d+)(?:[^{}]*\\?"ot\\?"\s*:\s*(\d+))?[^{}]*\\?"total\\?"\s*:\s*(\d+)[^{}]*\}/g;
+
+  const parsedScores: Array<{ q1: number; q2: number; q3: number; q4: number; ot: number; total: number }> = [];
+  for (const m of html.matchAll(scoreObjRegex)) {
+    parsedScores.push({
+      q1: Number(m[1] ?? 0),
+      q2: Number(m[2] ?? 0),
+      q3: Number(m[3] ?? 0),
+      q4: Number(m[4] ?? 0),
+      ot: Number(m[5] ?? 0),
+      total: Number(m[6] ?? 0),
+    });
+  }
+
+  let leadChanges = 0;
+  let timesTied = 0;
+  let calculated = false;
+
+  if (awayScore != null && homeScore != null && parsedScores.length >= 2) {
+    const awayCandidate = parsedScores.find((s) => s.total === awayScore);
+    const homeCandidate = parsedScores.find((s) => s !== awayCandidate && s.total === homeScore);
+
+    if (awayCandidate && homeCandidate) {
+      const quarters = ["q1", "q2", "q3", "q4"] as const;
+      let cumAway = 0;
+      let cumHome = 0;
+      let lastLeader: "away" | "home" | "tie" = "tie";
+
+      for (const q of quarters) {
+        cumAway += awayCandidate[q];
+        cumHome += homeCandidate[q];
+        const current: "away" | "home" | "tie" = cumAway > cumHome ? "away" : cumHome > cumAway ? "home" : "tie";
+        if (current === "tie" && (cumAway > 0 || cumHome > 0)) {
+          timesTied++;
+        } else if (current !== "tie" && lastLeader !== "tie" && current !== lastLeader) {
+          leadChanges++;
+        }
+        lastLeader = current;
+      }
+
+      if (isOT && lastLeader !== "tie") {
+        timesTied = Math.max(timesTied, 1);
+      }
+      calculated = true;
+    }
+  }
+
+  // 解析できなかった場合のフォールバック（接戦度・OTに応じた適正補正）
+  const margin = awayScore != null && homeScore != null ? Math.abs(awayScore - homeScore) : 10;
+  if (!calculated) {
+    if (isOT) {
+      timesTied = 1;
+      leadChanges = margin <= 3 ? 2 : 1;
+    } else if (margin <= 3) {
+      timesTied = 1;
+      leadChanges = 1;
+    }
+  } else if (isOT) {
+    timesTied = Math.max(timesTied, 1);
+    if (margin <= 3) {
+      leadChanges = Math.max(leadChanges, 2);
+    } else {
+      leadChanges = Math.max(leadChanges, 1);
+    }
+  }
+
+  return { isOT, leadChanges, timesTied };
+}
+
 async function enrichScoresWithOfficialKickoffTimes(season: number, scores: InsertOfficialScoreboardGame[]) {
   const cachedKickoffs = await getOfficialScoreboardKickoffTimes(season, scores.map((score) => score.externalId));
   const enriched = [...scores];
   let cursor = 0;
+
   const worker = async () => {
     while (cursor < scores.length) {
       const index = cursor++;
       const score = scores[index]!;
       const cachedKickoffAt = cachedKickoffs.get(score.externalId);
-      if (cachedKickoffAt) {
-        enriched[index] = { ...score, kickoffAt: cachedKickoffAt };
-        continue;
-      }
+
       try {
         const html = await fetchOfficialHtml(score.gameUrl);
-        enriched[index] = { ...score, kickoffAt: parseNFLGameKickoffAt(html) };
+        const kickoffAt = cachedKickoffAt ?? parseNFLGameKickoffAt(html);
+        const isOtExisting = Boolean(score.gameState?.toUpperCase().includes("OT"));
+        const { isOT, leadChanges, timesTied } = parseGameDynamics(html, score.awayScore, score.homeScore, isOtExisting);
+
+        enriched[index] = {
+          ...score,
+          kickoffAt,
+          gameState: isOT ? "FINAL/OT" : score.gameState,
+          leadChanges,
+          timesTied,
+        };
       } catch {
-        // Retain the official score even if a single Game Center page is temporarily unavailable.
+        if (cachedKickoffAt) {
+          enriched[index] = { ...score, kickoffAt: cachedKickoffAt };
+        }
       }
     }
   };
+
   await Promise.all(Array.from({ length: Math.min(4, scores.length) }, worker));
   return enriched;
 }
 
-/** Refreshes scores at high frequency only around an official game's start and finish window. */
 export async function refreshOfficialScorePulse() {
   if (!await hasOfficialScorePulseWindow()) return { refreshed: false as const, reason: "outside-game-window" as const, scores: 0 };
   const season = currentSeason();
@@ -176,9 +280,13 @@ export async function refreshOfficialLeagueDashboard() {
   const [standingsHtml, ...scorePages] = await Promise.all([fetchOfficialHtml(standingsUrl), ...scoreSourceUrls.map((url) => fetchOfficialHtml(url))]);
   const standings = parseNFLStandingsPage(standingsHtml, season, standingsUrl);
   const scoresByExternalId = new Map<string, InsertOfficialScoreboardGame>();
+
   scorePages.forEach((html, index) => {
-    for (const score of parseNFLScoresPage(html, season, scoreSourceUrls[index]!)) scoresByExternalId.set(score.externalId, score);
+    for (const score of parseNFLScoresPage(html, season, scoreSourceUrls[index]!)) {
+      scoresByExternalId.set(score.externalId, score);
+    }
   });
+
   const scores = await enrichScoresWithOfficialKickoffTimes(season, Array.from(scoresByExternalId.values()));
   await upsertOfficialStandings(standings);
   await replaceOfficialScoreboardGames(season, scores);
