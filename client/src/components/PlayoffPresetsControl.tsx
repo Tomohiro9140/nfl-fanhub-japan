@@ -1,7 +1,42 @@
 import React, { useState } from "react";
 import { Sparkles, RotateCcw, ChevronDown, Shield } from "lucide-react";
 import { PresetType } from "@/lib/playoffPresets";
-import { NFL_TEAMS } from "@/lib/nflTeams";
+
+// 全32チームの自己完結リスト（外部インポート依存を排除）
+const ALL_NFL_TEAMS: Array<{ code: string; name: string }> = [
+  { code: "ARI", name: "Cardinals" },
+  { code: "ATL", name: "Falcons" },
+  { code: "BAL", name: "Ravens" },
+  { code: "BUF", name: "Bills" },
+  { code: "CAR", name: "Panthers" },
+  { code: "CHI", name: "Bears" },
+  { code: "CIN", name: "Bengals" },
+  { code: "CLE", name: "Browns" },
+  { code: "DAL", name: "Cowboys" },
+  { code: "DEN", name: "Broncos" },
+  { code: "DET", name: "Lions" },
+  { code: "GB", name: "Packers" },
+  { code: "HOU", name: "Texans" },
+  { code: "IND", name: "Colts" },
+  { code: "JAX", name: "Jaguars" },
+  { code: "KC", name: "Chiefs" },
+  { code: "LV", name: "Raiders" },
+  { code: "LAC", name: "Chargers" },
+  { code: "LAR", name: "Rams" },
+  { code: "MIA", name: "Dolphins" },
+  { code: "MIN", name: "Vikings" },
+  { code: "NE", name: "Patriots" },
+  { code: "NO", name: "Saints" },
+  { code: "NYG", name: "Giants" },
+  { code: "NYJ", name: "Jets" },
+  { code: "PHI", name: "Eagles" },
+  { code: "PIT", name: "Steelers" },
+  { code: "SF", name: "49ers" },
+  { code: "SEA", name: "Seahawks" },
+  { code: "TB", name: "Buccaneers" },
+  { code: "TEN", name: "Titans" },
+  { code: "WAS", name: "Commanders" },
+];
 
 interface PlayoffPresetsControlProps {
   onApplyPreset: (preset: PresetType, mode: "fill_remaining" | "overwrite_all", favoriteTeam?: string) => void;
@@ -149,14 +184,14 @@ export const PlayoffPresetsControl: React.FC<PlayoffPresetsControlProps> = ({
               選択したチームの残り全試合を「勝利」に設定し、その他の対戦は「勝率上位」で自動補完します。
             </p>
             <div className="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-2">
-              {Object.entries(NFL_TEAMS).map(([code, team]) => (
+              {ALL_NFL_TEAMS.map((team) => (
                 <button
-                  key={code}
+                  key={team.code}
                   type="button"
-                  onClick={() => handleSelectFavoriteTeam(code)}
+                  onClick={() => handleSelectFavoriteTeam(team.code)}
                   className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 p-2 text-left hover:border-cyan-400 hover:bg-white/15 transition active:scale-95"
                 >
-                  <span className="font-mono text-xs font-bold text-[#ffc1a7]">{code}</span>
+                  <span className="font-mono text-xs font-bold text-[#ffc1a7]">{team.code}</span>
                   <span className="truncate text-xs font-semibold text-white">{team.name}</span>
                 </button>
               ))}
