@@ -317,7 +317,6 @@ export async function getOfficialTeamSnapshot(teamCode: string, skipGameUrl?: st
     db.select({ id: officialFeedItems.id, title: officialFeedItems.title, sourceName: officialFeedItems.sourceName, sourceKind: officialFeedItems.sourceKind, sourceUrl: officialFeedItems.sourceUrl, publishedAt: officialFeedItems.publishedAt, category: officialFeedItems.category, fetchedAt: officialFeedItems.fetchedAt }).from(officialFeedItems).where(and(eq(officialFeedItems.teamCode, teamCode), eq(officialFeedItems.category, "transaction"), gte(officialFeedItems.publishedAt, rosterMoveWindowStart))).orderBy(sql`case when ${officialFeedItems.sourceKind} = 'team_official' then 0 else 1 end`, desc(officialFeedItems.publishedAt)).limit(24),
     db.select({ id: officialFeedItems.id, title: officialFeedItems.title, summary: officialFeedItems.summary, sourceName: officialFeedItems.sourceName, sourceKind: officialFeedItems.sourceKind, sourceUrl: officialFeedItems.sourceUrl, publishedAt: officialFeedItems.publishedAt, fetchedAt: officialFeedItems.fetchedAt }).from(officialFeedItems).where(and(eq(officialFeedItems.teamCode, teamCode), eq(officialFeedItems.category, "news"))).orderBy(sql`case when ${officialFeedItems.sourceKind} = 'team_official' then 0 else 1 end`, desc(officialFeedItems.publishedAt)).limit(24),
     db.select({ id: externalAvailabilityInsights.id, playerName: externalAvailabilityInsights.playerName, statusLabel: externalAvailabilityInsights.statusLabel, headline: externalAvailabilityInsights.headline, sourceName: externalAvailabilityInsights.sourceName, sourceUrl: externalAvailabilityInsights.sourceUrl, publishedAt: externalAvailabilityInsights.publishedAt, fetchedAt: externalAvailabilityInsights.fetchedAt }).from(externalAvailabilityInsights).where(and(eq(externalAvailabilityInsights.teamCode, teamCode), gte(externalAvailabilityInsights.publishedAt, externalInsightWindowStart))).orderBy(desc(externalAvailabilityInsights.publishedAt)).limit(3),
-    // Game Ticket INJURIES用：DB内の該当チームの最新怪我レポートを取得
     db.select({
       title: officialFeedItems.title,
       summary: officialFeedItems.summary,
@@ -495,7 +494,17 @@ export async function upsertOfficialStandings(items: InsertOfficialStanding[]) {
 export async function replaceOfficialScoreboardGames(season: number, items: InsertOfficialScoreboardGame[]) {
   const db = await getDb();
   if (!db) throw new Error("Database is not available for official scoreboard cache");
-  const existingLinks = await db.select({ externalId: officialScoreboardGames.externalId, gameDate: officialScoreboardGames.gameDate, kickoffAt: officialScoreboardGames.kickoffAt, nflHighlightUrl: officialScoreboardGames.nflHighlightUrl, nflHighlightSourceUrl: officialScoreboardGames.nflHighlightSourceUrl, nflHighlightMatchedAt: officialScoreboardGames.nflHighlightMatchedAt, finalRecordedAt: officialScoreboardGames.finalRecordedAt }).from(officialScoreboardGames).where(eq(officialScoreboardGames.season, season));
+  const existingLinks = await db.select({
+    externalId: officialScoreboardGames.externalId,
+    gameDate: officialScoreboardGames.gameDate,
+    kickoffAt: officialScoreboardGames.kickoffAt,
+    nflHighlightUrl: officialScoreboardGames.nflHighlightUrl,
+    nflHighlightSourceUrl: officialScoreboardGames.nflHighlightSourceUrl,
+    nflHighlightMatchedAt: officialScoreboardGames.nflHighlightMatchedAt,
+    finalRecordedAt: officialScoreboardGames.finalRecordedAt,
+    leadChanges: officialScoreboardGames.leadChanges,
+    timesTied: officialScoreboardGames.timesTied,
+  }).from(officialScoreboardGames).where(eq(officialScoreboardGames.season, season));
   const existingByExternalId = new Map(existingLinks.map((link) => [link.externalId, link]));
   if (!items.length) return;
   for (const item of items) {
@@ -503,7 +512,31 @@ export async function replaceOfficialScoreboardGames(season: number, items: Inse
     const finalRecordedAt = isOfficialFinal(item) ? existing?.finalRecordedAt ?? item.fetchedAt : null;
     const gameDate = item.gameDate ?? existing?.gameDate ?? null;
     const kickoffAt = item.kickoffAt ?? existing?.kickoffAt ?? null;
-    await db.insert(officialScoreboardGames).values({ ...item, ...(existing ?? {}), gameDate, kickoffAt, finalRecordedAt }).onDuplicateKeyUpdate({ set: { awayScore: item.awayScore, homeScore: item.homeScore, gameState: item.gameState, gameDate, kickoffAt, finalRecordedAt, sourceUrl: item.sourceUrl, fetchedAt: item.fetchedAt } });
+    const leadChanges = item.leadChanges ?? existing?.leadChanges ?? null;
+    const timesTied = item.timesTied ?? existing?.timesTied ?? null;
+
+    await db.insert(officialScoreboardGames).values({
+      ...item,
+      ...(existing ?? {}),
+      gameDate,
+      kickoffAt,
+      finalRecordedAt,
+      leadChanges,
+      timesTied,
+    }).onDuplicateKeyUpdate({
+      set: {
+        awayScore: item.awayScore,
+        homeScore: item.homeScore,
+        gameState: item.gameState,
+        leadChanges,
+        timesTied,
+        gameDate,
+        kickoffAt,
+        finalRecordedAt,
+        sourceUrl: item.sourceUrl,
+        fetchedAt: item.fetchedAt,
+      },
+    });
   }
 }
 
