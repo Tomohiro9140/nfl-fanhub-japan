@@ -3,12 +3,13 @@
  * Stable team metadata stays local; game, roster, injury and news data arrive from official caches.
  */
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { CircleAlert, Eye, EyeOff, Flag, Menu, ShieldCheck, X } from "lucide-react";
+import { CircleAlert, Eye, EyeOff, Flag, Flame, Menu, ShieldCheck, X } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { getTeamByCode, nflTeams, type FavoriteTeam, type TeamBrand } from "@/lib/nflTeams";
 import { OfficialTeamFeed } from "@/components/OfficialTeamFeed";
 import { OfficialGameTicket, OfficialRosterMoveDigest, OfficialStatusRadar, type TeamSnapshot } from "@/components/OfficialGameExperience";
 import { OfficialLatestResults, OfficialLeagueDashboard, type LeagueDashboard } from "@/components/OfficialLeagueDashboard";
+import { ExciteIndexDialog } from "@/components/ExciteIndexDialog";
 import { preloadAtlasRoute, preloadCoachingTreeRoute, preloadFieldlineRoute } from "@/lib/routePreload";
 import { spoilerModeForTeamChange } from "@/lib/teamExperience";
 import { trpc } from "@/lib/trpc";
@@ -64,13 +65,35 @@ function TeamMark({ team, short, brand }: { team: string; short: string; brand: 
   return <div className="relative grid h-10 w-10 place-items-center rounded-[12px] border-2 font-display text-base font-black tracking-tight shadow-[0_2px_0_rgba(16,33,58,0.10)]" style={{ backgroundColor: brand.primary, borderColor: brand.accent, color: brand.onPrimary }} aria-label={team}>{short}</div>;
 }
 
-export function SpoilerSwitch({ spoilerMode, onToggle }: { spoilerMode: boolean; onToggle: () => void }) {
+export function SpoilerSwitch({
+  spoilerMode,
+  onToggle,
+  onOpenExciteIndex,
+}: {
+  spoilerMode: boolean;
+  onToggle: () => void;
+  onOpenExciteIndex?: () => void;
+}) {
   const panelClass = ["memo-slip relative overflow-hidden border p-4 transition-colors", spoilerMode ? "border-[#b8dca8] bg-[#f0f8eb]" : "border-[#ded8cc] bg-[#fffdf8]"].join(" ");
   const iconClass = ["grid h-10 w-10 place-items-center rounded-xl", spoilerMode ? "bg-[#3d6b2c] text-white" : "bg-[#e9e3d6] text-[#526173]"].join(" ");
   const toggleClass = ["relative h-7 w-12 rounded-full p-1 transition", spoilerMode ? "bg-[#3d6b2c]" : "bg-[#cbd5e1]"].join(" ");
   const knobClass = ["block h-5 w-5 rounded-full bg-white shadow-sm transition-transform", spoilerMode ? "translate-x-5" : "translate-x-0"].join(" ");
   return <section id="safe" data-layout-scope="spoiler" className={panelClass}>
-    <div className="flex items-center gap-3"><div className={iconClass}>{spoilerMode ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}</div><p className="min-w-0 flex-1 font-display text-base font-bold leading-none tracking-wide">ネタバレ防止</p><button onClick={onToggle} className={toggleClass} aria-pressed={spoilerMode} aria-label="ネタバレ防止モードを切り替える"><span className={knobClass} /></button></div>
+    <div className="flex items-center gap-3">
+      <div className={iconClass}>{spoilerMode ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}</div>
+      <p className="min-w-0 flex-1 font-display text-base font-bold leading-none tracking-wide">ネタバレ防止</p>
+      {onOpenExciteIndex && (
+        <button
+          type="button"
+          onClick={onOpenExciteIndex}
+          className="inline-flex items-center gap-1 rounded-lg bg-[#e85d2a] px-3 py-1.5 font-mono text-[11px] font-black tracking-wider text-white shadow-sm hover:bg-[#c44719] transition"
+        >
+          <Flame className="h-3.5 w-3.5 fill-current" />
+          注目ゲーム
+        </button>
+      )}
+      <button onClick={onToggle} className={toggleClass} aria-pressed={spoilerMode} aria-label="ネタバレ防止モードを切り替える"><span className={knobClass} /></button>
+    </div>
   </section>;
 }
 
@@ -80,6 +103,7 @@ export default function Home() {
   const [navOpen, setNavOpen] = useState(false);
   const [teamDialogOpen, setTeamDialogOpen] = useState(false);
   const [gameStatsUrl, setGameStatsUrl] = useState<string | null>(null);
+  const [exciteDialogOpen, setExciteDialogOpen] = useState(false);
   const [pickerConference, setPickerConference] = useState<"AFC" | "NFC">("AFC");
   const [forceLastGame, setForceLastGame] = useState(false);
   const [statusSection, setStatusSection] = useState<HTMLElement | null>(null);
@@ -164,6 +188,19 @@ export default function Home() {
 
     <Dialog open={teamDialogOpen} onOpenChange={setTeamDialogOpen}><DialogContent className="border-[#d7d1c4] bg-[#f5f2ea] p-5 sm:max-w-md" showCloseButton><DialogHeader className="text-left"><p className="font-mono text-[10px] font-bold tracking-[.16em] text-[#64748b]">YOUR HUDDLE</p><DialogTitle className="font-display text-2xl font-extrabold tracking-[.08em]">FAVORITE TEAM</DialogTitle><DialogDescription className="text-[12px]">AFC／NFCと地区から推しチームを選択します。選択状態はこの端末に保存されます。</DialogDescription></DialogHeader><div className="flex gap-2 border-b border-[#d7d1c4] pb-3"><button onClick={() => setPickerConference("AFC")} className={`px-3 py-1.5 font-mono text-xs font-bold tracking-[.12em] ${pickerConference === "AFC" ? "bg-[#10213a] text-white" : "border border-[#d7d1c4] bg-white text-[#526173]"}`}>AFC</button><button onClick={() => setPickerConference("NFC")} className={`px-3 py-1.5 font-mono text-xs font-bold tracking-[.12em] ${pickerConference === "NFC" ? "bg-[#10213a] text-white" : "border border-[#d7d1c4] bg-white text-[#526173]"}`}>NFC</button></div><div className="max-h-[52vh] space-y-4 overflow-y-auto pr-1">{divisionGroups.map(({ division, teams }) => <section key={division}><p className="mb-2 font-mono text-[10px] font-bold tracking-[.16em] text-[#64748b]">{pickerConference} {division.toUpperCase()}</p><div className="grid grid-cols-2 gap-2">{teams.map((team) => <button key={team.code} onClick={() => chooseFavorite(team)} className={`flex items-center gap-2 border p-2.5 text-left transition hover:border-[#e85d2a] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#10213a] ${favorite.code === team.code ? "border-[#e85d2a] bg-[#fffaf0]" : "border-[#d7d1c4] bg-white"}`}><TeamMark team={team.name} short={team.code} brand={team.brand} /><span className="min-w-0 flex-1"><span className="block font-display text-base font-bold tracking-wide">{team.code}</span><span className="block truncate text-[10px] text-[#64748b]">{team.name}</span></span>{favorite.code === team.code && <ShieldCheck className="h-3.5 w-3.5 text-[#e85d2a]" />}</button>)}</div></section>)}</div></DialogContent></Dialog>
 
-    <main className="relative z-10 mx-auto w-full min-w-0 max-w-6xl overflow-x-clip px-4 pb-24 pt-4 sm:px-6 sm:pt-6">{snapshotQuery.isError && <div className="mb-3 flex items-center gap-2 border border-[#f1c7b5] bg-[#fff4ef] px-3 py-2 text-[11px] text-[#a34220]"><CircleAlert className="h-4 w-4" />公式データを一時的に取得できません。保存済みの情報を再試行します。</div>}<div className="min-w-0 space-y-3"><OfficialGameTicket favorite={favorite} snapshot={displaySnapshot} loading={snapshotQuery.isLoading} spoilerMode={spoilerMode} hasWatchedTicket={Boolean(watchedTicketUrl)} canRestoreLastGame={Boolean(displaySnapshot?.canRestoreLastGame)} onMarkWatched={markTicketWatched} onRestoreLastGame={restoreLastGame} onOpenGameStats={setGameStatsUrl} /><SpoilerSwitch spoilerMode={spoilerMode} onToggle={toggleSpoiler} /><OfficialLatestResults favorite={favorite} dashboard={latestResultQuery.data} loading={latestResultQuery.isLoading} spoilerMode={spoilerMode} onOpenGameStats={setGameStatsUrl} onWarmGameStats={warmGameStats} /><div data-layout-scope="official-feed" className="min-w-0"><OfficialTeamFeed favorite={favorite} spoilerMode={spoilerMode} completedGame={displaySnapshot?.gameDayStatus ?? displaySnapshot?.nextGame} /></div><div ref={statusSectionRef}><OfficialStatusRadar favorite={favorite} snapshot={displaySnapshot} loading={snapshotQuery.isLoading || (shouldLoadStatus && rosterSnapshotQuery.isLoading)} /><OfficialRosterMoveDigest snapshot={displaySnapshot} loading={snapshotQuery.isLoading} /></div></div><div ref={leagueSectionRef} className="mt-3"><OfficialLeagueDashboard favorite={favorite} dashboard={leagueDashboard} loading={!shouldLoadLeagueSummary || leagueQuery.isLoading} calendarLoading={!shouldLoadLeagueCalendar || leagueCalendarQuery.isLoading} spoilerMode={spoilerMode} /></div></main>{gameStatsUrl ? <React.Suspense fallback={null}><GameStatsDialog gameUrl={gameStatsUrl} onOpenChange={(open) => { if (!open) setGameStatsUrl(null); }} /></React.Suspense> : null}
+    <main className="relative z-10 mx-auto w-full min-w-0 max-w-6xl overflow-x-clip px-4 pb-24 pt-4 sm:px-6 sm:pt-6">
+      {snapshotQuery.isError && <div className="mb-3 flex items-center gap-2 border border-[#f1c7b5] bg-[#fff4ef] px-3 py-2 text-[11px] text-[#a34220]"><CircleAlert className="h-4 w-4" />公式データを一時的に取得できません。保存済みの情報を再試行します。</div>}
+      <div className="min-w-0 space-y-3">
+        <OfficialGameTicket favorite={favorite} snapshot={displaySnapshot} loading={snapshotQuery.isLoading} spoilerMode={spoilerMode} hasWatchedTicket={Boolean(watchedTicketUrl)} canRestoreLastGame={Boolean(displaySnapshot?.canRestoreLastGame)} onMarkWatched={markTicketWatched} onRestoreLastGame={restoreLastGame} onOpenGameStats={setGameStatsUrl} />
+        <SpoilerSwitch spoilerMode={spoilerMode} onToggle={toggleSpoiler} onOpenExciteIndex={() => setExciteDialogOpen(true)} />
+        <OfficialLatestResults favorite={favorite} dashboard={latestResultQuery.data} loading={latestResultQuery.isLoading} spoilerMode={spoilerMode} onOpenGameStats={setGameStatsUrl} onWarmGameStats={warmGameStats} />
+        <div data-layout-scope="official-feed" className="min-w-0"><OfficialTeamFeed favorite={favorite} spoilerMode={spoilerMode} completedGame={displaySnapshot?.gameDayStatus ?? displaySnapshot?.nextGame} /></div>
+        <div ref={statusSectionRef}><OfficialStatusRadar favorite={favorite} snapshot={displaySnapshot} loading={snapshotQuery.isLoading || (shouldLoadStatus && rosterSnapshotQuery.isLoading)} /><OfficialRosterMoveDigest snapshot={displaySnapshot} loading={snapshotQuery.isLoading} /></div>
+      </div>
+      <div ref={leagueSectionRef} className="mt-3"><OfficialLeagueDashboard favorite={favorite} dashboard={leagueDashboard} loading={!shouldLoadLeagueSummary || leagueQuery.isLoading} calendarLoading={!shouldLoadLeagueCalendar || leagueCalendarQuery.isLoading} spoilerMode={spoilerMode} /></div>
+    </main>
+
+    {gameStatsUrl ? <React.Suspense fallback={null}><GameStatsDialog gameUrl={gameStatsUrl} onOpenChange={(open) => { if (!open) setGameStatsUrl(null); }} /></React.Suspense> : null}
+    <ExciteIndexDialog open={exciteDialogOpen} onClose={() => setExciteDialogOpen(false)} season={2026} />
   </div>;
 }
