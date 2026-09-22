@@ -74,8 +74,8 @@ export function OfficialGameTicket({ favorite, snapshot, loading, spoilerMode = 
   const favoriteLabel = game?.homeAway === "home" ? `@ ${favorite.name}` : favorite.name;
   const opponentLabel = game?.homeAway === "away" && opponent ? `@ ${opponent.name}` : opponent?.name;
   const isRevealedFinal = gameStatus.label === "FINAL" && !spoilerMode && Boolean(gameStatus.score);
-  const favoriteScore = game ? (game.homeAway === "home" ? game.homeScore : game.awayScore) : null;
-  const opponentScore = game ? (game.homeAway === "home" ? game.awayScore : game.homeScore) : null;
+  const favoriteScore = game ? (game.homeAway === "home" ? (game.homeScore ?? gameDay?.homeScore) : (game.awayScore ?? gameDay?.awayScore)) : null;
+  const opponentScore = game ? (game.homeAway === "home" ? (game.awayScore ?? gameDay?.awayScore) : (game.homeScore ?? gameDay?.homeScore)) : null;
   const ticketLabel = game ? (game.weekLabel ?? game.seasonPhase.toUpperCase()) : "OFFICIAL SCHEDULE";
   const isFinalTicket = gameStatus.label === "FINAL";
   const canOpenGameStats = isFinalTicket && Boolean(game?.sourceUrl.includes("/games/")) && Boolean(onOpenGameStats);
@@ -111,7 +111,7 @@ export function OfficialGameTicket({ favorite, snapshot, loading, spoilerMode = 
           <div className={`border-x border-dashed border-white/25 px-3 text-center ${isFinalTicket ? "flex h-[72px] flex-col justify-center" : ""}`}>
             {gameStatus.label === "FINAL" ? <>
               <p className="-mt-1 font-mono text-[9px] font-semibold tracking-[.14em] text-[#a5b3c9]">OFFICIAL GAME DATE</p>
-              <p className="mt-1 font-display text-lg font-extrabold leading-none">{fmtFinalGameDate(game.kickoffAt, game.gameDate)}</p>
+              <p className="mt-1 font-display text-lg font-extrabold leading-none">{fmtFinalGameDate(game.kickoffAt ?? gameDay?.kickoffAt, game.gameDate ?? gameDay?.gameDate)}</p>
               {isRevealedFinal ? <><p className="mt-1 font-display text-3xl font-black leading-none tracking-[.03em] text-white"><span className={favoriteScore !== null && opponentScore !== null && favoriteScore > opponentScore ? "text-[#ffc1a7]" : ""}>{favoriteScore}</span><span> — </span><span className={favoriteScore !== null && opponentScore !== null && opponentScore > favoriteScore ? "text-[#ffc1a7]" : ""}>{opponentScore}</span></p><p className="mt-1 font-mono text-[8px] font-bold tracking-[.14em] text-[#ffc1a7]">FINAL SCORE</p></> : <p className="mt-2 font-mono text-[8px] font-bold tracking-[.14em] text-[#a5b3c9]">FINAL · SCORE HIDDEN</p>}
             </> : <>
               <p className="font-mono text-[9px] font-semibold tracking-[.14em] text-[#a5b3c9]">{game.kickoffAtEstimated && gameStatus.label === "LIVE" ? "OFFICIAL SCOREBOARD" : "JST"}</p>
@@ -159,8 +159,16 @@ function gameStateCopy(game?: TeamSnapshot["gameDayStatus"], hideScores = false)
   const state = (game.gameState ?? "").toUpperCase();
   const hasScore = game.awayScore !== null && game.homeScore !== null;
   const score = hasScore ? `${game.awayScore} — ${game.homeScore}` : null;
-  if (state === "FINAL" || state === "COMPLETED") return { label: "FINAL", detail: hideScores ? "ネタバレ防止中 · 結果は隠しています" : "公式スコアを確認済み", score: hideScores ? null : score };
-  if (state.includes("LIVE") || state.includes("INGAME") || state.includes("IN_PROGRESS") || state.includes("HALFTIME")) return { label: "LIVE", detail: hideScores ? "ネタバレ防止中 · スコア非表示" : "公式スコアを更新中", score: hideScores ? null : score };
+  
+  // FINAL, FINAL/OT, COMPLETED などのあらゆる試合終了表記を確実に FINAL として判定
+  if (state.includes("FINAL") || state === "COMPLETED") {
+    return { label: "FINAL", detail: hideScores ? "ネタバレ防止中 · 結果は隠しています" : "公式スコアを確認済み", score: hideScores ? null : score };
+  }
+  
+  if (state.includes("LIVE") || state.includes("INGAME") || state.includes("IN_PROGRESS") || state.includes("HALFTIME")) {
+    return { label: "LIVE", detail: hideScores ? "ネタバレ防止中 · スコア非表示" : "公式スコアを更新中", score: hideScores ? null : score };
+  }
+  
   const hoursUntil = (new Date(game.kickoffAt).getTime() - Date.now()) / 3_600_000;
   return { label: hoursUntil <= 30 ? "GAME DAY" : "UPCOMING", detail: hoursUntil <= 30 ? "" : "試合当日の公式更新を待っています", score: hideScores ? null : score };
 }
@@ -185,7 +193,7 @@ export function OfficialGameNotes({ favorite, snapshot }: { favorite: FavoriteTe
     { label: "AVAILABILITY WATCH", title: snapshot?.injuries[0]?.title ?? "NO NEW INJURY UPDATE", copy: snapshot?.injuries[0] ? `${snapshot.injuries[0].sourceName} · ${sourceTime(snapshot.injuries[0].publishedAt)} JST` : "最新のNFL公式・チーム公式の負傷情報を確認中です。", url: snapshot?.injuries[0]?.sourceUrl },
     { label: "ROSTER PULSE", title: snapshot?.roster.length ? `${snapshot.roster.length} PLAYERS ON THE OFFICIAL ROSTER` : "OFFICIAL ROSTER UPDATE PENDING", copy: snapshot?.rosterCounts.length ? snapshot.rosterCounts.map((item) => `${item.status}: ${item.count}`).join(" · ") : "公式ロスターの次回更新を待っています。", url: snapshot?.roster[0]?.sourceUrl },
   ];
-  return <section id="briefing" data-layout-scope="briefing" className="scroll-mt-24"><div className="flex items-center gap-2 font-mono text-[10px] font-semibold tracking-[0.2em] text-[#64748b]"><span className="text-[#10213a]">03</span><span>OFFICIAL BRIEFING</span><span className="h-px flex-1 bg-[#d9d5cc]" /></div><div className="briefing-sheet mt-3 bg-white p-3 shadow-[0_10px_30px_rgba(34,42,53,.05)] ring-1 ring-[#ded8cc]"><div className="flex items-end justify-between gap-3"><div><h2 className="font-display text-xl font-extrabold tracking-[.08em]">GAME NOTES</h2><p className="mt-0.5 text-[11px] text-[#687587]">OFFICIAL SOURCES ONLY · UPDATED {sourceTime(snapshot?.lastUpdatedAt)} JST</p></div><FileText className="h-4 w-4 text-[#e85d2a]" /></div><div className="mt-3 grid gap-2">{notes.map((note, index) => <article key={note.label} className="briefing-row border border-[#e9e3d6] bg-[#fffdf8] p-3.5"><div className="flex gap-3"><span className="font-display text-2xl font-black leading-none text-[#e85d2a]">0{index + 1}</span><div className="min-w-0 flex-1"><p className="font-mono text-[9px] font-bold tracking-[.15em] text-[#64748b]">{note.label}</p><h3 className="mt-1 font-display text-base font-bold leading-tight tracking-wide">{note.title}</h3><p className="mt-1.5 text-[12px] leading-[1.45] text-[#526173]">{note.copy}</p>{note.url ? <a href={note.url} target="_blank" rel="noreferrer" className="mt-2 inline-flex items-center gap-1 text-[10px] font-bold underline decoration-[#e85d2a] decoration-2 underline-offset-3">OFFICIAL SOURCE <ArrowUpRight className="h-3 w-3" /></a> : <p className="mt-2 font-mono text-[9px] text-[#9a7560]">SOURCE LINK AVAILABLE AFTER NEXT OFFICIAL FETCH</p>}</div></div></article>)}</div>{!snapshot?.lastUpdatedAt && <div className="mt-3 border border-dashed border-[#d7d1c4] bg-[#fffdf8] p-3 text-[11px] text-[#687587]"><CircleAlert className="mr-1 inline h-3.5 w-3.5 text-[#e85d2a]" />公式データの初回取得を待っています。固定の試合分析は表示しません。</div>}</div></section>;
+  return <section id="briefing" data-layout-scope="briefing" className="scroll-mt-24"><div className="flex items-center gap-2 font-mono text-[10px] font-semibold tracking-[0.2em] text-[#64748b]"><span className="text-[#10213a]">03</span><span>OFFICIAL BRIEFING</span><span className="h-px flex-1 bg-[#d9d5cc]" /></div><div className="briefing-sheet mt-3 bg-white p-3 shadow-[0_10px_30px_rgba(34,42,53,.05)] ring-1 ring-[#ded8cc]"><div className="flex items-end justify-between gap-3"><div><h2 className="font-display text-xl font-extrabold tracking-[.08em]">GAME NOTES</h2><p className="mt-0.5 text-[11px] text-[#687587]">OFFICIAL SOURCES ONLY · UPDATED {sourceTime(snapshot?.lastUpdatedAt)} JST</p></div><FileText className="h-4 w-4 text-[#e85d2a]" /></div><div className="mt-3 grid gap-2">{notes.map((note, index) => <article key={note.label} className="briefing-row border border-[#e9e3d6] bg-[#fffdf8] p-3.5"><div className="flex gap-3"><span className="font-display text-2xl font-black leading-none text-[#e85d2a]">0{index + 1}</span><div className="min-w-0 flex-1"><p className="font-mono text-[9px] font-bold tracking-[.15em] text-[#64748b]">note.label</p><h3 className="mt-1 font-display text-base font-bold leading-tight tracking-wide">{note.title}</h3><p className="mt-1.5 text-[12px] leading-[1.45] text-[#526173]">{note.copy}</p>{note.url ? <a href={note.url} target="_blank" rel="noreferrer" className="mt-2 inline-flex items-center gap-1 text-[10px] font-bold underline decoration-[#e85d2a] decoration-2 underline-offset-3">OFFICIAL SOURCE <ArrowUpRight className="h-3 w-3" /></a> : <p className="mt-2 font-mono text-[9px] text-[#9a7560]">SOURCE LINK AVAILABLE AFTER NEXT OFFICIAL FETCH</p>}</div></div></article>)}</div>{!snapshot?.lastUpdatedAt && <div className="mt-3 border border-dashed border-[#d7d1c4] bg-[#fffdf8] p-3 text-[11px] text-[#687587]"><CircleAlert className="mr-1 inline h-3.5 w-3.5 text-[#e85d2a]" />公式データの初回取得を待っています。固定の試合分析は表示しません。</div>}</div></section>;
 }
 
 export function OfficialStatusRadar({ favorite, snapshot, loading }: { favorite: FavoriteTeam; snapshot?: TeamSnapshot; loading: boolean }) {
