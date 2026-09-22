@@ -21,9 +21,38 @@ function RouteLoading() {
 
 function Router() {
   // make sure to consider if you need authentication for certain routes
-  return <Suspense fallback={<RouteLoading />}><Switch><Route path="/" component={Home} /><Route path="/atlas" component={Atlas} /><Route path="/atlas/" component={Atlas} /><Route path="/coaching-tree" component={CoachingTree} /><Route path="/coaching-tree/" component={CoachingTree} /><Route path="/fieldline/admin" component={FieldlineAdmin} /><Route path="/fieldline/admin/" component={FieldlineAdmin} /><Route path="/fieldline" component={Fieldline} /><Route path="/fieldline/" component={Fieldline} /><Route path="/playoffs" component={PlayoffMachine} /><Route path="/playoffs/" component={PlayoffMachine} /><Route path="/404" component={NotFound} /><Route component={NotFound} /></Switch></Suspense>;
+  return (
+    <Suspense fallback={<RouteLoading />}>
+      <Switch>
+        <Route path="/" component={Home} />
+        <Route path="/atlas" component={Atlas} />
+        <Route path="/atlas/" component={Atlas} />
+        <Route path="/coaching-tree" component={CoachingTree} />
+        <Route path="/coaching-tree/" component={CoachingTree} />
+        <Route path="/fieldline/admin" component={FieldlineAdmin} />
+        <Route path="/fieldline/admin/" component={FieldlineAdmin} />
+        <Route path="/fieldline" component={Fieldline} />
+        <Route path="/fieldline/" component={Fieldline} />
+        <Route path="/simulator" component={PlayoffMachine} />
+        <Route path="/simulator/" component={PlayoffMachine} />
+        <Route path="/playoffs" component={PlayoffMachine} />
+        <Route path="/playoffs/" component={PlayoffMachine} />
+        <Route path="/404" component={NotFound} />
+        <Route component={NotFound} />
+      </Switch>
+    </Suspense>
+  );
 }
 
 export default function App() {
-  return <ErrorBoundary><ThemeProvider defaultTheme="light"><TooltipProvider><Toaster richColors position="top-center" /><Router /></TooltipProvider></ThemeProvider></ErrorBoundary>;
+  return (
+    <ErrorBoundary>
+      <ThemeProvider defaultTheme="light">
+        <TooltipProvider>
+          <Toaster richColors position="top-center" />
+          <Router />
+        </TooltipProvider>
+      </ThemeProvider>
+    </ErrorBoundary>
+  );
 }
