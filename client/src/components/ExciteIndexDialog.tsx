@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { ArrowUpRight, Flame, Loader2, Sparkles, Star, Trophy, Tv, X } from "lucide-react";
+import { ArrowUpRight, Flame, Loader2, Star, Trophy, Tv } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { getTeamByCode } from "@/lib/nflTeams";
 import {
@@ -14,6 +14,15 @@ interface ExciteIndexDialogProps {
   onClose: () => void;
   season?: number;
   initialWeekLabel?: string;
+}
+
+/** 週の表記を「WEEK 1」から「Wk1」のようにコンパクト化 */
+function formatWeekDisplay(weekStr: string): string {
+  const match = weekStr.match(/(?:week|wk)\s*(\d+)/i);
+  if (match) {
+    return `Wk${match[1]}`;
+  }
+  return weekStr;
 }
 
 /** 熱狂度スコアに応じた見どころタグの生成（ネタバレなし） */
@@ -79,7 +88,17 @@ export function ExciteIndexDialog({
     { enabled: open }
   );
 
-  const activeWeek = selectedWeek ?? data?.weekLabel ?? "";
+  // プレシーズンを除外し、レギュラーシーズンのみを抽出
+  const regularWeeks = (data?.availableWeeks ?? []).filter(
+    (w) => !/preseason/i.test(w)
+  );
+
+  const activeWeek =
+    selectedWeek ??
+    (data?.weekLabel && !/preseason/i.test(data.weekLabel)
+      ? data.weekLabel
+      : regularWeeks[0] ?? "");
+
   const completedGames = (data?.games ?? []).filter((g) => g.exciteIndex !== null);
   const top3Games = completedGames.slice(0, 3);
   const remainingGames = completedGames.slice(3);
@@ -89,7 +108,7 @@ export function ExciteIndexDialog({
       <DialogContent className="max-h-[90vh] w-full max-w-2xl overflow-y-auto border border-[#ded8cc] bg-[#0a1931] p-0 text-[#fffaf0] shadow-2xl sm:rounded-[20px]">
         {/* ヘッダーエリア */}
         <div className="relative border-b border-white/10 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-[#1d3557] to-[#0a1931] p-5 sm:p-6">
-          <div className="flex items-start justify-between gap-4">
+          <div className="flex items-start justify-between gap-4 pr-8">
             <div>
               <div className="flex items-center gap-1.5 font-mono text-[10px] font-bold tracking-[.18em] text-[#ffc1a7]">
                 <Flame className="h-3.5 w-3.5 text-[#e85d2a]" />
@@ -102,20 +121,12 @@ export function ExciteIndexDialog({
                 ネタバレ完全防止。点差や勝敗を隠したまま、試合の白熱度・ドラマ性だけを数値化しています。
               </DialogDescription>
             </div>
-            <button
-              type="button"
-              onClick={onClose}
-              aria-label="閉じる"
-              className="rounded-full bg-white/10 p-1.5 text-[#d9e3f3] transition hover:bg-white/20 hover:text-white"
-            >
-              <X className="h-4 w-4" />
-            </button>
           </div>
 
-          {/* 週選択タブ */}
-          {data?.availableWeeks && data.availableWeeks.length > 0 && (
+          {/* 週選択タブ（プレシーズンを除外、Wk表記） */}
+          {regularWeeks.length > 0 && (
             <div className="mt-4 flex flex-wrap gap-1.5 border-t border-white/10 pt-3">
-              {data.availableWeeks.map((week) => (
+              {regularWeeks.map((week) => (
                 <button
                   key={week}
                   type="button"
@@ -126,7 +137,7 @@ export function ExciteIndexDialog({
                       : "bg-white/10 text-[#d9e3f3] hover:bg-white/20"
                   }`}
                 >
-                  {week}
+                  {formatWeekDisplay(week)}
                 </button>
               ))}
             </div>
@@ -220,7 +231,7 @@ export function ExciteIndexDialog({
                           </div>
                         </div>
 
-                        {/* 下部アクション（ハイライト等） */}
+                        {/* 下部アクション */}
                         <div className="mt-3 flex items-center justify-between border-t border-white/10 pt-2.5">
                           <span className="font-mono text-[8px] font-medium text-[#a5b3c9]">
                             {game.exciteIndex?.stars === 5
