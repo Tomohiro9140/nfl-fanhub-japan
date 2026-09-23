@@ -78,15 +78,14 @@ export function ExciteIndexDialog({
         <div className="relative border-b border-white/10 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-[#1d3557] to-[#0a1931] p-5 sm:p-6">
           <div className="flex items-start justify-between gap-4 pr-8">
             <div>
-              <div className="flex items-center gap-1.5 font-mono text-[10px] font-bold tracking-[.18em] text-[#ffc1a7]">
-                <Flame className="h-3.5 w-3.5 text-[#e85d2a]" />
-                EXCITE INDEX / HEAT MAP
-              </div>
-              <DialogTitle className="mt-1 font-display text-2xl font-black tracking-wide text-white">
-                今週の注目ゲーム・熱狂度ランキング
+              {/* EXCITE INDEX / HEAT MAP をタイトル表記に格上げ（スマホ横幅に最適化） */}
+              <DialogTitle className="flex items-center gap-2 font-display text-[19px] sm:text-2xl font-black tracking-wide text-white">
+                <Flame className="h-5 w-5 text-[#e85d2a] shrink-0" />
+                <span>EXCITE INDEX / HEAT MAP</span>
               </DialogTitle>
-              <DialogDescription className="mt-1 text-xs text-[#d9e3f3]">
-                ネタバレ完全防止。点差や勝敗を隠したまま、試合の白熱度・ドラマ性だけを数値化しています。
+              {/* 指定された「ネタバレ完全防止。点差や勝敗を隠したまま、」を削除 */}
+              <DialogDescription className="mt-1.5 text-xs text-[#d9e3f3] leading-relaxed">
+                試合の白熱度・ドラマ性だけを数値化しています。
               </DialogDescription>
             </div>
           </div>
