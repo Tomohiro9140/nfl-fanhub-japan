@@ -79,6 +79,7 @@ export default function PlayoffMachine() {
   const [mainViewMode, setMainViewMode] = useState<"playoffs" | "draft">("playoffs");
   const [activeTab, setActiveTab] = useState<"simulator" | "rooting">("simulator");
   const [explanationModalSeed, setExplanationModalSeed] = useState<PlayoffSeed | null>(null);
+  const [showLowGuides, setShowLowGuides] = useState<boolean>(false);
 
   // 一括シミュレーションのステート
   const [presetDropdownOpen, setPresetDropdownOpen] = useState(false);
@@ -109,7 +110,7 @@ export default function PlayoffMachine() {
     }
   }, [officialScheduleQuery.data]);
 
-  // 未消化試合の勝敗個別トグル（一括プリセット適用後も何度でも自由に変更可能）
+  // 未消化試合の勝敗個別トグル
   const toggleOutcome = (gameId: number, target: "home" | "away" | "tie") => {
     setGames((prev) =>
       prev.map((g) => {
@@ -317,7 +318,7 @@ export default function PlayoffMachine() {
       sosMap[t.code] = totalOpp > 0 ? (oppWins + oppTies * 0.5) / totalOpp : 0.5;
     }
 
-    // 弱い順（勝率が低い順、同率ならSOSが低い＝弱い日程だった順）にソート
+    // 弱い順にソート
     const sorted = [...nonPlayoff].sort((a, b) => {
       if (Math.abs(a.record.pct - b.record.pct) >= 0.0001) {
         return a.record.pct - b.record.pct;
@@ -400,11 +401,24 @@ export default function PlayoffMachine() {
     return { inTheHuntTeams: inTheHunt, eliminatedTeams: eliminated };
   }, [currentConfStandings]);
 
-  // 週間応援ガイド
+  // 週間応援ガイドの生成と重要度別の分類
   const rootingGuide = useMemo(
     () => generateRootingGuide(focusTeam, games, selectedWeek),
     [focusTeam, games, selectedWeek]
   );
+
+  const { importantGuides, lowGuides } = useMemo(() => {
+    const important: typeof rootingGuide = [];
+    const low: typeof rootingGuide = [];
+    for (const item of rootingGuide) {
+      if (item.importance === "LOW") {
+        low.push(item);
+      } else {
+        important.push(item);
+      }
+    }
+    return { importantGuides: important, lowGuides: low };
+  }, [rootingGuide]);
 
   const focusTeamInfo = NFL_TEAMS[focusTeam];
   const weekGames = useMemo(
@@ -414,7 +428,6 @@ export default function PlayoffMachine() {
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 pb-16">
-      {/* ナビゲーションの呼び出し（SIMULATOR） */}
       <EmbeddedAppNav current="SIMULATOR" />
 
       {/* ヘッダー: アイコンとタイトル */}
@@ -429,14 +442,13 @@ export default function PlayoffMachine() {
         </div>
       </header>
 
-      {/* コントロールバー: 応援チーム、一括シミュレーション、Week選択、リセット */}
+      {/* コントロールバー: 応援チーム選択 ＆ 一括シミュレーション（Week選択は対戦カード側へ移動してスッキリ整理） */}
       <div className="border-b border-slate-200 bg-white shadow-xs">
-        <div className="container mx-auto flex flex-col gap-4 px-4 py-4 sm:px-6 md:flex-row md:items-end md:justify-between">
-          {/* 応援チーム選択 ＆ 一括シミュレーション */}
-          <div className="flex flex-wrap items-end gap-3">
+        <div className="container mx-auto flex flex-col gap-3 px-4 py-3 sm:px-6 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-wrap items-center gap-3">
             {/* 応援チーム選択（ABC順） */}
             <div className="w-full sm:w-56">
-              <Label className="text-xs font-semibold text-slate-600">あなたの応援チーム（Focus）</Label>
+              <Label className="text-[11px] font-semibold text-slate-500 uppercase">あなたの応援チーム（Focus）</Label>
               <Select
                 value={focusTeam}
                 onValueChange={(val) => {
@@ -464,7 +476,7 @@ export default function PlayoffMachine() {
 
             {/* 一括シミュレーション ドロップダウン */}
             <div className="relative">
-              <Label className="text-xs font-semibold text-slate-600">一括シミュレーション</Label>
+              <Label className="text-[11px] font-semibold text-slate-500 uppercase">一括シミュレーション</Label>
               <div className="mt-1 flex items-center gap-1.5">
                 <Button
                   type="button"
@@ -543,49 +555,15 @@ export default function PlayoffMachine() {
               )}
             </div>
           </div>
-
-          {/* 対象 Week 選択 ＆ 予想リセットボタン */}
-          <div className="flex-1 md:max-w-xl">
-            <div className="flex items-center justify-between">
-              <Label className="text-xs font-semibold text-slate-600">対象 Week</Label>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-6 px-2 text-[11px] text-slate-500 hover:text-[#e85d2a]"
-                onClick={resetToOfficial}
-                title="シミュレーションした勝敗を消去し、初期状態に戻します"
-              >
-                <RotateCcw className="mr-1 h-3 w-3" />
-                予想リセット
-              </Button>
-            </div>
-            <div className="mt-1 flex gap-1 overflow-x-auto pb-1">
-              {Array.from({ length: 18 }, (_, i) => i + 1).map((w) => (
-                <button
-                  key={w}
-                  type="button"
-                  onClick={() => setSelectedWeek(w)}
-                  className={`flex h-8 min-w-[2.2rem] items-center justify-center rounded-lg text-xs font-semibold transition-all ${
-                    selectedWeek === w
-                      ? "bg-[#e85d2a] text-white shadow-xs"
-                      : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-                  }`}
-                >
-                  W{w}
-                </button>
-              ))}
-            </div>
-          </div>
         </div>
       </div>
 
       {/* メインレイアウト */}
       <main className="container mx-auto mt-6 px-4 sm:px-6">
         <div className="grid gap-6 lg:grid-cols-12">
-          {/* 左カラム: シード順位表 ⇔ ドラフト指名順（タブ切り替え） */}
+          {/* 左カラム: シード順位表 ⇔ ドラフト指名順 */}
           <div className="space-y-6 lg:col-span-7">
             <Card className="border-slate-200 shadow-xs">
-              {/* カードヘッダー: プレーオフ ⇔ ドラフト順位の切り替えタブ */}
               <CardHeader className="flex flex-col gap-3 border-b border-slate-100 pb-3 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-100 p-1">
                   <button
@@ -614,7 +592,6 @@ export default function PlayoffMachine() {
                   </button>
                 </div>
 
-                {/* プレーオフ表示時の AFC / NFC 切り替えボタン */}
                 {mainViewMode === "playoffs" && (
                   <div className="flex rounded-lg border border-slate-200 bg-slate-100 p-1">
                     {(["AFC", "NFC"] as Conference[]).map((conf) => (
@@ -635,7 +612,6 @@ export default function PlayoffMachine() {
 
               <CardContent className="p-0">
                 {mainViewMode === "playoffs" ? (
-                  /* 1. プレーオフシード表 */
                   <div>
                     {/* 地区首位（#1〜#4） */}
                     <div className="border-b border-slate-100 bg-slate-50/70 px-4 py-2 text-[11px] font-bold tracking-wider text-slate-500">
@@ -709,7 +685,6 @@ export default function PlayoffMachine() {
                     )}
                   </div>
                 ) : (
-                  /* 2. Tankathon連動 ドラフト順位テーブル (#1〜#18) */
                   <div>
                     <div className="border-b border-slate-100 bg-slate-50/70 px-4 py-2.5 text-[11px] font-bold text-slate-600 flex items-center justify-between">
                       <span>2027 NFL DRAFT ORDER (非プレーオフ18チーム)</span>
@@ -783,8 +758,47 @@ export default function PlayoffMachine() {
             </Card>
           </div>
 
-          {/* 右カラム: 勝敗トグル & 応援ガイド */}
-          <div className="space-y-6 lg:col-span-5">
+          {/* 右カラム: 対象Weekセレクター ＆ 公式対戦カード（2列表示） ＆ 応援ガイド */}
+          <div className="space-y-4 lg:col-span-5">
+            {/* 1. 対象Weekセレクター ＆ 予想リセット（対戦カードの直上に統合） */}
+            <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-xs">
+              <div className="flex items-center justify-between pb-2">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs font-bold text-slate-800">対象 Week 選択</span>
+                  <span className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] font-bold text-slate-600">
+                    Week {selectedWeek}
+                  </span>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 px-2 text-[11px] text-slate-500 hover:text-[#e85d2a]"
+                  onClick={resetToOfficial}
+                  title="シミュレーションした勝敗を消去し、初期状態に戻します"
+                >
+                  <RotateCcw className="mr-1 h-3 w-3" />
+                  予想リセット
+                </Button>
+              </div>
+              <div className="flex gap-1 overflow-x-auto pb-1">
+                {Array.from({ length: 18 }, (_, i) => i + 1).map((w) => (
+                  <button
+                    key={w}
+                    type="button"
+                    onClick={() => setSelectedWeek(w)}
+                    className={`flex h-8 min-w-[2.2rem] shrink-0 items-center justify-center rounded-lg text-xs font-semibold transition-all ${
+                      selectedWeek === w
+                        ? "bg-[#e85d2a] text-white shadow-xs font-bold"
+                        : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                    }`}
+                  >
+                    W{w}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* タブ切り替え: 試合一覧 ⇔ 応援ガイド */}
             <div className="flex rounded-xl border border-slate-200 bg-white p-1 shadow-xs">
               <button
                 type="button"
@@ -812,7 +826,7 @@ export default function PlayoffMachine() {
               </button>
             </div>
 
-            {/* タブ 1: 試合一覧 & シミュレーショントグル */}
+            {/* タブ 1: 試合一覧（1段2試合の2列グリッドでスマホでもコンパクトに表示） */}
             {activeTab === "simulator" && (
               <Card className="border-slate-200 shadow-xs">
                 <CardHeader className="border-b border-slate-100 pb-3">
@@ -821,11 +835,11 @@ export default function PlayoffMachine() {
                       Week {selectedWeek} 公式対戦カード
                     </CardTitle>
                     <span className="text-[11px] text-slate-400">
-                      未消化カードをタップして勝敗予想
+                      タップして勝敗予想
                     </span>
                   </div>
                 </CardHeader>
-                <CardContent className="space-y-3 p-4">
+                <CardContent className="p-3">
                   {officialScheduleQuery.isLoading ? (
                     <div className="py-8 text-center text-xs text-slate-400">
                       公式日程データを読み込み中...
@@ -835,85 +849,87 @@ export default function PlayoffMachine() {
                       この週に対戦カードはありません。
                     </div>
                   ) : (
-                    weekGames.map((game) => (
-                      <div
-                        key={game.id}
-                        className={`flex items-center justify-between rounded-xl border p-2.5 shadow-xs transition-all ${
-                          game.isFinished
-                            ? "border-slate-200 bg-slate-50/70"
-                            : "border-slate-200 bg-white hover:border-slate-300"
-                        }`}
-                      >
-                        {/* アウェーチーム */}
-                        <button
-                          type="button"
-                          disabled={game.isFinished}
-                          onClick={() => toggleOutcome(game.id, "away")}
-                          className={`flex flex-1 items-center gap-2 rounded-lg p-2 text-left transition-all ${
-                            game.outcome === "away"
-                              ? "bg-emerald-600 text-white font-bold shadow-xs"
-                              : game.isFinished
-                              ? "opacity-60 cursor-not-allowed text-slate-700"
-                              : "hover:bg-slate-100 text-slate-800"
+                    <div className="grid grid-cols-2 gap-2">
+                      {weekGames.map((game) => (
+                        <div
+                          key={game.id}
+                          className={`flex flex-col justify-between rounded-xl border p-2 transition-all ${
+                            game.isFinished
+                              ? "border-slate-200 bg-slate-50/70"
+                              : "border-slate-200 bg-white shadow-xs hover:border-slate-300"
                           }`}
                         >
-                          <MemoTeamMark code={game.awayTeam} size="sm" />
-                          <div>
-                            <p className="text-xs">{game.awayTeam}</p>
-                            <p className="text-[9px] opacity-75">Away</p>
-                          </div>
-                        </button>
+                          {/* アウェーチーム */}
+                          <button
+                            type="button"
+                            disabled={game.isFinished}
+                            onClick={() => toggleOutcome(game.id, "away")}
+                            className={`flex items-center justify-between rounded-lg px-2 py-1.5 text-left transition-all ${
+                              game.outcome === "away"
+                                ? "bg-emerald-600 text-white font-bold shadow-xs"
+                                : game.isFinished
+                                ? "opacity-60 cursor-not-allowed text-slate-700"
+                                : "hover:bg-slate-100 text-slate-800"
+                            }`}
+                          >
+                            <div className="flex items-center gap-1.5 min-w-0">
+                              <MemoTeamMark code={game.awayTeam} size="sm" />
+                              <span className="text-xs font-bold truncate">{game.awayTeam}</span>
+                            </div>
+                            <span className="text-[9px] opacity-75 shrink-0">Away</span>
+                          </button>
 
-                        {/* ステータス */}
-                        <div className="px-2 text-center">
-                          {game.isFinished ? (
-                            <span className="flex items-center gap-1 rounded bg-slate-200 px-1.5 py-0.5 text-[9px] font-bold text-slate-600">
-                              <Lock className="h-2.5 w-2.5" />
-                              確定
-                            </span>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() => toggleOutcome(game.id, "tie")}
-                              className={`rounded px-1.5 py-0.5 text-[10px] font-bold transition-all ${
-                                game.outcome === "tie"
-                                  ? "bg-amber-500 text-white"
-                                  : "text-slate-400 hover:bg-slate-100"
-                              }`}
-                              title="引き分けにする"
-                            >
-                              {game.outcome === "tie" ? "引分" : "vs"}
-                            </button>
-                          )}
+                          {/* 中央のステータス/VS/引分 */}
+                          <div className="my-1 flex items-center justify-center">
+                            {game.isFinished ? (
+                              <span className="flex items-center gap-1 rounded bg-slate-200 px-1.5 py-0.5 text-[9px] font-bold text-slate-600">
+                                <Lock className="h-2.5 w-2.5" />
+                                確定
+                              </span>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => toggleOutcome(game.id, "tie")}
+                                className={`rounded px-2 py-0.5 text-[10px] font-bold transition-all ${
+                                  game.outcome === "tie"
+                                    ? "bg-amber-500 text-white"
+                                    : "text-slate-400 hover:bg-slate-100"
+                                }`}
+                                title="引き分けにする"
+                              >
+                                {game.outcome === "tie" ? "引分" : "vs"}
+                              </button>
+                            )}
+                          </div>
+
+                          {/* ホームチーム */}
+                          <button
+                            type="button"
+                            disabled={game.isFinished}
+                            onClick={() => toggleOutcome(game.id, "home")}
+                            className={`flex items-center justify-between rounded-lg px-2 py-1.5 text-left transition-all ${
+                              game.outcome === "home"
+                                ? "bg-emerald-600 text-white font-bold shadow-xs"
+                                : game.isFinished
+                              ? "opacity-60 cursor-not-allowed text-slate-700"
+                              : "hover:bg-slate-100 text-slate-800"
+                            }`}
+                          >
+                            <div className="flex items-center gap-1.5 min-w-0">
+                              <MemoTeamMark code={game.homeTeam} size="sm" />
+                              <span className="text-xs font-bold truncate">{game.homeTeam}</span>
+                            </div>
+                            <span className="text-[9px] opacity-75 shrink-0">Home</span>
+                          </button>
                         </div>
-
-                        {/* ホームチーム */}
-                        <button
-                          type="button"
-                          disabled={game.isFinished}
-                          onClick={() => toggleOutcome(game.id, "home")}
-                          className={`flex flex-1 items-center justify-end gap-2 rounded-lg p-2 text-right transition-all ${
-                            game.outcome === "home"
-                              ? "bg-emerald-600 text-white font-bold shadow-xs"
-                              : game.isFinished
-                              ? "opacity-60 cursor-not-allowed text-slate-700"
-                              : "hover:bg-slate-100 text-slate-800"
-                          }`}
-                        >
-                          <div>
-                            <p className="text-xs">{game.homeTeam}</p>
-                            <p className="text-[9px] opacity-75">Home</p>
-                          </div>
-                          <MemoTeamMark code={game.homeTeam} size="sm" />
-                        </button>
-                      </div>
-                    ))
+                      ))}
+                    </div>
                   )}
                 </CardContent>
               </Card>
             )}
 
-            {/* タブ 2: 週間応援ガイド */}
+            {/* タブ 2: 週間応援ガイド（重要度LOWをデフォルト折りたたみ） */}
             {activeTab === "rooting" && (
               <Card className="border-slate-200 shadow-xs">
                 <CardHeader className="border-b border-slate-100 pb-3">
@@ -930,46 +946,47 @@ export default function PlayoffMachine() {
                       この週に推奨できる試合カードはありません。
                     </div>
                   ) : (
-                    rootingGuide.map((item) => {
-                      const preferredTeam = item.preferredWinner === "home" ? item.homeTeam : item.awayTeam;
-                      const preferredInfo = NFL_TEAMS[preferredTeam];
-
-                      const badgeColor =
-                        item.importance === "CRITICAL"
-                          ? "bg-rose-100 text-rose-800 border-rose-300"
-                          : item.importance === "HIGH"
-                          ? "bg-amber-100 text-amber-800 border-amber-300"
-                          : item.importance === "MEDIUM"
-                          ? "bg-sky-100 text-sky-800 border-sky-300"
-                          : "bg-slate-100 text-slate-600 border-slate-200";
-
-                      return (
-                        <div
-                          key={item.gameId}
-                          className="rounded-xl border border-slate-200 bg-white p-3 shadow-xs space-y-2"
-                        >
-                          <div className="flex items-center justify-between">
-                            <span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold ${badgeColor}`}>
-                              重要度: {item.importance}
-                            </span>
-                            <span className="text-[11px] text-slate-400">
-                              {item.awayTeam} @ {item.homeTeam}
-                            </span>
-                          </div>
-
-                          <div className="flex items-center gap-2">
-                            <MemoTeamMark code={preferredTeam} size="sm" />
-                            <div className="text-xs font-bold text-slate-800">
-                              <span className="text-[#e85d2a]">{preferredInfo?.name ?? preferredTeam}</span> の勝利を応援！
-                            </div>
-                          </div>
-
-                          <p className="text-xs leading-relaxed text-slate-600">
-                            {item.reasonJa}
-                          </p>
+                    <>
+                      {importantGuides.length === 0 && (
+                        <div className="py-4 text-center text-xs text-slate-500">
+                          この週に重要度「中」以上の推奨試合はありません。
                         </div>
-                      );
-                    })
+                      )}
+
+                      {/* 重要度 CRITICAL / HIGH / MEDIUM の試合カード（常に表示） */}
+                      {importantGuides.map((item) => (
+                        <RootingGuideCard key={item.gameId} item={item} />
+                      ))}
+
+                      {/* 重要度 LOW の折りたたみアコーディオン */}
+                      {lowGuides.length > 0 && (
+                        <div className="pt-2">
+                          <button
+                            type="button"
+                            onClick={() => setShowLowGuides((prev) => !prev)}
+                            className="flex w-full items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-xs font-bold text-slate-600 hover:bg-slate-100 transition-colors"
+                          >
+                            <span>その他の試合（重要度 LOW: {lowGuides.length}件）</span>
+                            <div className="flex items-center gap-1 text-[11px] text-slate-400">
+                              <span>{showLowGuides ? "閉じる" : "表示する"}</span>
+                              <ChevronDown
+                                className={`h-4 w-4 transition-transform duration-200 ${
+                                  showLowGuides ? "rotate-180" : ""
+                                }`}
+                              />
+                            </div>
+                          </button>
+
+                          {showLowGuides && (
+                            <div className="mt-2.5 space-y-3 animate-in fade-in duration-200">
+                              {lowGuides.map((item) => (
+                                <RootingGuideCard key={item.gameId} item={item} />
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </>
                   )}
                 </CardContent>
               </Card>
@@ -1046,6 +1063,46 @@ export default function PlayoffMachine() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function RootingGuideCard({
+  item,
+}: {
+  item: ReturnType<typeof generateRootingGuide>[number];
+}) {
+  const preferredTeam = item.preferredWinner === "home" ? item.homeTeam : item.awayTeam;
+  const preferredInfo = NFL_TEAMS[preferredTeam];
+
+  const badgeColor =
+    item.importance === "CRITICAL"
+      ? "bg-rose-100 text-rose-800 border-rose-300"
+      : item.importance === "HIGH"
+      ? "bg-amber-100 text-amber-800 border-amber-300"
+      : item.importance === "MEDIUM"
+      ? "bg-sky-100 text-sky-800 border-sky-300"
+      : "bg-slate-100 text-slate-600 border-slate-200";
+
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-xs space-y-2">
+      <div className="flex items-center justify-between">
+        <span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold ${badgeColor}`}>
+          重要度: {item.importance}
+        </span>
+        <span className="text-[11px] text-slate-400">
+          {item.awayTeam} @ {item.homeTeam}
+        </span>
+      </div>
+
+      <div className="flex items-center gap-2">
+        <MemoTeamMark code={preferredTeam} size="sm" />
+        <div className="text-xs font-bold text-slate-800">
+          <span className="text-[#e85d2a]">{preferredInfo?.name ?? preferredTeam}</span> の勝利を応援！
+        </div>
+      </div>
+
+      <p className="text-xs leading-relaxed text-slate-600">{item.reasonJa}</p>
     </div>
   );
 }
