@@ -3653,13 +3653,22 @@ var metricRules = [
 ];
 function makeRanks(summaries) {
   for (const [metric, direction] of metricRules) {
-    summaries.filter((item) => item.metrics[metric] !== null).sort((a, b) => {
+    const valid = summaries.filter((item) => item.metrics[metric] !== null).sort((a, b) => {
       const left = a.metrics[metric];
       const right = b.metrics[metric];
       return direction === "desc" ? right - left : left - right;
-    }).forEach((entry, index2) => {
-      entry.ranks[metric] = index2 + 1;
     });
+    let currentRank = 1;
+    for (let i = 0; i < valid.length; i++) {
+      if (i > 0) {
+        const prevVal = valid[i - 1].metrics[metric];
+        const currVal = valid[i].metrics[metric];
+        if (Math.abs(currVal - prevVal) >= 1e-5) {
+          currentRank = i + 1;
+        }
+      }
+      valid[i].ranks[metric] = currentRank;
+    }
   }
 }
 async function getFieldlineSeasons() {
