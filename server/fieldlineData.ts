@@ -160,13 +160,32 @@ const metricRules: [string, "asc" | "desc"][] = [
   ["fieldGoalPct", "desc"], ["extraPointPct", "desc"], ["puntInside20Pct", "desc"], ["penalties", "asc"],
 ];
 
+/**
+ * スポーツ統計の標準ルール（Standard Competition Ranking）に基づいて順位を計算。
+ * 数値が同等の場合は同一順位（タイ）とし、次の順位は人数分スキップします。
+ * （浮動小数点演算の丸め誤差に対応するため、差が 0.00001 未満を同数と判定）
+ */
 function makeRanks(summaries: FieldlineSummary[]) {
   for (const [metric, direction] of metricRules) {
-    summaries.filter(item => item.metrics[metric] !== null).sort((a, b) => {
-      const left = a.metrics[metric] as number;
-      const right = b.metrics[metric] as number;
-      return direction === "desc" ? right - left : left - right;
-    }).forEach((entry, index) => { entry.ranks[metric] = index + 1; });
+    const valid = summaries
+      .filter((item) => item.metrics[metric] !== null)
+      .sort((a, b) => {
+        const left = a.metrics[metric] as number;
+        const right = b.metrics[metric] as number;
+        return direction === "desc" ? right - left : left - right;
+      });
+
+    let currentRank = 1;
+    for (let i = 0; i < valid.length; i++) {
+      if (i > 0) {
+        const prevVal = valid[i - 1].metrics[metric] as number;
+        const currVal = valid[i].metrics[metric] as number;
+        if (Math.abs(currVal - prevVal) >= 0.00001) {
+          currentRank = i + 1;
+        }
+      }
+      valid[i].ranks[metric] = currentRank;
+    }
   }
 }
 
@@ -276,7 +295,6 @@ export async function getFieldlineWeeks(season: number, team: string, venue: Fie
 
       let isBye = false;
       if (scheduleByWeek.size > 0) {
-        // 公式スケジュールが存在しない週のみが正規の Bye Week
         isBye = !schedule;
       } else {
         const games = statsByWeek.get(w) ?? 0;
