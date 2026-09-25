@@ -1,5 +1,5 @@
 import React, { useMemo, useRef, useState, useEffect } from "react";
-import { X, Trophy, Share2, Sparkles, RotateCcw } from "lucide-react";
+import { X, Trophy, Share2, RotateCcw } from "lucide-react";
 import { NFL_TEAMS } from "@/lib/tiebreaker/nflTeams";
 
 // ESPN CDN 略称マップ
@@ -71,7 +71,6 @@ function getTeamInfo(code: string) {
   };
 }
 
-// Canvas アスペクト比維持描画ヘルパー
 function drawImageContain(
   ctx: CanvasRenderingContext2D,
   img: HTMLImageElement,
@@ -117,9 +116,8 @@ export function PlayoffPredictionModal({ isOpen, onClose, afcSeeds, nfcSeeds }: 
   const afcSeedMap = useMemo(() => new Map(afcSeeds.map((s, i) => [s.team, i + 1])), [afcSeeds]);
   const nfcSeedMap = useMemo(() => new Map(nfcSeeds.map((s, i) => [s.team, i + 1])), [nfcSeeds]);
 
-  // 公式ロゴ画像 ＆ チームロゴの事前ロード
+  // 事前ロード
   useEffect(() => {
-    // 1. 大会公式ロゴ（WebP）
     const loadTournamentLogo = (key: "sb" | "afc" | "nfc", src: string) => {
       const img = new Image();
       img.src = src;
@@ -133,7 +131,6 @@ export function PlayoffPredictionModal({ isOpen, onClose, afcSeeds, nfcSeeds }: 
     loadTournamentLogo("afc", "/Afc_championship_logo.svg.webp");
     loadTournamentLogo("nfc", "/Nfc_championship_logo.svg.webp");
 
-    // 2. チームロゴ
     const allTeams = [...afcSeeds, ...nfcSeeds].map((s) => s.team);
     allTeams.forEach((code) => {
       if (!logoCache.current.has(code)) {
@@ -176,17 +173,6 @@ export function PlayoffPredictionModal({ isOpen, onClose, afcSeeds, nfcSeeds }: 
     return getDivisionalMatchups(nfcSeeds[0]?.team, winners, nfcSeedMap);
   }, [nfcSeeds, nfcWcWinners, nfcSeedMap]);
 
-  const autoFillHigherSeeds = () => {
-    if (afcSeeds.length < 4 || nfcSeeds.length < 4) return;
-    setAfcWcWinners({ 0: afcSeeds[1]?.team, 1: afcSeeds[2]?.team, 2: afcSeeds[3]?.team });
-    setNfcWcWinners({ 0: nfcSeeds[1]?.team, 1: nfcSeeds[2]?.team, 2: nfcSeeds[3]?.team });
-    setAfcDivWinners({ 0: afcSeeds[0]?.team, 1: afcSeeds[1]?.team });
-    setNfcDivWinners({ 0: nfcSeeds[0]?.team, 1: nfcSeeds[1]?.team });
-    setAfcChamp(afcSeeds[0]?.team);
-    setNfcChamp(nfcSeeds[0]?.team);
-    setSuperBowlChamp(afcSeeds[0]?.team);
-  };
-
   const resetAll = () => {
     setAfcWcWinners({});
     setNfcWcWinners({});
@@ -198,7 +184,7 @@ export function PlayoffPredictionModal({ isOpen, onClose, afcSeeds, nfcSeeds }: 
     setPreviewUrl(null);
   };
 
-  // Canvas 描画
+  // Canvas 描画（AFC左 / NFC右、ロゴ＆文字サイズアップ、余白最小化）
   const renderCanvas = () => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -211,10 +197,10 @@ export function PlayoffPredictionModal({ isOpen, onClose, afcSeeds, nfcSeeds }: 
     canvas.height = height;
 
     // 1. 深みのあるダークテクスチャ背景
-    ctx.fillStyle = "#0a0e17";
+    ctx.fillStyle = "#090d16";
     ctx.fillRect(0, 0, width, height);
 
-    // 百合の紋章透かしパターン
+    // 百合の紋章透かし
     ctx.fillStyle = "rgba(255, 255, 255, 0.015)";
     for (let x = 60; x < width; x += 100) {
       for (let y = 50; y < height; y += 100) {
@@ -226,34 +212,34 @@ export function PlayoffPredictionModal({ isOpen, onClose, afcSeeds, nfcSeeds }: 
       }
     }
 
-    // 2. カンファレンス透かし文字 (NFC / AFC)
+    // 2. カンファレンス透かし文字（左が AFC、右が NFC）
     ctx.fillStyle = "rgba(255, 255, 255, 0.05)";
     ctx.font = "900 130px 'Impact', sans-serif";
     ctx.textAlign = "center";
-    ctx.fillText("NFC", 320, 360);
-    ctx.fillText("AFC", 880, 360);
+    ctx.fillText("AFC", 320, 360);
+    ctx.fillText("NFC", 880, 360);
 
-    // 3. 【公式ロゴ描画】中央上部：SUPER BOWL 公式ロゴ
+    // 3. 【公式ロゴ】中央上部：SUPER BOWL 公式ロゴ
     const midX = width / 2;
     if (tournamentLogos.current.sb) {
-      drawImageContain(ctx, tournamentLogos.current.sb, midX - 110, 18, 220, 130);
+      drawImageContain(ctx, tournamentLogos.current.sb, midX - 115, 14, 230, 135);
     } else {
       ctx.fillStyle = "#ffffff";
       ctx.font = "900 32px 'Arial Black', sans-serif";
       ctx.fillText("SUPER BOWL", midX, 85);
     }
 
-    // 4. 【公式ロゴ描画】左右カンファレンス公式ロゴ
-    if (tournamentLogos.current.nfc) {
-      drawImageContain(ctx, tournamentLogos.current.nfc, 375, 150, 190, 85);
-    }
+    // 4. 【公式ロゴ】左右カンファレンスロゴ（左が AFC、右が NFC）
     if (tournamentLogos.current.afc) {
-      drawImageContain(ctx, tournamentLogos.current.afc, 635, 150, 190, 85);
+      drawImageContain(ctx, tournamentLogos.current.afc, 370, 148, 195, 88);
+    }
+    if (tournamentLogos.current.nfc) {
+      drawImageContain(ctx, tournamentLogos.current.nfc, 635, 148, 195, 88);
     }
 
-    // 5. 公式スタイルカード描画（チームロゴ ＋ チームカラー ＋ 白四角シードバッジ）
-    const cardW = 168;
-    const rowH = 32;
+    // 5. カード描画（幅180px、高さ36px/段、ロゴ28px、文字サイズアップ）
+    const cardW = 180;
+    const rowH = 36;
 
     const drawCard = (
       x: number,
@@ -265,18 +251,18 @@ export function PlayoffPredictionModal({ isOpen, onClose, afcSeeds, nfcSeeds }: 
       winner?: string
     ) => {
       ctx.save();
-      ctx.strokeStyle = "rgba(255, 255, 255, 0.3)";
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.35)";
       ctx.lineWidth = 1;
       ctx.strokeRect(x, y, cardW, rowH * 2);
 
       const renderTeamRow = (rowY: number, code?: string, seed?: number, isWinner?: boolean) => {
         if (!code) {
-          ctx.fillStyle = "rgba(15, 23, 42, 0.75)";
+          ctx.fillStyle = "rgba(15, 23, 42, 0.8)";
           ctx.fillRect(x, rowY, cardW, rowH);
           ctx.fillStyle = "rgba(255, 255, 255, 0.3)";
-          ctx.font = "bold 11px monospace";
+          ctx.font = "bold 12px monospace";
           ctx.textAlign = "center";
-          ctx.fillText("TBD", x + cardW / 2, rowY + 20);
+          ctx.fillText("TBD", x + cardW / 2, rowY + 23);
           return;
         }
 
@@ -284,30 +270,30 @@ export function PlayoffPredictionModal({ isOpen, onClose, afcSeeds, nfcSeeds }: 
         ctx.fillStyle = isWinner ? info.primaryColor : "#141c2b";
         ctx.fillRect(x, rowY, cardW, rowH);
 
-        // チームロゴ
+        // チームロゴ（サイズ拡大 28x28）
         const logoImg = logoCache.current.get(code);
         if (logoImg && logoImg.complete) {
           try {
-            ctx.drawImage(logoImg, x + 6, rowY + 4, 24, 24);
+            ctx.drawImage(logoImg, x + 6, rowY + 4, 28, 28);
           } catch {
             // スキップ
           }
         }
 
-        // チームコード
+        // チームコード（フォント拡大 15/16px 太字）
         ctx.fillStyle = "#ffffff";
-        ctx.font = isWinner ? "900 14px sans-serif" : "bold 13px sans-serif";
+        ctx.font = isWinner ? "900 16px sans-serif" : "bold 15px sans-serif";
         ctx.textAlign = "left";
-        ctx.fillText(code, x + 36, rowY + 21);
+        ctx.fillText(code, x + 40, rowY + 24);
 
-        // 白四角シードバッジ
+        // 白四角シードバッジ（黒太字 15px）
         if (seed) {
           ctx.fillStyle = "#ffffff";
-          ctx.fillRect(x + cardW - 28, rowY + 3, 25, rowH - 6);
+          ctx.fillRect(x + cardW - 30, rowY + 3, 27, rowH - 6);
           ctx.fillStyle = "#000000";
-          ctx.font = "900 14px 'Arial Black', monospace";
+          ctx.font = "900 15px 'Arial Black', monospace";
           ctx.textAlign = "center";
-          ctx.fillText(String(seed), x + cardW - 15.5, rowY + 21);
+          ctx.fillText(String(seed), x + cardW - 16.5, rowY + 23);
         }
 
         // 勝者ハイライト
@@ -323,7 +309,6 @@ export function PlayoffPredictionModal({ isOpen, onClose, afcSeeds, nfcSeeds }: 
       ctx.restore();
     };
 
-    // 接続線
     const drawLine = (x1: number, y1: number, x2: number, y2: number) => {
       ctx.strokeStyle = "rgba(255, 255, 255, 0.25)";
       ctx.lineWidth = 1.5;
@@ -336,45 +321,18 @@ export function PlayoffPredictionModal({ isOpen, onClose, afcSeeds, nfcSeeds }: 
       ctx.stroke();
     };
 
-    // 左右対称座標
-    const nfcWcX = 45;
-    const nfcDivX = 230;
-    const nfcCcgX = 390;
+    // 左右対称座標（左：AFC / 右：NFC）
+    const afcWcX = 35;
+    const afcDivX = 225;
+    const afcCcgX = 395;
 
-    const afcCcgX = 642;
-    const afcDivX = 802;
-    const afcWcX = 987;
+    const nfcCcgX = 625;
+    const nfcDivX = 795;
+    const nfcWcX = 985;
 
     const wcY = [115, 265, 415];
 
-    // ============= NFC (左側) =============
-    const nfcWcList = [
-      { hSeed: 2, aSeed: 7, win: nfcWcWinners[0] },
-      { hSeed: 3, aSeed: 6, win: nfcWcWinners[1] },
-      { hSeed: 4, aSeed: 5, win: nfcWcWinners[2] },
-    ];
-    nfcWcList.forEach((m, i) => {
-      const topT = nfcSeeds[m.hSeed - 1]?.team;
-      const botT = nfcSeeds[m.aSeed - 1]?.team;
-      drawCard(nfcWcX, wcY[i], topT, m.hSeed, botT, m.aSeed, m.win);
-
-      const targetDivY = i === 0 ? 190 : 340;
-      drawLine(nfcWcX + cardW, wcY[i] + rowH, nfcDivX, targetDivY + (i === 1 ? 0 : rowH));
-    });
-
-    const nfcD1Away = nfcDivMatchups ? nfcDivMatchups[0]?.away : undefined;
-    const nfcD2Home = nfcDivMatchups ? nfcDivMatchups[1]?.home : undefined;
-    const nfcD2Away = nfcDivMatchups ? nfcDivMatchups[1]?.away : undefined;
-
-    drawCard(nfcDivX, 190, nfcSeeds[0]?.team, 1, nfcD1Away, nfcD1Away ? nfcSeedMap.get(nfcD1Away) : undefined, nfcDivWinners[0]);
-    drawCard(nfcDivX, 340, nfcD2Home, nfcD2Home ? nfcSeedMap.get(nfcD2Home) : undefined, nfcD2Away, nfcD2Away ? nfcSeedMap.get(nfcD2Away) : undefined, nfcDivWinners[1]);
-
-    drawLine(nfcDivX + cardW, 190 + rowH, nfcCcgX, 265);
-    drawLine(nfcDivX + cardW, 340 + rowH, nfcCcgX, 265 + rowH);
-
-    drawCard(nfcCcgX, 265, nfcDivWinners[0], nfcDivWinners[0] ? nfcSeedMap.get(nfcDivWinners[0]) : undefined, nfcDivWinners[1], nfcDivWinners[1] ? nfcSeedMap.get(nfcDivWinners[1]) : undefined, nfcChamp ?? undefined);
-
-    // ============= AFC (右側) =============
+    // ============= 左側：AFC 描画 =============
     const afcWcList = [
       { hSeed: 2, aSeed: 7, win: afcWcWinners[0] },
       { hSeed: 3, aSeed: 6, win: afcWcWinners[1] },
@@ -386,7 +344,7 @@ export function PlayoffPredictionModal({ isOpen, onClose, afcSeeds, nfcSeeds }: 
       drawCard(afcWcX, wcY[i], topT, m.hSeed, botT, m.aSeed, m.win);
 
       const targetDivY = i === 0 ? 190 : 340;
-      drawLine(afcWcX, wcY[i] + rowH, afcDivX + cardW, targetDivY + (i === 1 ? 0 : rowH));
+      drawLine(afcWcX + cardW, wcY[i] + rowH, afcDivX, targetDivY + (i === 1 ? 0 : rowH));
     });
 
     const afcD1Away = afcDivMatchups ? afcDivMatchups[0]?.away : undefined;
@@ -396,19 +354,47 @@ export function PlayoffPredictionModal({ isOpen, onClose, afcSeeds, nfcSeeds }: 
     drawCard(afcDivX, 190, afcSeeds[0]?.team, 1, afcD1Away, afcD1Away ? afcSeedMap.get(afcD1Away) : undefined, afcDivWinners[0]);
     drawCard(afcDivX, 340, afcD2Home, afcD2Home ? afcSeedMap.get(afcD2Home) : undefined, afcD2Away, afcD2Away ? afcSeedMap.get(afcD2Away) : undefined, afcDivWinners[1]);
 
-    drawLine(afcDivX, 190 + rowH, afcCcgX + cardW, 265);
-    drawLine(afcDivX, 340 + rowH, afcCcgX + cardW, 265 + rowH);
+    drawLine(afcDivX + cardW, 190 + rowH, afcCcgX, 265);
+    drawLine(afcDivX + cardW, 340 + rowH, afcCcgX, 265 + rowH);
 
     drawCard(afcCcgX, 265, afcDivWinners[0], afcDivWinners[0] ? afcSeedMap.get(afcDivWinners[0]) : undefined, afcDivWinners[1], afcDivWinners[1] ? afcSeedMap.get(afcDivWinners[1]) : undefined, afcChamp ?? undefined);
 
-    // ============= 中央最下部：SUPER BOWL LXI =============
-    const sbX = (width - cardW) / 2;
-    const sbY = 485;
+    // ============= 右側：NFC 描画 =============
+    const nfcWcList = [
+      { hSeed: 2, aSeed: 7, win: nfcWcWinners[0] },
+      { hSeed: 3, aSeed: 6, win: nfcWcWinners[1] },
+      { hSeed: 4, aSeed: 5, win: nfcWcWinners[2] },
+    ];
+    nfcWcList.forEach((m, i) => {
+      const topT = nfcSeeds[m.hSeed - 1]?.team;
+      const botT = nfcSeeds[m.aSeed - 1]?.team;
+      drawCard(nfcWcX, wcY[i], topT, m.hSeed, botT, m.aSeed, m.win);
 
-    drawLine(nfcCcgX + cardW / 2, 265 + rowH * 2, sbX, sbY + rowH / 2);
-    drawLine(afcCcgX + cardW / 2, 265 + rowH * 2, sbX + cardW, sbY + rowH * 1.5);
+      const targetDivY = i === 0 ? 190 : 340;
+      drawLine(nfcWcX, wcY[i] + rowH, nfcDivX + cardW, targetDivY + (i === 1 ? 0 : rowH));
+    });
 
-    drawCard(sbX, sbY, nfcChamp ?? undefined, nfcChamp ? nfcSeedMap.get(nfcChamp) : undefined, afcChamp ?? undefined, afcChamp ? afcSeedMap.get(afcChamp) : undefined, superBowlChamp ?? undefined);
+    const nfcD1Away = nfcDivMatchups ? nfcDivMatchups[0]?.away : undefined;
+    const nfcD2Home = nfcDivMatchups ? nfcDivMatchups[1]?.home : undefined;
+    const nfcD2Away = nfcDivMatchups ? nfcDivMatchups[1]?.away : undefined;
+
+    drawCard(nfcDivX, 190, nfcSeeds[0]?.team, 1, nfcD1Away, nfcD1Away ? nfcSeedMap.get(nfcD1Away) : undefined, nfcDivWinners[0]);
+    drawCard(nfcDivX, 340, nfcD2Home, nfcD2Home ? nfcSeedMap.get(nfcD2Home) : undefined, nfcD2Away, nfcD2Away ? nfcSeedMap.get(nfcD2Away) : undefined, nfcDivWinners[1]);
+
+    drawLine(nfcDivX, 190 + rowH, nfcCcgX + cardW, 265);
+    drawLine(nfcDivX, 340 + rowH, nfcCcgX + cardW, 265 + rowH);
+
+    drawCard(nfcCcgX, 265, nfcDivWinners[0], nfcDivWinners[0] ? nfcSeedMap.get(nfcDivWinners[0]) : undefined, nfcDivWinners[1], nfcDivWinners[1] ? nfcSeedMap.get(nfcDivWinners[1]) : undefined, nfcChamp ?? undefined);
+
+    // ============= 中央最下部：SUPER BOWL LXI（左がAFC、右がNFC） =============
+    const sbW = 190;
+    const sbX = (width - sbW) / 2;
+    const sbY = 480;
+
+    drawLine(afcCcgX + cardW / 2, 265 + rowH * 2, sbX, sbY + rowH / 2);
+    drawLine(nfcCcgX + cardW / 2, 265 + rowH * 2, sbX + sbW, sbY + rowH * 1.5);
+
+    drawCard(sbX, sbY, afcChamp ?? undefined, afcChamp ? afcSeedMap.get(afcChamp) : undefined, nfcChamp ?? undefined, nfcChamp ? nfcSeedMap.get(nfcChamp) : undefined, superBowlChamp ?? undefined);
 
     // サイトロゴ（右下端に控えめ配置）
     ctx.textAlign = "right";
@@ -490,130 +476,20 @@ export function PlayoffPredictionModal({ isOpen, onClose, afcSeeds, nfcSeeds }: 
           </button>
         </div>
 
-        {/* コントロールバー */}
-        <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2 bg-slate-900/80 p-2 rounded-xl border border-slate-800 text-xs">
+        {/* コントロールバー（リセットのみのスマートな配置） */}
+        <div className="mt-2.5 flex items-center justify-between bg-slate-900/80 p-2 rounded-xl border border-slate-800 text-xs">
           <span className="text-slate-400 text-[11px]">チームをタップして勝ち上がらせてください</span>
-          <div className="flex gap-2">
-            <button
-              onClick={autoFillHigherSeeds}
-              className="inline-flex items-center gap-1 rounded bg-amber-500/20 px-2.5 py-1 text-[11px] font-bold text-amber-300 border border-amber-500/40 hover:bg-amber-500/30"
-            >
-              <Sparkles className="h-3 w-3" /> 上位シード全勝
-            </button>
-            <button
-              onClick={resetAll}
-              className="inline-flex items-center gap-1 rounded bg-slate-800 px-2.5 py-1 text-[11px] text-slate-300 hover:bg-slate-700"
-            >
-              <RotateCcw className="h-3 w-3" /> リセット
-            </button>
-          </div>
+          <button
+            onClick={resetAll}
+            className="inline-flex items-center gap-1 rounded bg-slate-800 px-2.5 py-1 text-[11px] text-slate-300 hover:bg-slate-700"
+          >
+            <RotateCcw className="h-3 w-3" /> リセット
+          </button>
         </div>
 
-        {/* タブなし！スマホ左右2列（チームカラー即時反映ボタン） */}
+        {/* 左右2列（左：AFC / 右：NFC） */}
         <div className="mt-3 grid grid-cols-2 gap-2 sm:gap-4">
-          {/* 左：NFC カラム */}
-          <div className="rounded-xl border border-blue-950/60 bg-blue-950/15 p-2 sm:p-3 space-y-2.5">
-            <div className="flex items-center justify-between font-mono text-[11px] font-black text-blue-400 border-b border-blue-900/40 pb-1">
-              <span>NFC</span>
-              <span className="text-[9px] text-slate-400">#1 {nfcSeeds[0]?.team} (BYE)</span>
-            </div>
-
-            {/* WC */}
-            <div className="space-y-1.5">
-              <span className="text-[9px] font-mono text-slate-400 block">WILD CARD</span>
-              {[
-                { hSeed: 2, aSeed: 7, idx: 0 },
-                { hSeed: 3, aSeed: 6, idx: 1 },
-                { hSeed: 4, aSeed: 5, idx: 2 },
-              ].map(({ hSeed, aSeed, idx }) => {
-                const hCode = nfcSeeds[hSeed - 1]?.team;
-                const aCode = nfcSeeds[aSeed - 1]?.team;
-                const won = nfcWcWinners[idx];
-                return (
-                  <div key={idx} className="flex gap-1">
-                    {[
-                      { code: hCode, seed: hSeed },
-                      { code: aCode, seed: aSeed },
-                    ].map((t) => {
-                      const color = t.code ? NFL_TEAM_COLORS[t.code]?.primary : "#1e293b";
-                      return (
-                        <button
-                          key={t.code}
-                          onClick={() => setNfcWcWinners((prev) => ({ ...prev, [idx]: t.code }))}
-                          style={{ backgroundColor: won === t.code ? color : undefined }}
-                          className={`flex-1 rounded py-1 px-1 text-center text-[11px] font-bold border truncate ${
-                            won === t.code
-                              ? "text-white border-amber-400 ring-1 ring-amber-400"
-                              : "bg-slate-900 text-slate-300 border-slate-800 hover:bg-slate-800"
-                          }`}
-                        >
-                          #{t.seed} {t.code}
-                        </button>
-                      );
-                    })}
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* DIV */}
-            {nfcDivMatchups && (
-              <div className="space-y-1.5 pt-1.5 border-t border-blue-900/40">
-                <span className="text-[9px] font-mono text-slate-400 block">DIVISIONAL</span>
-                {nfcDivMatchups.map((m, idx) => (
-                  <div key={idx} className="flex gap-1">
-                    {[m.home, m.away].map((code) => {
-                      const color = code ? NFL_TEAM_COLORS[code]?.primary : "#1e293b";
-                      const won = nfcDivWinners[idx] === code;
-                      return (
-                        <button
-                          key={code}
-                          onClick={() => setNfcDivWinners((prev) => ({ ...prev, [idx]: code }))}
-                          style={{ backgroundColor: won ? color : undefined }}
-                          className={`flex-1 rounded py-1 px-1 text-center text-[11px] font-bold border truncate ${
-                            won
-                              ? "text-white border-amber-400 ring-1 ring-amber-400"
-                              : "bg-slate-900 text-slate-300 border-slate-800 hover:bg-slate-800"
-                          }`}
-                        >
-                          #{nfcSeedMap.get(code)} {code}
-                        </button>
-                      );
-                    })}
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* CCG */}
-            {nfcDivWinners[0] && nfcDivWinners[1] && (
-              <div className="space-y-1.5 pt-1.5 border-t border-blue-900/40">
-                <span className="text-[9px] font-mono text-blue-300 block">NFC CHAMPIONSHIP</span>
-                <div className="flex gap-1">
-                  {[nfcDivWinners[0], nfcDivWinners[1]].map((code) => {
-                    const color = code ? NFL_TEAM_COLORS[code]?.primary : "#1e293b";
-                    const won = nfcChamp === code;
-                    return (
-                      <button
-                        key={code}
-                        onClick={() => setNfcChamp(code)}
-                        style={{ backgroundColor: won ? color : undefined }}
-                        className={`flex-1 rounded py-1.5 px-1 text-center text-[11px] font-black border truncate ${
-                          won
-                            ? "text-white border-blue-400 ring-2 ring-blue-400 shadow-md"
-                            : "bg-slate-900 text-slate-300 border-slate-800 hover:bg-slate-800"
-                        }`}
-                      >
-                        #{nfcSeedMap.get(code)} {code}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* 右：AFC カラム */}
+          {/* 左：AFC カラム */}
           <div className="rounded-xl border border-red-950/60 bg-red-950/15 p-2 sm:p-3 space-y-2.5">
             <div className="flex items-center justify-between font-mono text-[11px] font-black text-red-400 border-b border-red-900/40 pb-1">
               <span>AFC</span>
@@ -714,16 +590,118 @@ export function PlayoffPredictionModal({ isOpen, onClose, afcSeeds, nfcSeeds }: 
               </div>
             )}
           </div>
+
+          {/* 右：NFC カラム */}
+          <div className="rounded-xl border border-blue-950/60 bg-blue-950/15 p-2 sm:p-3 space-y-2.5">
+            <div className="flex items-center justify-between font-mono text-[11px] font-black text-blue-400 border-b border-blue-900/40 pb-1">
+              <span>NFC</span>
+              <span className="text-[9px] text-slate-400">#1 {nfcSeeds[0]?.team} (BYE)</span>
+            </div>
+
+            {/* WC */}
+            <div className="space-y-1.5">
+              <span className="text-[9px] font-mono text-slate-400 block">WILD CARD</span>
+              {[
+                { hSeed: 2, aSeed: 7, idx: 0 },
+                { hSeed: 3, aSeed: 6, idx: 1 },
+                { hSeed: 4, aSeed: 5, idx: 2 },
+              ].map(({ hSeed, aSeed, idx }) => {
+                const hCode = nfcSeeds[hSeed - 1]?.team;
+                const aCode = nfcSeeds[aSeed - 1]?.team;
+                const won = nfcWcWinners[idx];
+                return (
+                  <div key={idx} className="flex gap-1">
+                    {[
+                      { code: hCode, seed: hSeed },
+                      { code: aCode, seed: aSeed },
+                    ].map((t) => {
+                      const color = t.code ? NFL_TEAM_COLORS[t.code]?.primary : "#1e293b";
+                      return (
+                        <button
+                          key={t.code}
+                          onClick={() => setNfcWcWinners((prev) => ({ ...prev, [idx]: t.code }))}
+                          style={{ backgroundColor: won === t.code ? color : undefined }}
+                          className={`flex-1 rounded py-1 px-1 text-center text-[11px] font-bold border truncate ${
+                            won === t.code
+                              ? "text-white border-amber-400 ring-1 ring-amber-400"
+                              : "bg-slate-900 text-slate-300 border-slate-800 hover:bg-slate-800"
+                          }`}
+                        >
+                          #{t.seed} {t.code}
+                        </button>
+                      );
+                    })}
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* DIV */}
+            {nfcDivMatchups && (
+              <div className="space-y-1.5 pt-1.5 border-t border-blue-900/40">
+                <span className="text-[9px] font-mono text-slate-400 block">DIVISIONAL</span>
+                {nfcDivMatchups.map((m, idx) => (
+                  <div key={idx} className="flex gap-1">
+                    {[m.home, m.away].map((code) => {
+                      const color = code ? NFL_TEAM_COLORS[code]?.primary : "#1e293b";
+                      const won = nfcDivWinners[idx] === code;
+                      return (
+                        <button
+                          key={code}
+                          onClick={() => setNfcDivWinners((prev) => ({ ...prev, [idx]: code }))}
+                          style={{ backgroundColor: won ? color : undefined }}
+                          className={`flex-1 rounded py-1 px-1 text-center text-[11px] font-bold border truncate ${
+                            won
+                              ? "text-white border-amber-400 ring-1 ring-amber-400"
+                              : "bg-slate-900 text-slate-300 border-slate-800 hover:bg-slate-800"
+                          }`}
+                        >
+                          #{nfcSeedMap.get(code)} {code}
+                        </button>
+                      );
+                    })}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* CCG */}
+            {nfcDivWinners[0] && nfcDivWinners[1] && (
+              <div className="space-y-1.5 pt-1.5 border-t border-blue-900/40">
+                <span className="text-[9px] font-mono text-blue-300 block">NFC CHAMPIONSHIP</span>
+                <div className="flex gap-1">
+                  {[nfcDivWinners[0], nfcDivWinners[1]].map((code) => {
+                    const color = code ? NFL_TEAM_COLORS[code]?.primary : "#1e293b";
+                    const won = nfcChamp === code;
+                    return (
+                      <button
+                        key={code}
+                        onClick={() => setNfcChamp(code)}
+                        style={{ backgroundColor: won ? color : undefined }}
+                        className={`flex-1 rounded py-1.5 px-1 text-center text-[11px] font-black border truncate ${
+                          won
+                            ? "text-white border-blue-400 ring-2 ring-blue-400 shadow-md"
+                            : "bg-slate-900 text-slate-300 border-slate-800 hover:bg-slate-800"
+                        }`}
+                      >
+                        #{nfcSeedMap.get(code)} {code}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
         </div>
 
-        {/* 最下部中央：SUPER BOWL LXI */}
+        {/* 最下部中央：SUPER BOWL LXI（左がAFC、右がNFC） */}
         {afcChamp && nfcChamp && (
           <div className="mt-3 rounded-xl border border-amber-500/50 bg-amber-500/10 p-2 sm:p-2.5 text-center">
             <span className="font-mono text-[10px] text-amber-400 font-black tracking-widest block">SUPER BOWL LXI</span>
             <div className="mt-1 flex gap-2 justify-center max-w-xs mx-auto">
               {[
-                { code: nfcChamp, seedMap: nfcSeedMap },
                 { code: afcChamp, seedMap: afcSeedMap },
+                { code: nfcChamp, seedMap: nfcSeedMap },
               ].map(({ code, seedMap }) => {
                 const color = NFL_TEAM_COLORS[code]?.primary;
                 const won = superBowlChamp === code;
