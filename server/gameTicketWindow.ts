@@ -19,7 +19,8 @@ function latestWednesdaySixJst(now: Date) {
 }
 
 export function isOfficialFinal(game?: Pick<GameTicketCandidate, "gameState">) {
-  return Boolean(game?.gameState && /final|completed/i.test(game.gameState));
+  // FINAL, COMPLETED に加え、NFL.com 公式の終了直後ステータス POST も確実に検出
+  return Boolean(game?.gameState && /final|completed|post/i.test(game.gameState));
 }
 
 /** Keeps the latest officially final game until the following Wednesday at 06:00 JST for replay viewers. */
@@ -29,7 +30,7 @@ export function isWithinJstReplayWindow(game: Pick<GameTicketCandidate, "kickoff
 
 function regularWeekNumber(game?: Pick<GameTicketCandidate, "seasonPhase" | "weekLabel">) {
   if (game?.seasonPhase !== "regular") return null;
-  const week = game?.weekLabel?.match(/^WEEK\s+(\d+)$/i)?.[1];
+  const week = game?.weekLabel?.match(/WEEK\s*(\d+)/i)?.[1];
   return week ? Number(week) : null;
 }
 
@@ -64,6 +65,12 @@ export function getRegularSeasonByeWeek<T extends GameTicketCandidate>({
   // 3. activeGame の週が previousWeek + 1 の場合も Bye Week ではない
   const activeWeek = regularWeekNumber(activeGame);
   if (activeWeek === previousWeek + 1) {
+    return undefined;
+  }
+
+  // 4. 次の試合（scheduledGame）まで6日未満の場合は Bye Week ではない（連戦中の誤認を完全防止）
+  const daysUntilNext = (new Date(scheduledGame.kickoffAt).getTime() - now.getTime()) / (24 * 60 * 60 * 1_000);
+  if (daysUntilNext < 6) {
     return undefined;
   }
 
