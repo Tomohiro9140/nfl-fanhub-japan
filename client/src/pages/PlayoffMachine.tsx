@@ -25,7 +25,6 @@ import {
 } from "lucide-react";
 import { memo, useMemo, useState, useEffect } from "react";
 
-// ESPN CDN ロゴコード変換用マップ（略称の表記揺れ対応）
 const ESPN_LOGO_CODES: Record<string, string> = {
   WAS: "wsh",
   WSH: "wsh",
@@ -34,10 +33,9 @@ const ESPN_LOGO_CODES: Record<string, string> = {
   LV: "lv",
 };
 
-/** ESPN公式高解像度CDNからロゴを安全に表示（エラー時はテキストにフォールバック） */
 function TeamMark({ code, size = "md" }: { code: string; size?: "sm" | "md" | "lg" }) {
   const [hasError, setHasError] = useState(false);
-  const dimension = size === "lg" ? "h-10 w-10" : size === "md" ? "h-7 w-7" : "h-5 w-5";
+  const dimension = size === "lg" ? "h-9 w-9" : size === "md" ? "h-6 w-6" : "h-5 w-5";
   const espnCode = ESPN_LOGO_CODES[code.toUpperCase()] ?? code.toLowerCase();
   const logoUrl = `https://a.espncdn.com/i/teamlogos/nfl/500/${espnCode}.png`;
 
@@ -82,19 +80,14 @@ export default function PlayoffMachine() {
   const [explanationModalSeed, setExplanationModalSeed] = useState<PlayoffSeed | null>(null);
   const [showLowGuides, setShowLowGuides] = useState<boolean>(false);
 
-  // プレイオフ予想モーダルの開閉ステート
   const [isPredictionOpen, setIsPredictionOpen] = useState(false);
-
-  // 一括シミュレーションのステート
   const [presetDropdownOpen, setPresetDropdownOpen] = useState(false);
   const [fillMode, setFillMode] = useState<"fill_remaining" | "overwrite_all">("fill_remaining");
 
-  // チーム名をアルファベット昇順（A to Z）でソート
   const alphabeticalTeams = useMemo(() => {
     return Object.values(NFL_TEAMS).sort((a, b) => a.name.localeCompare(b.name));
   }, []);
 
-  // 公式スケジュール・実データの取得
   const officialScheduleQuery = trpc.playoff.getSchedule.useQuery(
     { season: 2026 },
     { staleTime: 5 * 60_000 }
@@ -114,7 +107,6 @@ export default function PlayoffMachine() {
     }
   }, [officialScheduleQuery.data]);
 
-  // 未消化試合の勝敗個別トグル
   const toggleOutcome = (gameId: number, target: "home" | "away" | "tie") => {
     setGames((prev) =>
       prev.map((g) => {
@@ -125,18 +117,15 @@ export default function PlayoffMachine() {
     );
   };
 
-  // 全シミュレーション結果を公式実データ状態へリセット
   const resetToOfficial = () => {
     if (officialScheduleQuery.data?.games) {
       setGames(officialScheduleQuery.data.games as ScheduledGame[]);
     }
   };
 
-  // タイブレーカーエンジンによる即時シード計算
   const standings = useMemo(() => calculateAllStandings(games), [games]);
   const currentConfStandings = standings[activeConf];
 
-  // プレイオフ進出シード 1〜7 位（AFC / NFC）
   const afcPlayoffSeeds = useMemo(() => {
     return [
       ...(standings.AFC?.divisionWinners ?? []),
@@ -151,7 +140,6 @@ export default function PlayoffMachine() {
     ];
   }, [standings.NFC]);
 
-  // 全32チームのリアルタイム成績（ドラフト・プリセット用）
   const allTeamRecords = useMemo(() => {
     const records: Record<
       string,
@@ -238,7 +226,7 @@ export default function PlayoffMachine() {
           records[g.awayTeam].confTies++;
         }
         if (isDiv) {
-          records[g.homeTeam].divWins++;
+          records[g.homeTeam].divTies++;
           records[g.awayTeam].divTies++;
         }
       }
@@ -256,7 +244,6 @@ export default function PlayoffMachine() {
     return records;
   }, [games]);
 
-  // 一括シミュレーション（プリセット適用）
   const applyPreset = (preset: "better_record" | "home_wins" | "run_the_table" | "underdogs") => {
     setPresetDropdownOpen(false);
 
@@ -296,7 +283,6 @@ export default function PlayoffMachine() {
     );
   };
 
-  // プレーオフ進出14チーム（AFC 1〜7位、NFC 1〜7位）
   const playoffTeamCodes = useMemo(() => {
     const set = new Set<string>();
     for (const conf of ["AFC", "NFC"] as Conference[]) {
@@ -306,7 +292,6 @@ export default function PlayoffMachine() {
     return set;
   }, [standings]);
 
-  // Tankathon連動 ドラフト指名順（Pick #1〜#18）のリアルタイム算出
   const draftOrder = useMemo<DraftPickItem[]>(() => {
     const nonPlayoff = Object.keys(NFL_TEAMS)
       .filter((code) => !playoffTeamCodes.has(code))
@@ -397,7 +382,6 @@ export default function PlayoffMachine() {
     });
   }, [playoffTeamCodes, allTeamRecords, games]);
 
-  // In the Hunt と Eliminated の分類
   const { inTheHuntTeams, eliminatedTeams } = useMemo(() => {
     const seed7Wins = currentConfStandings?.wildCards?.[2]?.record.wins ?? 0;
     const inTheHunt: PlayoffSeed[] = [];
@@ -418,7 +402,6 @@ export default function PlayoffMachine() {
     return { inTheHuntTeams: inTheHunt, eliminatedTeams: eliminated };
   }, [currentConfStandings]);
 
-  // 週間応援ガイドの生成と重要度別の分類
   const rootingGuide = useMemo(
     () => generateRootingGuide(focusTeam, games, selectedWeek),
     [focusTeam, games, selectedWeek]
@@ -444,28 +427,28 @@ export default function PlayoffMachine() {
   );
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 pb-16">
+    <div className="min-h-screen bg-slate-50 text-slate-900 pb-16 w-full max-w-full overflow-x-hidden">
       <EmbeddedAppNav current="SIMULATOR" />
 
       {/* ヘッダー */}
       <header className="border-b border-white/10 bg-[#101827] text-white">
-        <div className="container mx-auto flex min-h-16 items-center justify-center px-4 py-3 sm:px-6">
-          <div className="flex items-center gap-2.5">
-            <div className="grid h-9 w-9 place-items-center rounded-xl bg-gradient-to-br from-[#f2bc62] to-[#e85d2a] shadow-lg">
-              <Trophy className="h-5 w-5 text-[#101827]" />
+        <div className="container mx-auto flex min-h-14 items-center justify-center px-4 py-2.5 sm:px-6">
+          <div className="flex items-center gap-2">
+            <div className="grid h-8 w-8 place-items-center rounded-xl bg-gradient-to-br from-[#f2bc62] to-[#e85d2a] shadow-lg">
+              <Trophy className="h-4 w-4 text-[#101827]" />
             </div>
-            <h1 className="font-display text-xl font-bold tracking-tight">NFL Season Simulator</h1>
+            <h1 className="font-display text-lg sm:text-xl font-bold tracking-tight">NFL Season Simulator</h1>
           </div>
         </div>
       </header>
 
       {/* コントロールバー */}
       <div className="border-b border-slate-200 bg-white shadow-xs">
-        <div className="container mx-auto flex flex-col gap-3 px-4 py-3 sm:px-6 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex flex-wrap items-center gap-3">
+        <div className="container mx-auto flex flex-col gap-2.5 px-3 py-2.5 sm:px-6 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-2.5 w-full sm:w-auto">
             {/* 応援チーム選択 */}
-            <div className="w-full sm:w-56">
-              <Label className="text-[11px] font-semibold text-slate-500 uppercase">あなたの応援チーム（Focus）</Label>
+            <div className="w-full sm:w-52">
+              <Label className="text-[10px] font-semibold text-slate-500 uppercase">あなたの応援チーム</Label>
               <Select
                 value={focusTeam}
                 onValueChange={(val) => {
@@ -474,7 +457,7 @@ export default function PlayoffMachine() {
                   if (info) setActiveConf(info.conference as Conference);
                 }}
               >
-                <SelectTrigger className="mt-1 h-9 bg-slate-50">
+                <SelectTrigger className="mt-0.5 h-8 text-xs bg-slate-50">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent className="z-50 max-h-72 bg-white">
@@ -482,7 +465,7 @@ export default function PlayoffMachine() {
                     <SelectItem key={team.code} value={team.code}>
                       <div className="flex items-center gap-2">
                         <MemoTeamMark code={team.code} size="sm" />
-                        <span>{team.name}</span>
+                        <span className="text-xs">{team.name}</span>
                         <span className="text-[10px] text-slate-400">({team.division})</span>
                       </div>
                     </SelectItem>
@@ -491,95 +474,91 @@ export default function PlayoffMachine() {
               </Select>
             </div>
 
-            {/* 一括シミュレーション */}
-            <div className="relative">
-              <Label className="text-[11px] font-semibold text-slate-500 uppercase">一括シミュレーション</Label>
-              <div className="mt-1 flex items-center gap-1.5">
+            {/* 一括シミュレーション ＆ トグル */}
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <div className="relative">
                 <Button
                   type="button"
                   variant="outline"
                   size="sm"
                   onClick={() => setPresetDropdownOpen(!presetDropdownOpen)}
-                  className="h-9 border-slate-200 bg-slate-50 font-bold text-slate-700 hover:bg-slate-100"
+                  className="h-8 border-slate-200 bg-slate-50 text-xs font-bold text-slate-700 hover:bg-slate-100"
                 >
-                  <Sparkles className="mr-1.5 h-3.5 w-3.5 text-[#e85d2a]" />
-                  <span>プリセット適用</span>
-                  <ChevronDown className={`ml-1.5 h-3.5 w-3.5 transition-transform ${presetDropdownOpen ? "rotate-180" : ""}`} />
+                  <Sparkles className="mr-1 h-3.5 w-3.5 text-[#e85d2a]" />
+                  <span>プリセット</span>
+                  <ChevronDown className={`ml-1 h-3 w-3 transition-transform ${presetDropdownOpen ? "rotate-180" : ""}`} />
                 </Button>
 
-                <div className="flex h-9 items-center rounded-lg border border-slate-200 bg-slate-100 p-0.5 text-[11px]">
-                  <button
-                    type="button"
-                    onClick={() => setFillMode("fill_remaining")}
-                    className={`h-full rounded-md px-2 font-semibold transition ${
-                      fillMode === "fill_remaining" ? "bg-white text-slate-900 shadow-xs" : "text-slate-500 hover:text-slate-800"
-                    }`}
-                  >
-                    未選択のみ
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setFillMode("overwrite_all")}
-                    className={`h-full rounded-md px-2 font-semibold transition ${
-                      fillMode === "overwrite_all" ? "bg-white text-slate-900 shadow-xs" : "text-slate-500 hover:text-slate-800"
-                    }`}
-                  >
-                    全上書き
-                  </button>
-                </div>
+                {presetDropdownOpen && (
+                  <div className="absolute left-0 top-full z-50 mt-1.5 w-60 rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl animate-in fade-in zoom-in-95 duration-100">
+                    <button
+                      type="button"
+                      onClick={() => applyPreset("better_record")}
+                      className="flex w-full flex-col rounded-lg px-2.5 py-1.5 text-left hover:bg-slate-50 transition"
+                    >
+                      <span className="text-xs font-bold text-slate-800">🏆 勝率上位（Better Record）</span>
+                      <span className="text-[10px] text-slate-500">対戦時の勝率が高い方を勝者に</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => applyPreset("home_wins")}
+                      className="flex w-full flex-col rounded-lg px-2.5 py-1.5 text-left hover:bg-slate-50 transition"
+                    >
+                      <span className="text-xs font-bold text-slate-800">🏠 ホーム全勝（Home Wins）</span>
+                      <span className="text-[10px] text-slate-500">ホームチーム全勝</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => applyPreset("run_the_table")}
+                      className="flex w-full flex-col rounded-lg px-2.5 py-1.5 text-left hover:bg-slate-50 transition"
+                    >
+                      <span className="text-xs font-bold text-[#e85d2a]">🔥 {focusTeamInfo?.name ?? focusTeam} 全勝</span>
+                      <span className="text-[10px] text-slate-500">応援チームが全勝</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => applyPreset("underdogs")}
+                      className="flex w-full flex-col rounded-lg px-2.5 py-1.5 text-left hover:bg-slate-50 transition"
+                    >
+                      <span className="text-xs font-bold text-emerald-700">⚡ 最大波乱（Chaos）</span>
+                      <span className="text-[10px] text-slate-500">アンダードッグが全勝</span>
+                    </button>
+                  </div>
+                )}
               </div>
 
-              {presetDropdownOpen && (
-                <div className="absolute left-0 top-full z-50 mt-1.5 w-64 rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl animate-in fade-in zoom-in-95 duration-100">
-                  <div className="px-2.5 py-1 text-[10px] font-bold text-slate-400 uppercase">
-                    シナリオを選択
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => applyPreset("better_record")}
-                    className="flex w-full flex-col rounded-lg px-2.5 py-2 text-left hover:bg-slate-50 transition"
-                  >
-                    <span className="text-xs font-bold text-slate-800">🏆 勝率上位（Better Record）</span>
-                    <span className="text-[10px] text-slate-500">対戦時の勝率が高いチームの勝利を一括設定</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => applyPreset("home_wins")}
-                    className="flex w-full flex-col rounded-lg px-2.5 py-2 text-left hover:bg-slate-50 transition"
-                  >
-                    <span className="text-xs font-bold text-slate-800">🏠 ホーム全勝（Home Team Wins）</span>
-                    <span className="text-[10px] text-slate-500">ホームチームが全勝するシナリオを反映</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => applyPreset("run_the_table")}
-                    className="flex w-full flex-col rounded-lg px-2.5 py-2 text-left hover:bg-slate-50 transition"
-                  >
-                    <span className="text-xs font-bold text-[#e85d2a]">🔥 {focusTeamInfo?.name ?? focusTeam} 全勝</span>
-                    <span className="text-[10px] text-slate-500">応援チームの残り全試合を勝利、他は勝率上位</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => applyPreset("underdogs")}
-                    className="flex w-full flex-col rounded-lg px-2.5 py-2 text-left hover:bg-slate-50 transition"
-                  >
-                    <span className="text-xs font-bold text-emerald-700">⚡ 最大波乱（Underdogs / Chaos）</span>
-                    <span className="text-[10px] text-slate-500">格下のアンダードッグが全て勝利する展開</span>
-                  </button>
-                </div>
-              )}
+              <div className="flex h-8 items-center rounded-lg border border-slate-200 bg-slate-100 p-0.5 text-[10px]">
+                <button
+                  type="button"
+                  onClick={() => setFillMode("fill_remaining")}
+                  className={`h-full rounded px-2 font-semibold transition ${
+                    fillMode === "fill_remaining" ? "bg-white text-slate-900 shadow-xs" : "text-slate-500 hover:text-slate-800"
+                  }`}
+                >
+                  未選択
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFillMode("overwrite_all")}
+                  className={`h-full rounded px-2 font-semibold transition ${
+                    fillMode === "overwrite_all" ? "bg-white text-slate-900 shadow-xs" : "text-slate-500 hover:text-slate-800"
+                  }`}
+                >
+                  全上書き
+                </button>
+              </div>
             </div>
           </div>
 
-          {/* プレイオフ勝敗予想 ＆ 画像シェアボタン */}
-          <div className="flex items-center">
+          {/* プレイオフ予想ボタン */}
+          <div className="w-full sm:w-auto">
             <Button
               type="button"
               onClick={() => setIsPredictionOpen(true)}
-              className="h-9 gap-1.5 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white font-bold shadow-xs transition active:scale-95"
+              className="w-full sm:w-auto h-8 gap-1.5 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white font-bold text-xs shadow-xs transition active:scale-95"
               size="sm"
             >
-              <Trophy className="h-4 w-4" />
+              <Trophy className="h-3.5 w-3.5" />
               <span>プレイオフ勝敗予想</span>
             </Button>
           </div>
@@ -587,47 +566,43 @@ export default function PlayoffMachine() {
       </div>
 
       {/* メインレイアウト */}
-      <main className="container mx-auto mt-6 px-4 sm:px-6">
-        <div className="grid gap-6 lg:grid-cols-12">
+      <main className="container mx-auto mt-4 px-2.5 sm:px-6">
+        <div className="grid gap-4 lg:grid-cols-12">
           {/* 左カラム: シード順位表 ⇔ ドラフト指名順 */}
-          <div className="space-y-6 lg:col-span-7">
+          <div className="space-y-4 lg:col-span-7 min-w-0">
             <Card className="border-slate-200 shadow-xs">
-              <CardHeader className="flex flex-col gap-3 border-b border-slate-100 pb-3 sm:flex-row sm:items-center sm:justify-between">
-                <div className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-100 p-1">
+              <CardHeader className="flex flex-col gap-2.5 border-b border-slate-100 p-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-100 p-0.5">
                   <button
                     type="button"
                     onClick={() => setMainViewMode("playoffs")}
-                    className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-bold transition-all ${
-                      mainViewMode === "playoffs"
-                        ? "bg-white text-slate-900 shadow-xs"
-                        : "text-slate-600 hover:text-slate-900"
+                    className={`flex items-center gap-1 rounded px-2.5 py-1 text-xs font-bold transition-all ${
+                      mainViewMode === "playoffs" ? "bg-white text-slate-900 shadow-xs" : "text-slate-600 hover:text-slate-900"
                     }`}
                   >
-                    <Trophy className="h-3.5 w-3.5 text-[#e85d2a]" />
+                    <Trophy className="h-3 w-3 text-[#e85d2a]" />
                     <span>シード順位表</span>
                   </button>
                   <button
                     type="button"
                     onClick={() => setMainViewMode("draft")}
-                    className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-bold transition-all ${
-                      mainViewMode === "draft"
-                        ? "bg-white text-slate-900 shadow-xs"
-                        : "text-slate-600 hover:text-slate-900"
+                    className={`flex items-center gap-1 rounded px-2.5 py-1 text-xs font-bold transition-all ${
+                      mainViewMode === "draft" ? "bg-white text-slate-900 shadow-xs" : "text-slate-600 hover:text-slate-900"
                     }`}
                   >
-                    <Award className="h-3.5 w-3.5 text-cyan-600" />
-                    <span>ドラフト指名順 (#1〜#18)</span>
+                    <Award className="h-3 w-3 text-cyan-600" />
+                    <span>ドラフト順 (#1〜#18)</span>
                   </button>
                 </div>
 
                 {mainViewMode === "playoffs" && (
-                  <div className="flex rounded-lg border border-slate-200 bg-slate-100 p-1">
+                  <div className="flex rounded-lg border border-slate-200 bg-slate-100 p-0.5">
                     {(["AFC", "NFC"] as Conference[]).map((conf) => (
                       <button
                         key={conf}
                         type="button"
                         onClick={() => setActiveConf(conf)}
-                        className={`rounded-md px-3 py-1 text-xs font-bold transition-all ${
+                        className={`rounded px-2.5 py-1 text-xs font-bold transition-all ${
                           activeConf === conf ? "bg-[#101827] text-white shadow-xs" : "text-slate-600 hover:text-slate-900"
                         }`}
                       >
@@ -641,7 +616,7 @@ export default function PlayoffMachine() {
               <CardContent className="p-0">
                 {mainViewMode === "playoffs" ? (
                   <div>
-                    <div className="border-b border-slate-100 bg-slate-50/70 px-4 py-2 text-[11px] font-bold tracking-wider text-slate-500">
+                    <div className="border-b border-slate-100 bg-slate-50/70 px-3 py-1.5 text-[10px] font-bold tracking-wider text-slate-500">
                       DIVISION LEADERS (#1〜#4)
                     </div>
                     <div className="divide-y divide-slate-100">
@@ -655,7 +630,7 @@ export default function PlayoffMachine() {
                       ))}
                     </div>
 
-                    <div className="border-y border-slate-100 bg-amber-50/50 px-4 py-2 text-[11px] font-bold tracking-wider text-amber-800">
+                    <div className="border-y border-slate-100 bg-amber-50/50 px-3 py-1.5 text-[10px] font-bold tracking-wider text-amber-800">
                       WILD CARD (#5〜#7)
                     </div>
                     <div className="divide-y divide-slate-100">
@@ -669,8 +644,8 @@ export default function PlayoffMachine() {
                       ))}
                     </div>
 
-                    <div className="flex items-center gap-1.5 border-y border-slate-100 bg-blue-50/50 px-4 py-2 text-[11px] font-bold tracking-wider text-blue-800">
-                      <Flame className="h-3.5 w-3.5 text-blue-600" />
+                    <div className="flex items-center gap-1 border-y border-slate-100 bg-blue-50/50 px-3 py-1.5 text-[10px] font-bold tracking-wider text-blue-800">
+                      <Flame className="h-3 w-3 text-blue-600" />
                       IN THE HUNT (進出可能性あり)
                     </div>
                     <div className="divide-y divide-slate-100">
@@ -684,14 +659,14 @@ export default function PlayoffMachine() {
                           />
                         ))
                       ) : (
-                        <div className="px-4 py-3 text-xs text-slate-400">該当球団なし</div>
+                        <div className="px-3 py-2 text-xs text-slate-400">該当球団なし</div>
                       )}
                     </div>
 
                     {eliminatedTeams.length > 0 && (
                       <>
-                        <div className="flex items-center gap-1.5 border-y border-slate-100 bg-slate-100/70 px-4 py-2 text-[11px] font-bold tracking-wider text-slate-500">
-                          <Ban className="h-3.5 w-3.5 text-rose-500" />
+                        <div className="flex items-center gap-1 border-y border-slate-100 bg-slate-100/70 px-3 py-1.5 text-[10px] font-bold tracking-wider text-slate-500">
+                          <Ban className="h-3 w-3 text-rose-500" />
                           ELIMINATED (完全敗退決定)
                         </div>
                         <div className="divide-y divide-slate-100 opacity-60">
@@ -710,67 +685,39 @@ export default function PlayoffMachine() {
                   </div>
                 ) : (
                   <div>
-                    <div className="border-b border-slate-100 bg-slate-50/70 px-4 py-2.5 text-[11px] font-bold text-slate-600 flex items-center justify-between">
-                      <span>2027 NFL DRAFT ORDER (非プレーオフ18チーム)</span>
-                      <span className="text-[10px] text-slate-400 font-normal">※全体勝率が低い順、同率はSOSが低い順に優先</span>
+                    <div className="border-b border-slate-100 bg-slate-50/70 px-3 py-2 text-[10px] font-bold text-slate-600 flex items-center justify-between">
+                      <span>2027 NFL DRAFT ORDER</span>
+                      <span className="text-[9px] text-slate-400 font-normal">全体勝率・SOS優先</span>
                     </div>
 
                     <div className="overflow-x-auto">
                       <table className="w-full text-left text-xs">
-                        <thead className="border-b border-slate-100 bg-slate-50 font-mono text-[10px] uppercase text-slate-500">
+                        <thead className="border-b border-slate-100 bg-slate-50 font-mono text-[9px] uppercase text-slate-500">
                           <tr>
-                            <th className="px-3 py-2.5 text-center w-12">PICK</th>
-                            <th className="px-3 py-2.5">TEAM</th>
-                            <th className="px-2 py-2.5 text-center">RECORD</th>
-                            <th className="px-2 py-2.5 text-center">WIN%</th>
-                            <th className="px-2 py-2.5 text-center font-bold text-cyan-700">SOS</th>
-                            <th className="px-3 py-2.5">TIEBREAKER 理由</th>
+                            <th className="px-2 py-2 text-center w-8">#</th>
+                            <th className="px-2 py-2">TEAM</th>
+                            <th className="px-2 py-2 text-center">W-L</th>
+                            <th className="px-2 py-2 text-center">PCT</th>
+                            <th className="px-2 py-2 text-center text-cyan-700">SOS</th>
+                            <th className="px-2 py-2">REASON</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100">
                           {draftOrder.map((item) => (
-                            <tr
-                              key={item.team}
-                              className={`hover:bg-slate-50 transition-colors ${
-                                item.pickNumber === 1 ? "bg-amber-50/40" : ""
-                              }`}
-                            >
-                              <td className="px-3 py-2 text-center font-mono">
-                                <span
-                                  className={`inline-grid h-6 w-6 place-items-center rounded text-xs font-bold ${
-                                    item.pickNumber === 1
-                                      ? "bg-[#e85d2a] text-white shadow-xs"
-                                      : item.pickNumber <= 5
-                                      ? "bg-[#101827] text-white"
-                                      : "bg-slate-200 text-slate-700"
-                                  }`}
-                                >
-                                  {item.pickNumber}
-                                </span>
+                            <tr key={item.team} className="hover:bg-slate-50">
+                              <td className="px-2 py-1.5 text-center font-mono font-bold text-[10px]">
+                                {item.pickNumber}
                               </td>
-                              <td className="px-3 py-2">
-                                <div className="flex items-center gap-2">
+                              <td className="px-2 py-1.5">
+                                <div className="flex items-center gap-1.5 min-w-0">
                                   <MemoTeamMark code={item.team} size="sm" />
-                                  <div>
-                                    <span className="font-bold text-slate-800">{item.teamName}</span>
-                                    <span className="ml-1.5 text-[10px] text-slate-400">({item.division})</span>
-                                  </div>
+                                  <span className="font-bold truncate text-xs">{item.teamName}</span>
                                 </div>
                               </td>
-                              <td className="px-2 py-2 text-center font-mono font-bold text-slate-700">
-                                {item.record}
-                              </td>
-                              <td className="px-2 py-2 text-center font-mono text-slate-500">
-                                .{Math.round(item.winPct * 1000).toString().padStart(3, "0")}
-                              </td>
-                              <td className="px-2 py-2 text-center font-mono font-bold text-cyan-700">
-                                .{Math.round(item.sos * 1000).toString().padStart(3, "0")}
-                              </td>
-                              <td className="px-3 py-2">
-                                <span className="inline-block rounded bg-slate-100 px-2 py-0.5 font-mono text-[10px] text-slate-600">
-                                  {item.tiebreakReason}
-                                </span>
-                              </td>
+                              <td className="px-2 py-1.5 text-center font-mono text-[11px] font-semibold">{item.record}</td>
+                              <td className="px-2 py-1.5 text-center font-mono text-[11px] text-slate-500">.{Math.round(item.winPct * 1000).toString().padStart(3, "0")}</td>
+                              <td className="px-2 py-1.5 text-center font-mono text-[11px] font-bold text-cyan-700">.{Math.round(item.sos * 1000).toString().padStart(3, "0")}</td>
+                              <td className="px-2 py-1.5 text-[9px] text-slate-500">{item.tiebreakReason}</td>
                             </tr>
                           ))}
                         </tbody>
@@ -783,24 +730,23 @@ export default function PlayoffMachine() {
           </div>
 
           {/* 右カラム: 対象Weekセレクター ＆ 公式対戦カード（スマホ1列・PC2列） */}
-          <div className="space-y-4 lg:col-span-5">
-            <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-xs">
-              <div className="flex items-center justify-between pb-2">
+          <div className="space-y-4 lg:col-span-5 min-w-0">
+            <div className="rounded-xl border border-slate-200 bg-white p-2.5 shadow-xs">
+              <div className="flex items-center justify-between pb-1.5">
                 <div className="flex items-center gap-1.5">
-                  <span className="text-xs font-bold text-slate-800">対象 Week 選択</span>
-                  <span className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] font-bold text-slate-600">
+                  <span className="text-xs font-bold text-slate-800">Week 選択</span>
+                  <span className="rounded bg-slate-100 px-1 py-0.2 font-mono text-[10px] font-bold text-slate-600">
                     Week {selectedWeek}
                   </span>
                 </div>
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="h-6 px-2 text-[11px] text-slate-500 hover:text-[#e85d2a]"
+                  className="h-6 px-1.5 text-[10px] text-slate-500 hover:text-[#e85d2a]"
                   onClick={resetToOfficial}
-                  title="シミュレーションした勝敗を消去し、初期状態に戻します"
                 >
-                  <RotateCcw className="mr-1 h-3 w-3" />
-                  予想リセット
+                  <RotateCcw className="mr-1 h-2.5 w-2.5" />
+                  リセット
                 </Button>
               </div>
               <div className="flex gap-1 overflow-x-auto pb-1">
@@ -809,7 +755,7 @@ export default function PlayoffMachine() {
                     key={w}
                     type="button"
                     onClick={() => setSelectedWeek(w)}
-                    className={`flex h-8 min-w-[2.2rem] shrink-0 items-center justify-center rounded-lg text-xs font-semibold transition-all ${
+                    className={`flex h-7 min-w-[2rem] shrink-0 items-center justify-center rounded text-xs font-semibold transition-all ${
                       selectedWeek === w
                         ? "bg-[#e85d2a] text-white shadow-xs font-bold"
                         : "bg-slate-100 text-slate-600 hover:bg-slate-200"
@@ -826,72 +772,60 @@ export default function PlayoffMachine() {
               <button
                 type="button"
                 onClick={() => setActiveTab("simulator")}
-                className={`flex flex-1 items-center justify-center gap-2 rounded-lg py-2 text-xs font-bold transition-all ${
-                  activeTab === "simulator"
-                    ? "bg-[#e85d2a] text-white shadow-xs"
-                    : "text-slate-600 hover:bg-slate-50"
+                className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg py-1.5 text-xs font-bold transition-all ${
+                  activeTab === "simulator" ? "bg-[#e85d2a] text-white shadow-xs" : "text-slate-600 hover:bg-slate-50"
                 }`}
               >
-                <Layers className="h-4 w-4" />
-                Week {selectedWeek} 試合一覧
+                <Layers className="h-3.5 w-3.5" />
+                Week {selectedWeek} 対戦カード
               </button>
               <button
                 type="button"
                 onClick={() => setActiveTab("rooting")}
-                className={`flex flex-1 items-center justify-center gap-2 rounded-lg py-2 text-xs font-bold transition-all ${
-                  activeTab === "rooting"
-                    ? "bg-[#e85d2a] text-white shadow-xs"
-                    : "text-slate-600 hover:bg-slate-50"
+                className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg py-1.5 text-xs font-bold transition-all ${
+                  activeTab === "rooting" ? "bg-[#e85d2a] text-white shadow-xs" : "text-slate-600 hover:bg-slate-50"
                 }`}
               >
-                <Sparkles className="h-4 w-4" />
+                <Sparkles className="h-3.5 w-3.5" />
                 応援ガイド ({focusTeam})
               </button>
             </div>
 
-            {/* 試合一覧（スマホは1列、PC・タブレットは2列に自動最適化） */}
+            {/* 対戦カード（スマホ1列・PC2列で完全に画面幅内にフィット） */}
             {activeTab === "simulator" && (
               <Card className="border-slate-200 shadow-xs">
-                <CardHeader className="border-b border-slate-100 pb-3">
+                <CardHeader className="border-b border-slate-100 p-3">
                   <div className="flex items-center justify-between">
-                    <CardTitle className="text-sm font-bold text-slate-800">
-                      Week {selectedWeek} 公式対戦カード
+                    <CardTitle className="text-xs sm:text-sm font-bold text-slate-800">
+                      Week {selectedWeek} 対戦カード
                     </CardTitle>
-                    <span className="text-[11px] text-slate-400">
-                      タップして勝敗予想
-                    </span>
+                    <span className="text-[10px] text-slate-400">タップして勝敗予想</span>
                   </div>
                 </CardHeader>
-                <CardContent className="p-3">
+                <CardContent className="p-2 sm:p-3">
                   {officialScheduleQuery.isLoading ? (
-                    <div className="py-8 text-center text-xs text-slate-400">
-                      公式日程データを読み込み中...
-                    </div>
+                    <div className="py-6 text-center text-xs text-slate-400">読み込み中...</div>
                   ) : weekGames.length === 0 ? (
-                    <div className="py-8 text-center text-xs text-slate-400">
-                      この週に対戦カードはありません。
-                    </div>
+                    <div className="py-6 text-center text-xs text-slate-400">対戦カードがありません。</div>
                   ) : (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                       {weekGames.map((game) => (
                         <div
                           key={game.id}
-                          className={`flex flex-col justify-between rounded-xl border p-2 transition-all ${
-                            game.isFinished
-                              ? "border-slate-200 bg-slate-50/70"
-                              : "border-slate-200 bg-white shadow-xs hover:border-slate-300"
+                          className={`flex flex-col justify-between rounded-xl border p-1.5 transition-all ${
+                            game.isFinished ? "border-slate-200 bg-slate-50/70" : "border-slate-200 bg-white shadow-xs"
                           }`}
                         >
                           <button
                             type="button"
                             disabled={game.isFinished}
                             onClick={() => toggleOutcome(game.id, "away")}
-                            className={`flex items-center justify-between rounded-lg px-2 py-1.5 text-left transition-all ${
+                            className={`flex items-center justify-between rounded-lg px-2 py-1 text-left transition-all ${
                               game.outcome === "away"
-                                ? "bg-emerald-600 text-white font-bold shadow-xs"
+                                ? "bg-emerald-600 text-white font-bold"
                                 : game.isFinished
-                                ? "opacity-60 cursor-not-allowed text-slate-700"
-                                : "hover:bg-slate-100 text-slate-800"
+                                ? "opacity-60 cursor-not-allowed"
+                                : "hover:bg-slate-100"
                             }`}
                           >
                             <div className="flex items-center gap-1.5 min-w-0">
@@ -901,22 +835,18 @@ export default function PlayoffMachine() {
                             <span className="text-[9px] opacity-75 shrink-0">Away</span>
                           </button>
 
-                          <div className="my-1 flex items-center justify-center">
+                          <div className="my-0.5 flex items-center justify-center">
                             {game.isFinished ? (
-                              <span className="flex items-center gap-1 rounded bg-slate-200 px-1.5 py-0.5 text-[9px] font-bold text-slate-600">
-                                <Lock className="h-2.5 w-2.5" />
-                                確定
+                              <span className="flex items-center gap-1 rounded bg-slate-200 px-1 py-0.2 text-[8px] font-bold text-slate-600">
+                                <Lock className="h-2 w-2" /> 確定
                               </span>
                             ) : (
                               <button
                                 type="button"
                                 onClick={() => toggleOutcome(game.id, "tie")}
-                                className={`rounded px-2 py-0.5 text-[10px] font-bold transition-all ${
-                                  game.outcome === "tie"
-                                    ? "bg-amber-500 text-white"
-                                    : "text-slate-400 hover:bg-slate-100"
+                                className={`rounded px-1.5 py-0.2 text-[9px] font-bold ${
+                                  game.outcome === "tie" ? "bg-amber-500 text-white" : "text-slate-400"
                                 }`}
-                                title="引き分けにする"
                               >
                                 {game.outcome === "tie" ? "引分" : "vs"}
                               </button>
@@ -927,12 +857,12 @@ export default function PlayoffMachine() {
                             type="button"
                             disabled={game.isFinished}
                             onClick={() => toggleOutcome(game.id, "home")}
-                            className={`flex items-center justify-between rounded-lg px-2 py-1.5 text-left transition-all ${
+                            className={`flex items-center justify-between rounded-lg px-2 py-1 text-left transition-all ${
                               game.outcome === "home"
-                                ? "bg-emerald-600 text-white font-bold shadow-xs"
+                                ? "bg-emerald-600 text-white font-bold"
                                 : game.isFinished
-                              ? "opacity-60 cursor-not-allowed text-slate-700"
-                              : "hover:bg-slate-100 text-slate-800"
+                                ? "opacity-60 cursor-not-allowed"
+                                : "hover:bg-slate-100"
                             }`}
                           >
                             <div className="flex items-center gap-1.5 min-w-0">
@@ -952,51 +882,34 @@ export default function PlayoffMachine() {
             {/* 週間応援ガイド */}
             {activeTab === "rooting" && (
               <Card className="border-slate-200 shadow-xs">
-                <CardHeader className="border-b border-slate-100 pb-3">
+                <CardHeader className="border-b border-slate-100 p-3">
                   <div className="flex items-center gap-2">
                     <MemoTeamMark code={focusTeam} size="sm" />
-                    <CardTitle className="text-sm font-bold text-slate-800">
-                      {focusTeamInfo?.name ?? focusTeam} の週間応援ガイド (Week {selectedWeek})
+                    <CardTitle className="text-xs sm:text-sm font-bold text-slate-800">
+                      {focusTeamInfo?.name ?? focusTeam} の週間応援ガイド
                     </CardTitle>
                   </div>
                 </CardHeader>
-                <CardContent className="space-y-3 p-4">
+                <CardContent className="space-y-2.5 p-3">
                   {rootingGuide.length === 0 ? (
-                    <div className="py-8 text-center text-xs text-slate-400">
-                      この週に推奨できる試合カードはありません。
-                    </div>
+                    <div className="py-6 text-center text-xs text-slate-400">推奨カードはありません。</div>
                   ) : (
                     <>
-                      {importantGuides.length === 0 && (
-                        <div className="py-4 text-center text-xs text-slate-500">
-                          この週に重要度「中」以上の推奨試合はありません。
-                        </div>
-                      )}
-
                       {importantGuides.map((item) => (
                         <RootingGuideCard key={item.gameId} item={item} />
                       ))}
-
                       {lowGuides.length > 0 && (
-                        <div className="pt-2">
+                        <div className="pt-1">
                           <button
                             type="button"
                             onClick={() => setShowLowGuides((prev) => !prev)}
-                            className="flex w-full items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-xs font-bold text-slate-600 hover:bg-slate-100 transition-colors"
+                            className="flex w-full items-center justify-between rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-xs font-bold text-slate-600"
                           >
-                            <span>その他の試合（重要度 LOW: {lowGuides.length}件）</span>
-                            <div className="flex items-center gap-1 text-[11px] text-slate-400">
-                              <span>{showLowGuides ? "閉じる" : "表示する"}</span>
-                              <ChevronDown
-                                className={`h-4 w-4 transition-transform duration-200 ${
-                                  showLowGuides ? "rotate-180" : ""
-                                }`}
-                              />
-                            </div>
+                            <span>その他の試合 ({lowGuides.length}件)</span>
+                            <ChevronDown className={`h-3.5 w-3.5 transition-transform ${showLowGuides ? "rotate-180" : ""}`} />
                           </button>
-
                           {showLowGuides && (
-                            <div className="mt-2.5 space-y-3 animate-in fade-in duration-200">
+                            <div className="mt-2 space-y-2">
                               {lowGuides.map((item) => (
                                 <RootingGuideCard key={item.gameId} item={item} />
                               ))}
@@ -1028,61 +941,47 @@ export default function PlayoffMachine() {
           onClick={() => setExplanationModalSeed(null)}
         >
           <div
-            className="max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl"
+            className="max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-5 shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-start justify-between border-b border-slate-100 pb-4">
-              <div className="flex items-center gap-3">
+            <div className="flex items-start justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2.5">
                 <MemoTeamMark code={explanationModalSeed.team} size="lg" />
                 <div>
-                  <h3 className="text-base font-bold text-slate-900">
+                  <h3 className="text-sm sm:text-base font-bold text-slate-900">
                     #{explanationModalSeed.seed} {explanationModalSeed.teamName}
                   </h3>
-                  <p className="text-xs text-slate-500">
-                    タイブレーカー適用判定ステップの解説
-                  </p>
+                  <p className="text-[11px] text-slate-500">タイブレーカー判定詳細</p>
                 </div>
               </div>
               <button
                 type="button"
-                className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+                className="rounded-lg p-1 text-slate-400 hover:bg-slate-100"
                 onClick={() => setExplanationModalSeed(null)}
               >
                 <X className="h-5 w-5" />
               </button>
             </div>
 
-            <div className="mt-4 space-y-3">
+            <div className="mt-3 space-y-2">
               {explanationModalSeed.tiebreakerExplanations && explanationModalSeed.tiebreakerExplanations.length > 0 ? (
                 explanationModalSeed.tiebreakerExplanations.map((exp, idx) => (
-                  <div
-                    key={idx}
-                    className="rounded-xl border border-slate-200 bg-slate-50/70 p-4 text-xs space-y-1.5"
-                  >
-                    <div className="flex items-center gap-2">
-                      <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                  <div key={idx} className="rounded-xl border border-slate-200 bg-slate-50/70 p-3 text-xs space-y-1">
+                    <div className="flex items-center gap-1.5">
+                      <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
                       <span className="font-bold text-slate-800">{exp.stepNameJa}</span>
                     </div>
-                    <p className="text-slate-600 leading-relaxed">{exp.reasonJa}</p>
-                    <div className="text-[10px] text-slate-400 pt-1">
-                      対象球団: {exp.teamsCompared.join(", ")}
-                    </div>
+                    <p className="text-slate-600 leading-relaxed text-[11px]">{exp.reasonJa}</p>
+                    <div className="text-[9px] text-slate-400">対象: {exp.teamsCompared.join(", ")}</div>
                   </div>
                 ))
               ) : (
-                <div className="py-6 text-center text-xs text-slate-500">
-                  単独勝率のため、タイブレーカーの適用なしにシードが確定しています。
-                </div>
+                <div className="py-4 text-center text-xs text-slate-500">単独勝率のため確定しています。</div>
               )}
             </div>
 
-            <div className="mt-6 flex justify-end">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => setExplanationModalSeed(null)}
-              >
+            <div className="mt-4 flex justify-end">
+              <Button type="button" variant="outline" size="sm" onClick={() => setExplanationModalSeed(null)}>
                 閉じる
               </Button>
             </div>
@@ -1093,11 +992,7 @@ export default function PlayoffMachine() {
   );
 }
 
-function RootingGuideCard({
-  item,
-}: {
-  item: ReturnType<typeof generateRootingGuide>[number];
-}) {
+function RootingGuideCard({ item }: { item: ReturnType<typeof generateRootingGuide>[number] }) {
   const preferredTeam = item.preferredWinner === "home" ? item.homeTeam : item.awayTeam;
   const preferredInfo = NFL_TEAMS[preferredTeam];
 
@@ -1111,24 +1006,24 @@ function RootingGuideCard({
       : "bg-slate-100 text-slate-600 border-slate-200";
 
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-xs space-y-2">
+    <div className="rounded-xl border border-slate-200 bg-white p-2.5 shadow-xs space-y-1.5">
       <div className="flex items-center justify-between">
-        <span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold ${badgeColor}`}>
+        <span className={`rounded-full border px-2 py-0.2 text-[9px] font-bold ${badgeColor}`}>
           重要度: {item.importance}
         </span>
-        <span className="text-[11px] text-slate-400">
+        <span className="text-[10px] text-slate-400">
           {item.awayTeam} @ {item.homeTeam}
         </span>
       </div>
 
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-1.5">
         <MemoTeamMark code={preferredTeam} size="sm" />
         <div className="text-xs font-bold text-slate-800">
           <span className="text-[#e85d2a]">{preferredInfo?.name ?? preferredTeam}</span> の勝利を応援！
         </div>
       </div>
 
-      <p className="text-xs leading-relaxed text-slate-600">{item.reasonJa}</p>
+      <p className="text-[11px] leading-relaxed text-slate-600">{item.reasonJa}</p>
     </div>
   );
 }
@@ -1148,13 +1043,13 @@ function SeedRow({
 
   return (
     <div
-      className={`flex items-center justify-between px-4 py-2.5 transition-colors ${
+      className={`flex items-center justify-between px-3 py-2 transition-colors ${
         isFocus ? "bg-amber-50/80 ring-1 ring-amber-300 ring-inset" : "hover:bg-slate-50"
       }`}
     >
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2 min-w-0 flex-1 mr-2">
         <span
-          className={`flex h-6 w-6 items-center justify-center rounded-md text-xs font-bold ${
+          className={`flex h-5 w-5 shrink-0 items-center justify-center rounded text-[11px] font-bold ${
             isEliminated
               ? "bg-slate-200 text-slate-400 line-through"
               : seed.seed <= 4
@@ -1167,27 +1062,27 @@ function SeedRow({
           {seed.seed}
         </span>
         <MemoTeamMark code={seed.team} size="sm" />
-        <div>
-          <div className="flex items-center gap-1.5">
-            <span className={`text-xs font-bold ${isEliminated ? "text-slate-400 line-through" : "text-slate-800"}`}>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-1 min-w-0">
+            <span className={`text-xs font-bold truncate ${isEliminated ? "text-slate-400 line-through" : "text-slate-800"}`}>
               {seed.teamName}
             </span>
             {seed.isDivisionWinner && (
-              <span className="rounded bg-slate-100 px-1 py-0.2 text-[9px] font-semibold text-slate-600">
+              <span className="shrink-0 rounded bg-slate-100 px-1 py-0.2 text-[8px] font-semibold text-slate-600">
                 地区1位
               </span>
             )}
             {isEliminated && (
-              <span className="rounded bg-rose-100 px-1 py-0.2 text-[9px] font-semibold text-rose-600">
+              <span className="shrink-0 rounded bg-rose-100 px-1 py-0.2 text-[8px] font-semibold text-rose-600">
                 敗退
               </span>
             )}
           </div>
-          <span className="text-[10px] text-slate-400">{seed.division}</span>
+          <span className="text-[9px] text-slate-400 block truncate">{seed.division}</span>
         </div>
       </div>
 
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2 shrink-0">
         <span className="text-xs font-bold tabular-nums text-slate-700">
           {seed.record.wins}-{seed.record.losses}
           {seed.record.ties > 0 && `-${seed.record.ties}`}
@@ -1197,13 +1092,13 @@ function SeedRow({
           <button
             type="button"
             onClick={onExplainClick}
-            className="flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1 text-[10px] font-semibold text-slate-600 transition-all hover:border-[#e85d2a] hover:text-[#e85d2a]"
+            className="flex items-center gap-0.5 rounded border border-slate-200 bg-white px-1.5 py-0.5 text-[9px] font-semibold text-slate-600 hover:border-[#e85d2a] hover:text-[#e85d2a]"
           >
             <span>解説</span>
-            <HelpCircle className="h-3 w-3 text-[#e85d2a]" />
+            <HelpCircle className="h-2.5 w-2.5 text-[#e85d2a]" />
           </button>
         ) : (
-          <div className="w-12" />
+          <div className="w-8" />
         )}
       </div>
     </div>
