@@ -217,9 +217,11 @@ function playerCategories(tables: GameCenterTable[], awayCode: string, homeCode:
   return { passing: byCategory("PASSING"), rushing: byCategory("RUSHING"), receiving: byCategory("RECEIVING"), defense: byCategory("DEFENSE") };
 }
 
-function isOfficialFinal(state: string) {
+function isOfficialFinal(state?: string | null) {
+  if (!state) return false;
   const normalized = state.toUpperCase();
-  return normalized === "FINAL" || normalized === "COMPLETED";
+  // FINAL, FINAL/OT, COMPLETED, POST（試合終了直後）を確実に試合終了として判定
+  return normalized.includes("FINAL") || normalized === "COMPLETED" || normalized === "POST";
 }
 
 export async function getOfficialGameStats(gameUrl: string): Promise<GameStatsPayload> {
