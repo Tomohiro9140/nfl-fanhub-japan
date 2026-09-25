@@ -76,9 +76,37 @@ export function parseExternalTeamNewsRss(
     const publishedAt = new Date(field(item, "pubDate"));
     if (!title || !sourceUrl || !isEditorialNews(title, summary ?? "", sourceUrl) || Number.isNaN(publishedAt.getTime())) continue;
     if (publishedAt.getTime() < now.getTime() - EXTERNAL_NEWS_MAX_AGE_MS || publishedAt.getTime() > now.getTime() + 24 * 60 * 60 * 1_000) continue;
-    const haystack = `${title} ${summary ?? ""}`.toLowerCase();
-    for (const teamCode of requestedTeamCodes) {
-      if (!(teamMatchers[teamCode] ?? []).some((matcher) => haystack.includes(matcher))) continue;
+
+    const titleLower = title.toLowerCase();
+    const rawSummaryLower = (summary ?? "").toLowerCase();
+
+    // 1. 対戦相手としての言及フレーズ（against the ..., loss to ... 等）を除去
+    const sanitizedSummary = rawSummaryLower.replace(
+      /\b(?:against|vs\.?|versus|loss to|lost to|fell to|defeated by|facing|faced|beat by|over)\s+(?:the\s+)?([a-z0-9\s]+?)(?=[,.;]|\s+(?:on|in|after|during|with|and|who|which)\b|$)/gi,
+      " "
+    );
+
+    const matchesTeam = (text: string, code: string) => {
+      const matchers = teamMatchers[code] ?? [];
+      return matchers.some((m) => {
+        const escaped = m.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        return new RegExp(`\\b${escaped}\\b`, "i").test(text);
+      });
+    };
+
+    // 2. タイトルにチーム名が含まれているか（主語の判定）
+    const titleMatchedTeams = requestedTeamCodes.filter((code) => matchesTeam(titleLower, code));
+
+    let matchedTeamCodes: string[] = [];
+    if (titleMatchedTeams.length > 0) {
+      // タイトルにチーム名がある場合：そのチーム「のみ」を対象（対戦相手の混入を完全遮断）
+      matchedTeamCodes = titleMatchedTeams;
+    } else {
+      // タイトルにチーム名がない場合（選手名のみの記事など）：対戦相手表現を除去したサマリーから判定
+      matchedTeamCodes = requestedTeamCodes.filter((code) => matchesTeam(sanitizedSummary, code));
+    }
+
+    for (const teamCode of matchedTeamCodes) {
       candidates.push({
         externalId: createHash("sha256").update(`${source.kind}:${teamCode}:${sourceUrl}`).digest("hex"),
         teamCode,
