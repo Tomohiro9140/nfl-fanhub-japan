@@ -136,7 +136,7 @@ export default function PlayoffMachine() {
   const standings = useMemo(() => calculateAllStandings(games), [games]);
   const currentConfStandings = standings[activeConf];
 
-  // プレイオフ進出シード 1〜7 位（AFC / NFC の大文字キーで正確に取得）
+  // プレイオフ進出シード 1〜7 位（AFC / NFC）
   const afcPlayoffSeeds = useMemo(() => {
     return [
       ...(standings.AFC?.divisionWinners ?? []),
@@ -238,7 +238,7 @@ export default function PlayoffMachine() {
           records[g.awayTeam].confTies++;
         }
         if (isDiv) {
-          records[g.homeTeam].divTies++;
+          records[g.homeTeam].divWins++;
           records[g.awayTeam].divTies++;
         }
       }
@@ -316,7 +316,6 @@ export default function PlayoffMachine() {
         record: allTeamRecords[code],
       }));
 
-    // 対戦相手合計勝率（SOS）を算出
     const sosMap: Record<string, number> = {};
     for (const t of nonPlayoff) {
       const teamGames = games.filter((g) => g.awayTeam === t.code || g.homeTeam === t.code);
@@ -337,7 +336,6 @@ export default function PlayoffMachine() {
       sosMap[t.code] = totalOpp > 0 ? (oppWins + oppTies * 0.5) / totalOpp : 0.5;
     }
 
-    // 弱い順にソート
     const sorted = [...nonPlayoff].sort((a, b) => {
       if (Math.abs(a.record.pct - b.record.pct) >= 0.0001) {
         return a.record.pct - b.record.pct;
@@ -449,7 +447,7 @@ export default function PlayoffMachine() {
     <div className="min-h-screen bg-slate-50 text-slate-900 pb-16">
       <EmbeddedAppNav current="SIMULATOR" />
 
-      {/* ヘッダー: アイコンとタイトル */}
+      {/* ヘッダー */}
       <header className="border-b border-white/10 bg-[#101827] text-white">
         <div className="container mx-auto flex min-h-16 items-center justify-center px-4 py-3 sm:px-6">
           <div className="flex items-center gap-2.5">
@@ -461,11 +459,11 @@ export default function PlayoffMachine() {
         </div>
       </header>
 
-      {/* コントロールバー: 応援チーム選択 ＆ 一括シミュレーション ＆ プレイオフ予想ボタン */}
+      {/* コントロールバー */}
       <div className="border-b border-slate-200 bg-white shadow-xs">
         <div className="container mx-auto flex flex-col gap-3 px-4 py-3 sm:px-6 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex flex-wrap items-center gap-3">
-            {/* 応援チーム選択（ABC順） */}
+            {/* 応援チーム選択 */}
             <div className="w-full sm:w-56">
               <Label className="text-[11px] font-semibold text-slate-500 uppercase">あなたの応援チーム（Focus）</Label>
               <Select
@@ -493,7 +491,7 @@ export default function PlayoffMachine() {
               </Select>
             </div>
 
-            {/* 一括シミュレーション ドロップダウン */}
+            {/* 一括シミュレーション */}
             <div className="relative">
               <Label className="text-[11px] font-semibold text-slate-500 uppercase">一括シミュレーション</Label>
               <div className="mt-1 flex items-center gap-1.5">
@@ -509,7 +507,6 @@ export default function PlayoffMachine() {
                   <ChevronDown className={`ml-1.5 h-3.5 w-3.5 transition-transform ${presetDropdownOpen ? "rotate-180" : ""}`} />
                 </Button>
 
-                {/* 未選択のみ / 全上書き トグル */}
                 <div className="flex h-9 items-center rounded-lg border border-slate-200 bg-slate-100 p-0.5 text-[11px]">
                   <button
                     type="button"
@@ -532,7 +529,6 @@ export default function PlayoffMachine() {
                 </div>
               </div>
 
-              {/* プリセットメニュー */}
               {presetDropdownOpen && (
                 <div className="absolute left-0 top-full z-50 mt-1.5 w-64 rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl animate-in fade-in zoom-in-95 duration-100">
                   <div className="px-2.5 py-1 text-[10px] font-bold text-slate-400 uppercase">
@@ -645,7 +641,6 @@ export default function PlayoffMachine() {
               <CardContent className="p-0">
                 {mainViewMode === "playoffs" ? (
                   <div>
-                    {/* 地区首位（#1〜#4） */}
                     <div className="border-b border-slate-100 bg-slate-50/70 px-4 py-2 text-[11px] font-bold tracking-wider text-slate-500">
                       DIVISION LEADERS (#1〜#4)
                     </div>
@@ -660,7 +655,6 @@ export default function PlayoffMachine() {
                       ))}
                     </div>
 
-                    {/* ワイルドカード（#5〜#7） */}
                     <div className="border-y border-slate-100 bg-amber-50/50 px-4 py-2 text-[11px] font-bold tracking-wider text-amber-800">
                       WILD CARD (#5〜#7)
                     </div>
@@ -675,7 +669,6 @@ export default function PlayoffMachine() {
                       ))}
                     </div>
 
-                    {/* 追撃圏内 (IN THE HUNT) */}
                     <div className="flex items-center gap-1.5 border-y border-slate-100 bg-blue-50/50 px-4 py-2 text-[11px] font-bold tracking-wider text-blue-800">
                       <Flame className="h-3.5 w-3.5 text-blue-600" />
                       IN THE HUNT (進出可能性あり)
@@ -695,7 +688,6 @@ export default function PlayoffMachine() {
                       )}
                     </div>
 
-                    {/* 完全敗退 (ELIMINATED) */}
                     {eliminatedTeams.length > 0 && (
                       <>
                         <div className="flex items-center gap-1.5 border-y border-slate-100 bg-slate-100/70 px-4 py-2 text-[11px] font-bold tracking-wider text-slate-500">
@@ -790,9 +782,8 @@ export default function PlayoffMachine() {
             </Card>
           </div>
 
-          {/* 右カラム: 対象Weekセレクター ＆ 公式対戦カード（2列表示） ＆ 応援ガイド */}
+          {/* 右カラム: 対象Weekセレクター ＆ 公式対戦カード（スマホ1列・PC2列） */}
           <div className="space-y-4 lg:col-span-5">
-            {/* 1. 対象Weekセレクター ＆ 予想リセット（対戦カードの直上に統合） */}
             <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-xs">
               <div className="flex items-center justify-between pb-2">
                 <div className="flex items-center gap-1.5">
@@ -830,7 +821,7 @@ export default function PlayoffMachine() {
               </div>
             </div>
 
-            {/* タブ切り替え: 試合一覧 ⇔ 応援ガイド */}
+            {/* タブ切り替え */}
             <div className="flex rounded-xl border border-slate-200 bg-white p-1 shadow-xs">
               <button
                 type="button"
@@ -858,7 +849,7 @@ export default function PlayoffMachine() {
               </button>
             </div>
 
-            {/* タブ 1: 試合一覧（1段2試合の2列グリッドでスマホでもコンパクトに表示） */}
+            {/* 試合一覧（スマホは1列、PC・タブレットは2列に自動最適化） */}
             {activeTab === "simulator" && (
               <Card className="border-slate-200 shadow-xs">
                 <CardHeader className="border-b border-slate-100 pb-3">
@@ -881,7 +872,7 @@ export default function PlayoffMachine() {
                       この週に対戦カードはありません。
                     </div>
                   ) : (
-                    <div className="grid grid-cols-2 gap-2">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                       {weekGames.map((game) => (
                         <div
                           key={game.id}
@@ -891,7 +882,6 @@ export default function PlayoffMachine() {
                               : "border-slate-200 bg-white shadow-xs hover:border-slate-300"
                           }`}
                         >
-                          {/* アウェーチーム */}
                           <button
                             type="button"
                             disabled={game.isFinished}
@@ -911,7 +901,6 @@ export default function PlayoffMachine() {
                             <span className="text-[9px] opacity-75 shrink-0">Away</span>
                           </button>
 
-                          {/* 中央のステータス/VS/引分 */}
                           <div className="my-1 flex items-center justify-center">
                             {game.isFinished ? (
                               <span className="flex items-center gap-1 rounded bg-slate-200 px-1.5 py-0.5 text-[9px] font-bold text-slate-600">
@@ -934,7 +923,6 @@ export default function PlayoffMachine() {
                             )}
                           </div>
 
-                          {/* ホームチーム */}
                           <button
                             type="button"
                             disabled={game.isFinished}
@@ -961,7 +949,7 @@ export default function PlayoffMachine() {
               </Card>
             )}
 
-            {/* タブ 2: 週間応援ガイド（重要度LOWをデフォルト折りたたみ） */}
+            {/* 週間応援ガイド */}
             {activeTab === "rooting" && (
               <Card className="border-slate-200 shadow-xs">
                 <CardHeader className="border-b border-slate-100 pb-3">
@@ -985,12 +973,10 @@ export default function PlayoffMachine() {
                         </div>
                       )}
 
-                      {/* 重要度 CRITICAL / HIGH / MEDIUM の試合カード（常に表示） */}
                       {importantGuides.map((item) => (
                         <RootingGuideCard key={item.gameId} item={item} />
                       ))}
 
-                      {/* 重要度 LOW の折りたたみアコーディオン */}
                       {lowGuides.length > 0 && (
                         <div className="pt-2">
                           <button
