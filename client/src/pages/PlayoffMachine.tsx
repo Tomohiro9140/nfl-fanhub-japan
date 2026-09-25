@@ -136,20 +136,20 @@ export default function PlayoffMachine() {
   const standings = useMemo(() => calculateAllStandings(games), [games]);
   const currentConfStandings = standings[activeConf];
 
-  // プレイオフ進出シード 1〜7 位（AFC / NFC）
+  // プレイオフ進出シード 1〜7 位（AFC / NFC の大文字キーで正確に取得）
   const afcPlayoffSeeds = useMemo(() => {
     return [
-      ...(standings.afc?.divisionWinners ?? []),
-      ...(standings.afc?.wildCards ?? []),
+      ...(standings.AFC?.divisionWinners ?? []),
+      ...(standings.AFC?.wildCards ?? []),
     ];
-  }, [standings.afc]);
+  }, [standings.AFC]);
 
   const nfcPlayoffSeeds = useMemo(() => {
     return [
-      ...(standings.nfc?.divisionWinners ?? []),
-      ...(standings.nfc?.wildCards ?? []),
+      ...(standings.NFC?.divisionWinners ?? []),
+      ...(standings.NFC?.wildCards ?? []),
     ];
-  }, [standings.nfc]);
+  }, [standings.NFC]);
 
   // 全32チームのリアルタイム成績（ドラフト・プリセット用）
   const allTeamRecords = useMemo(() => {
@@ -300,8 +300,8 @@ export default function PlayoffMachine() {
   const playoffTeamCodes = useMemo(() => {
     const set = new Set<string>();
     for (const conf of ["AFC", "NFC"] as Conference[]) {
-      for (const t of standings[conf].divisionWinners) set.add(t.team);
-      for (const t of standings[conf].wildCards) set.add(t.team);
+      for (const t of standings[conf]?.divisionWinners ?? []) set.add(t.team);
+      for (const t of standings[conf]?.wildCards ?? []) set.add(t.team);
     }
     return set;
   }, [standings]);
@@ -401,11 +401,11 @@ export default function PlayoffMachine() {
 
   // In the Hunt と Eliminated の分類
   const { inTheHuntTeams, eliminatedTeams } = useMemo(() => {
-    const seed7Wins = currentConfStandings.wildCards[2]?.record.wins ?? 0;
+    const seed7Wins = currentConfStandings?.wildCards?.[2]?.record.wins ?? 0;
     const inTheHunt: PlayoffSeed[] = [];
     const eliminated: PlayoffSeed[] = [];
 
-    for (const team of currentConfStandings.inTheHunt) {
+    for (const team of currentConfStandings?.inTheHunt ?? []) {
       const played = team.record.wins + team.record.losses + team.record.ties;
       const remainingGames = Math.max(0, 17 - played);
       const maxPossibleWins = team.record.wins + remainingGames;
@@ -650,7 +650,7 @@ export default function PlayoffMachine() {
                       DIVISION LEADERS (#1〜#4)
                     </div>
                     <div className="divide-y divide-slate-100">
-                      {currentConfStandings.divisionWinners.map((team) => (
+                      {(currentConfStandings?.divisionWinners ?? []).map((team) => (
                         <SeedRow
                           key={team.team}
                           seed={team}
@@ -665,7 +665,7 @@ export default function PlayoffMachine() {
                       WILD CARD (#5〜#7)
                     </div>
                     <div className="divide-y divide-slate-100">
-                      {currentConfStandings.wildCards.map((team) => (
+                      {(currentConfStandings?.wildCards ?? []).map((team) => (
                         <SeedRow
                           key={team.team}
                           seed={team}
