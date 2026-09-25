@@ -71,9 +71,36 @@ function getTeamInfo(code: string) {
   };
 }
 
+// Canvas アスペクト比維持描画ヘルパー
+function drawImageContain(
+  ctx: CanvasRenderingContext2D,
+  img: HTMLImageElement,
+  x: number,
+  y: number,
+  maxW: number,
+  maxH: number
+) {
+  if (!img.complete || img.naturalWidth === 0) return;
+  const imgRatio = img.naturalWidth / img.naturalHeight;
+  let w = maxW;
+  let h = maxW / imgRatio;
+  if (h > maxH) {
+    h = maxH;
+    w = maxH * imgRatio;
+  }
+  const drawX = x + (maxW - w) / 2;
+  const drawY = y + (maxH - h) / 2;
+  ctx.drawImage(img, drawX, drawY, w, h);
+}
+
 export function PlayoffPredictionModal({ isOpen, onClose, afcSeeds, nfcSeeds }: Props) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const logoCache = useRef<Map<string, HTMLImageElement>>(new Map());
+  const tournamentLogos = useRef<{
+    sb?: HTMLImageElement;
+    afc?: HTMLImageElement;
+    nfc?: HTMLImageElement;
+  }>({});
 
   // 勝敗ステート
   const [afcWcWinners, setAfcWcWinners] = useState<{ [matchIndex: number]: string }>({});
@@ -90,8 +117,23 @@ export function PlayoffPredictionModal({ isOpen, onClose, afcSeeds, nfcSeeds }: 
   const afcSeedMap = useMemo(() => new Map(afcSeeds.map((s, i) => [s.team, i + 1])), [afcSeeds]);
   const nfcSeedMap = useMemo(() => new Map(nfcSeeds.map((s, i) => [s.team, i + 1])), [nfcSeeds]);
 
-  // ロゴ画像の事前ロード（CORS対応）
+  // 公式ロゴ画像 ＆ チームロゴの事前ロード
   useEffect(() => {
+    // 1. 大会公式ロゴ（WebP）
+    const loadTournamentLogo = (key: "sb" | "afc" | "nfc", src: string) => {
+      const img = new Image();
+      img.src = src;
+      img.onload = () => {
+        tournamentLogos.current[key] = img;
+        renderCanvas();
+      };
+    };
+
+    loadTournamentLogo("sb", "/superbowl2026.webp");
+    loadTournamentLogo("afc", "/Afc_championship_logo.svg.webp");
+    loadTournamentLogo("nfc", "/Nfc_championship_logo.svg.webp");
+
+    // 2. チームロゴ
     const allTeams = [...afcSeeds, ...nfcSeeds].map((s) => s.team);
     allTeams.forEach((code) => {
       if (!logoCache.current.has(code)) {
@@ -156,7 +198,7 @@ export function PlayoffPredictionModal({ isOpen, onClose, afcSeeds, nfcSeeds }: 
     setPreviewUrl(null);
   };
 
-  // Canvas描画（参考写真 Image 19 の高密度TVブロードキャスト完全再現）
+  // Canvas 描画
   const renderCanvas = () => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -169,11 +211,11 @@ export function PlayoffPredictionModal({ isOpen, onClose, afcSeeds, nfcSeeds }: 
     canvas.height = height;
 
     // 1. 深みのあるダークテクスチャ背景
-    ctx.fillStyle = "#0c101a";
+    ctx.fillStyle = "#0a0e17";
     ctx.fillRect(0, 0, width, height);
 
     // 百合の紋章透かしパターン
-    ctx.fillStyle = "rgba(255, 255, 255, 0.02)";
+    ctx.fillStyle = "rgba(255, 255, 255, 0.015)";
     for (let x = 60; x < width; x += 100) {
       for (let y = 50; y < height; y += 100) {
         ctx.beginPath();
@@ -185,37 +227,31 @@ export function PlayoffPredictionModal({ isOpen, onClose, afcSeeds, nfcSeeds }: 
     }
 
     // 2. カンファレンス透かし文字 (NFC / AFC)
-    ctx.fillStyle = "rgba(255, 255, 255, 0.07)";
+    ctx.fillStyle = "rgba(255, 255, 255, 0.05)";
     ctx.font = "900 130px 'Impact', sans-serif";
     ctx.textAlign = "center";
     ctx.fillText("NFC", 320, 360);
     ctx.fillText("AFC", 880, 360);
 
-    // 3. 上部中央：SUPER BOWL LXI & トロフィーエンブレム
+    // 3. 【公式ロゴ描画】中央上部：SUPER BOWL 公式ロゴ
     const midX = width / 2;
-    // トロフィーシルエット（シルバーグラデーション）
-    const trophyGrad = ctx.createLinearGradient(midX - 20, 30, midX + 20, 110);
-    trophyGrad.addColorStop(0, "#ffffff");
-    trophyGrad.addColorStop(0.5, "#94a3b8");
-    trophyGrad.addColorStop(1, "#475569");
-    ctx.fillStyle = trophyGrad;
-    ctx.beginPath();
-    ctx.ellipse(midX, 50, 16, 24, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillRect(midX - 3.5, 70, 7, 28);
-    ctx.fillRect(midX - 18, 98, 36, 6);
+    if (tournamentLogos.current.sb) {
+      drawImageContain(ctx, tournamentLogos.current.sb, midX - 110, 18, 220, 130);
+    } else {
+      ctx.fillStyle = "#ffffff";
+      ctx.font = "900 32px 'Arial Black', sans-serif";
+      ctx.fillText("SUPER BOWL", midX, 85);
+    }
 
-    ctx.fillStyle = "#ffffff";
-    ctx.font = "900 34px 'Arial Black', sans-serif";
-    ctx.letterSpacing = "2px";
-    ctx.fillText("LXI", midX, 90);
+    // 4. 【公式ロゴ描画】左右カンファレンス公式ロゴ
+    if (tournamentLogos.current.nfc) {
+      drawImageContain(ctx, tournamentLogos.current.nfc, 375, 150, 190, 85);
+    }
+    if (tournamentLogos.current.afc) {
+      drawImageContain(ctx, tournamentLogos.current.afc, 635, 150, 190, 85);
+    }
 
-    ctx.fillStyle = "#eab308";
-    ctx.font = "900 12px monospace";
-    ctx.letterSpacing = "3px";
-    ctx.fillText("SUPER BOWL", midX, 126);
-
-    // 4. 公式スタイルカード描画（チームロゴ ＋ チームカラー ＋ 白四角シードバッジ）
+    // 5. 公式スタイルカード描画（チームロゴ ＋ チームカラー ＋ 白四角シードバッジ）
     const cardW = 168;
     const rowH = 32;
 
@@ -229,14 +265,13 @@ export function PlayoffPredictionModal({ isOpen, onClose, afcSeeds, nfcSeeds }: 
       winner?: string
     ) => {
       ctx.save();
-      // 外枠シャドウ
       ctx.strokeStyle = "rgba(255, 255, 255, 0.3)";
       ctx.lineWidth = 1;
       ctx.strokeRect(x, y, cardW, rowH * 2);
 
       const renderTeamRow = (rowY: number, code?: string, seed?: number, isWinner?: boolean) => {
         if (!code) {
-          ctx.fillStyle = "rgba(15, 23, 42, 0.7)";
+          ctx.fillStyle = "rgba(15, 23, 42, 0.75)";
           ctx.fillRect(x, rowY, cardW, rowH);
           ctx.fillStyle = "rgba(255, 255, 255, 0.3)";
           ctx.font = "bold 11px monospace";
@@ -246,27 +281,26 @@ export function PlayoffPredictionModal({ isOpen, onClose, afcSeeds, nfcSeeds }: 
         }
 
         const info = getTeamInfo(code);
-        // 背景色（チーム公式カラー）
         ctx.fillStyle = isWinner ? info.primaryColor : "#141c2b";
         ctx.fillRect(x, rowY, cardW, rowH);
 
-        // チームロゴ（ESPN CDN）
+        // チームロゴ
         const logoImg = logoCache.current.get(code);
         if (logoImg && logoImg.complete) {
           try {
             ctx.drawImage(logoImg, x + 6, rowY + 4, 24, 24);
           } catch {
-            // エラー時はスキップ
+            // スキップ
           }
         }
 
-        // チーム略称
+        // チームコード
         ctx.fillStyle = "#ffffff";
         ctx.font = isWinner ? "900 14px sans-serif" : "bold 13px sans-serif";
         ctx.textAlign = "left";
         ctx.fillText(code, x + 36, rowY + 21);
 
-        // 白四角シードバッジ（黒太字）
+        // 白四角シードバッジ
         if (seed) {
           ctx.fillStyle = "#ffffff";
           ctx.fillRect(x + cardW - 28, rowY + 3, 25, rowH - 6);
@@ -276,7 +310,7 @@ export function PlayoffPredictionModal({ isOpen, onClose, afcSeeds, nfcSeeds }: 
           ctx.fillText(String(seed), x + cardW - 15.5, rowY + 21);
         }
 
-        // 勝者ハイライト枠
+        // 勝者ハイライト
         if (isWinner) {
           ctx.strokeStyle = "#eab308";
           ctx.lineWidth = 2.5;
@@ -303,12 +337,10 @@ export function PlayoffPredictionModal({ isOpen, onClose, afcSeeds, nfcSeeds }: 
     };
 
     // 左右対称座標
-    // NFC (左)
     const nfcWcX = 45;
     const nfcDivX = 230;
     const nfcCcgX = 390;
 
-    // AFC (右)
     const afcCcgX = 642;
     const afcDivX = 802;
     const afcWcX = 987;
