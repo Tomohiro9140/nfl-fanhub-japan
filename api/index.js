@@ -59,21 +59,41 @@ function latestWednesdaySixJst(now) {
   return cutoff;
 }
 function isOfficialFinal(game) {
-  return Boolean(game?.gameState && /final|completed/i.test(game.gameState));
+  return Boolean(game?.gameState && /final|completed|post/i.test(game.gameState));
 }
 function isWithinJstReplayWindow(game, now) {
   return isOfficialFinal(game) && new Date(game.kickoffAt).getTime() >= latestWednesdaySixJst(now).getTime();
 }
 function regularWeekNumber(game) {
   if (game?.seasonPhase !== "regular") return null;
-  const week = game.weekLabel?.match(/^WEEK\s+(\d+)$/i)?.[1];
+  const week = game?.weekLabel?.match(/WEEK\s*(\d+)/i)?.[1];
   return week ? Number(week) : null;
 }
-function getRegularSeasonByeWeek({ now, scheduledGame, latestCompletedGame }) {
+function getRegularSeasonByeWeek({
+  now,
+  scheduledGame,
+  latestCompletedGame,
+  activeGame
+}) {
+  if (activeGame && !isOfficialFinal(activeGame)) {
+    return void 0;
+  }
   const nextWeek = regularWeekNumber(scheduledGame);
   const previousWeek = regularWeekNumber(latestCompletedGame);
-  if (!scheduledGame || !latestCompletedGame || nextWeek === null || previousWeek === null) return void 0;
-  if (nextWeek !== previousWeek + 2 || isWithinJstReplayWindow(latestCompletedGame, now)) return void 0;
+  if (!scheduledGame || !latestCompletedGame || nextWeek === null || previousWeek === null) {
+    return void 0;
+  }
+  if (nextWeek !== previousWeek + 2 || isWithinJstReplayWindow(latestCompletedGame, now)) {
+    return void 0;
+  }
+  const activeWeek = regularWeekNumber(activeGame);
+  if (activeWeek === previousWeek + 1) {
+    return void 0;
+  }
+  const daysUntilNext = (new Date(scheduledGame.kickoffAt).getTime() - now.getTime()) / (24 * 60 * 60 * 1e3);
+  if (daysUntilNext < 6) {
+    return void 0;
+  }
   return { weekLabel: `WEEK ${previousWeek + 1}`, nextGameWeekLabel: scheduledGame.weekLabel };
 }
 function selectGameTicketGame({
@@ -773,7 +793,15 @@ async function getOfficialTeamSnapshot(teamCode, skipGameUrl, forceLastGame = fa
     skipReplayWindow: Boolean(skipGameUrl && (latestCompletedGame?.sourceUrl === skipGameUrl || latestCompletedGame?.sourceUrl && skipGameUrl.includes(latestCompletedGame.sourceUrl))),
     forceLastGame
   });
-  const byeWeek = getRegularSeasonByeWeek({ now, scheduledGame: scheduledWithScore, latestCompletedGame });
+  const isLiveOrActive = Boolean(
+    activeWithScore && !isOfficialFinal(activeWithScore) || activeScoreboardCandidates.some((score) => !isOfficialFinal(score))
+  );
+  const rawByeWeek = !isLiveOrActive ? getRegularSeasonByeWeek({
+    now,
+    scheduledGame: scheduledWithScore,
+    latestCompletedGame,
+    activeGame: activeWithScore
+  }) : void 0;
   const rosterCounts = Array.from(roster.reduce((counts, entry) => {
     counts.set(entry.rosterStatus, (counts.get(entry.rosterStatus) ?? 0) + 1);
     return counts;
@@ -793,6 +821,7 @@ async function getOfficialTeamSnapshot(teamCode, skipGameUrl, forceLastGame = fa
     sourceUrl: nextGame.sourceUrl,
     fetchedAt: nextGame.fetchedAt
   } : void 0;
+  const byeWeek = gameDayStatus && !isOfficialFinal(gameDayStatus) ? void 0 : rawByeWeek;
   const inactiveReport = buildSnapshotInactiveReport(inactiveAnnouncements);
   return { nextGame, gameDayStatus, canRestoreLastGame, byeWeek, roster, rosterCounts, injuries, rosterMoves, news, externalInsights, inactiveReport, sources: { schedule: nextGame?.sourceUrl ?? null, roster: roster[0]?.sourceUrl ?? null, injury: injuries[0]?.sourceUrl ?? null, moves: rosterMoves[0]?.sourceUrl ?? null, gameDay: nextGame?.sourceUrl ?? null }, lastUpdatedAt };
 }
@@ -811,8 +840,8 @@ async function hasOfficialScorePulseWindow(now = /* @__PURE__ */ new Date()) {
   if (!db) return false;
   const jst = new Date(now.getTime() + 9 * 60 * 60 * 1e3);
   const japanDayStart = new Date(Date.UTC(jst.getUTCFullYear(), jst.getUTCMonth(), jst.getUTCDate()) - 9 * 60 * 60 * 1e3);
-  const windowStart = new Date(japanDayStart.getTime() - 6 * 60 * 60 * 1e3);
-  const windowEnd = new Date(japanDayStart.getTime() + 24 * 60 * 60 * 1e3);
+  const windowStart = new Date(japanDayStart.getTime() - 12 * 60 * 60 * 1e3);
+  const windowEnd = new Date(japanDayStart.getTime() + 30 * 60 * 60 * 1e3);
   const games = await db.select({ id: officialGames.id }).from(officialGames).where(and(gte(officialGames.kickoffAt, windowStart), lt(officialGames.kickoffAt, windowEnd))).limit(1);
   return games.length > 0;
 }
@@ -4640,9 +4669,27 @@ function parseExternalTeamNewsRss(xml, source, requestedTeamCodes, now = /* @__P
     const publishedAt = new Date(field2(item, "pubDate"));
     if (!title || !sourceUrl || !isEditorialNews(title, summary ?? "", sourceUrl) || Number.isNaN(publishedAt.getTime())) continue;
     if (publishedAt.getTime() < now.getTime() - EXTERNAL_NEWS_MAX_AGE_MS || publishedAt.getTime() > now.getTime() + 24 * 60 * 60 * 1e3) continue;
-    const haystack = `${title} ${summary ?? ""}`.toLowerCase();
-    for (const teamCode of requestedTeamCodes) {
-      if (!(teamMatchers[teamCode] ?? []).some((matcher) => haystack.includes(matcher))) continue;
+    const titleLower = title.toLowerCase();
+    const rawSummaryLower = (summary ?? "").toLowerCase();
+    const sanitizedSummary = rawSummaryLower.replace(
+      /\b(?:against|vs\.?|versus|loss to|lost to|fell to|defeated by|facing|faced|beat by|over)\s+(?:the\s+)?([a-z0-9\s]+?)(?=[,.;]|\s+(?:on|in|after|during|with|and|who|which)\b|$)/gi,
+      " "
+    );
+    const matchesTeam = (text4, code) => {
+      const matchers = teamMatchers[code] ?? [];
+      return matchers.some((m) => {
+        const escaped = m.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        return new RegExp(`\\b${escaped}\\b`, "i").test(text4);
+      });
+    };
+    const titleMatchedTeams = requestedTeamCodes.filter((code) => matchesTeam(titleLower, code));
+    let matchedTeamCodes = [];
+    if (titleMatchedTeams.length > 0) {
+      matchedTeamCodes = titleMatchedTeams;
+    } else {
+      matchedTeamCodes = requestedTeamCodes.filter((code) => matchesTeam(sanitizedSummary, code));
+    }
+    for (const teamCode of matchedTeamCodes) {
       candidates.push({
         externalId: createHash4("sha256").update(`${source.kind}:${teamCode}:${sourceUrl}`).digest("hex"),
         teamCode,
