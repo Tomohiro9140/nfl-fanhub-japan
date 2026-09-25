@@ -1,8 +1,8 @@
 import React, { useMemo, useRef, useState, useEffect } from "react";
-import { X, Trophy, Share2, Sparkles, RotateCcw, ChevronRight, Award } from "lucide-react";
+import { X, Trophy, Share2, Sparkles, RotateCcw } from "lucide-react";
 import { NFL_TEAMS } from "@/lib/tiebreaker/nflTeams";
 
-// NFL公式チームカラーマップ（背景・アクセント用）
+// NFL公式チームカラー定義
 const NFL_TEAM_COLORS: Record<string, { primary: string; secondary: string; text: string }> = {
   ARI: { primary: "#97233F", secondary: "#000000", text: "#FFFFFF" },
   ATL: { primary: "#A71930", secondary: "#000000", text: "#FFFFFF" },
@@ -65,7 +65,7 @@ function getTeamInfo(code: string) {
 export function PlayoffPredictionModal({ isOpen, onClose, afcSeeds, nfcSeeds }: Props) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
-  // トーナメント状態
+  // トーナメント勝者
   const [afcWcWinners, setAfcWcWinners] = useState<{ [matchIndex: number]: string }>({});
   const [nfcWcWinners, setNfcWcWinners] = useState<{ [matchIndex: number]: string }>({});
   const [afcDivWinners, setAfcDivWinners] = useState<{ [matchIndex: number]: string }>({});
@@ -74,15 +74,13 @@ export function PlayoffPredictionModal({ isOpen, onClose, afcSeeds, nfcSeeds }: 
   const [nfcChamp, setNfcChamp] = useState<string | null>(null);
   const [superBowlChamp, setSuperBowlChamp] = useState<string | null>(null);
 
-  const [activeTab, setActiveTab] = useState<"AFC" | "NFC" | "SB">("AFC");
   const [isGenerating, setIsGenerating] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
-  // シード番号辞書
   const afcSeedMap = useMemo(() => new Map(afcSeeds.map((s, i) => [s.team, i + 1])), [afcSeeds]);
   const nfcSeedMap = useMemo(() => new Map(nfcSeeds.map((s, i) => [s.team, i + 1])), [nfcSeeds]);
 
-  // NFL公式リシーディング計算（#1シードは残った中で最もシード順位が低いチームと対戦）
+  // リシーディング計算（#1シードはWC勝ち残りの中で最もシードが低いチームと対戦）
   const getDivisionalMatchups = (
     seed1: string | undefined,
     wcWinners: string[],
@@ -94,8 +92,8 @@ export function PlayoffPredictionModal({ isOpen, onClose, afcSeeds, nfcSeeds }: 
     const mid1 = sorted[0];
     const mid2 = sorted[1];
     return [
-      { home: seed1, away: lowest, id: "div1" },
-      { home: mid1, away: mid2, id: "div2" },
+      { home: seed1, away: lowest },
+      { home: mid1, away: mid2 },
     ];
   };
 
@@ -109,7 +107,7 @@ export function PlayoffPredictionModal({ isOpen, onClose, afcSeeds, nfcSeeds }: 
     return getDivisionalMatchups(nfcSeeds[0]?.team, winners, nfcSeedMap);
   }, [nfcSeeds, nfcWcWinners, nfcSeedMap]);
 
-  // 自動上位全勝入力
+  // 上位シード全勝一括
   const autoFillHigherSeeds = () => {
     if (afcSeeds.length < 4 || nfcSeeds.length < 4) return;
     setAfcWcWinners({ 0: afcSeeds[1]?.team, 1: afcSeeds[2]?.team, 2: afcSeeds[3]?.team });
@@ -132,7 +130,7 @@ export function PlayoffPredictionModal({ isOpen, onClose, afcSeeds, nfcSeeds }: 
     setPreviewUrl(null);
   };
 
-  // 1200 x 675 プロ仕様高画質グラフィックレンダリング
+  // 添付画像(Image 36)を忠実に再現したCanvas描画
   const renderCanvas = () => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -144,277 +142,208 @@ export function PlayoffPredictionModal({ isOpen, onClose, afcSeeds, nfcSeeds }: 
     canvas.width = width;
     canvas.height = height;
 
-    // 1. 深みのあるスタジアム調ダークグラデーション背景
-    const bgGrad = ctx.createRadialGradient(width / 2, height / 2, 80, width / 2, height / 2, width * 0.7);
-    bgGrad.addColorStop(0, "#151e32");
-    bgGrad.addColorStop(0.6, "#0b101b");
-    bgGrad.addColorStop(1, "#05070d");
-    ctx.fillStyle = bgGrad;
+    // 1. 深みのあるダークスタジアム背景 ＆ 百合紋章の透かし
+    ctx.fillStyle = "#0c111c";
     ctx.fillRect(0, 0, width, height);
 
-    // 微細グリッド背景
-    ctx.strokeStyle = "rgba(255, 255, 255, 0.025)";
-    ctx.lineWidth = 1;
-    for (let x = 0; x < width; x += 40) {
-      ctx.beginPath();
-      ctx.moveTo(x, 0);
-      ctx.lineTo(x, height);
-      ctx.stroke();
-    }
-    for (let y = 0; y < height; y += 40) {
-      ctx.beginPath();
-      ctx.moveTo(0, y);
-      ctx.lineTo(width, y);
-      ctx.stroke();
-    }
-
-    // 2. ヘッダーデザイン
-    ctx.fillStyle = "#ffffff";
-    ctx.font = "900 30px 'Arial Black', sans-serif";
-    ctx.textAlign = "center";
-    ctx.letterSpacing = "2px";
-    ctx.fillText("2026-27 NFL PLAYOFF BRACKET", width / 2, 52);
-
-    ctx.fillStyle = "#eab308";
-    ctx.font = "bold 12px monospace";
-    ctx.letterSpacing = "3px";
-    ctx.fillText("ROAD TO SUPER BOWL LXI", width / 2, 74);
-
-    // 3. ブラケットカード描画ヘルパー
-    const drawCard = (x: number, y: number, w: number, h: number, code?: string, seedNum?: number, isWinner?: boolean) => {
-      ctx.save();
-      if (!code) {
-        // 未確定枠
-        ctx.fillStyle = "rgba(255, 255, 255, 0.03)";
-        ctx.strokeStyle = "rgba(255, 255, 255, 0.08)";
-        ctx.lineWidth = 1;
+    // フルール・ド・リス（透かし模様）
+    ctx.fillStyle = "rgba(255, 255, 255, 0.02)";
+    for (let x = 60; x < width; x += 120) {
+      for (let y = 60; y < height; y += 120) {
         ctx.beginPath();
-        ctx.roundRect(x, y, w, h, 6);
+        ctx.arc(x, y, 16, 0, Math.PI * 2);
+        ctx.arc(x - 12, y + 10, 10, 0, Math.PI * 2);
+        ctx.arc(x + 12, y + 10, 10, 0, Math.PI * 2);
         ctx.fill();
-        ctx.stroke();
-        ctx.fillStyle = "rgba(255, 255, 255, 0.25)";
-        ctx.font = "bold 11px monospace";
-        ctx.textAlign = "center";
-        ctx.fillText("TBD", x + w / 2, y + h / 2 + 4);
-        ctx.restore();
-        return;
       }
+    }
 
-      const team = getTeamInfo(code);
+    // 2. カンファレンス巨大透かし文字 (NFC / AFC)
+    ctx.fillStyle = "rgba(255, 255, 255, 0.08)";
+    ctx.font = "900 110px 'Impact', sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText("NFC", 330, 360);
+    ctx.fillText("AFC", 870, 360);
 
-      // 背景
-      ctx.fillStyle = isWinner ? "#182238" : "#0d1320";
-      ctx.strokeStyle = isWinner ? "#eab308" : "rgba(255, 255, 255, 0.12)";
-      ctx.lineWidth = isWinner ? 2 : 1;
-      ctx.beginPath();
-      ctx.roundRect(x, y, w, h, 6);
-      ctx.fill();
-      ctx.stroke();
-
-      // チームカラーの左アクセントバー
-      ctx.fillStyle = team.primaryColor;
-      ctx.beginPath();
-      ctx.roundRect(x, y, 6, h, [6, 0, 0, 6]);
-      ctx.fill();
-
-      // シード番号バッジ
-      if (seedNum) {
-        ctx.fillStyle = isWinner ? "#eab308" : "rgba(255, 255, 255, 0.2)";
-        ctx.font = "900 11px monospace";
-        ctx.textAlign = "left";
-        ctx.fillText(`#${seedNum}`, x + 12, y + h / 2 + 4);
-      }
-
-      // チーム名
-      ctx.fillStyle = isWinner ? "#ffffff" : "rgba(255, 255, 255, 0.75)";
-      ctx.font = isWinner ? "bold 13px sans-serif" : "12px sans-serif";
-      ctx.textAlign = "left";
-      ctx.fillText(team.name, x + (seedNum ? 34 : 14), y + h / 2 + 4);
-
-      // 勝者マーク
-      if (isWinner) {
-        ctx.fillStyle = "#eab308";
-        ctx.font = "bold 10px monospace";
-        ctx.textAlign = "right";
-        ctx.fillText("ADV ▶", x + w - 8, y + h / 2 + 3);
-      }
-
-      ctx.restore();
-    };
-
-    // 接続ライン描画ヘルパー
-    const drawLine = (x1: number, y1: number, x2: number, y2: number, active = false) => {
-      ctx.save();
-      ctx.strokeStyle = active ? "#eab308" : "rgba(255, 255, 255, 0.15)";
-      ctx.lineWidth = active ? 2 : 1;
-      ctx.beginPath();
-      ctx.moveTo(x1, y1);
-      const midX = (x1 + x2) / 2;
-      ctx.lineTo(midX, y1);
-      ctx.lineTo(midX, y2);
-      ctx.lineTo(x2, y2);
-      ctx.stroke();
-      ctx.restore();
-    };
-
-    // AFC 列設定 (左側)
-    const cardW = 160;
-    const cardH = 34;
-
-    const afcWcX = 40;
-    const afcDivX = 235;
-    const afcChampX = 425;
-
-    // NFC 列設定 (右側)
-    const nfcChampX = 615;
-    const nfcDivX = 805;
-    const nfcWcX = 1000;
-
-    // ヘッダーラベル
-    ctx.fillStyle = "#ef4444";
-    ctx.font = "900 16px monospace";
-    ctx.textAlign = "left";
-    ctx.fillText("AFC PLAYOFFS", afcWcX, 105);
-
-    ctx.fillStyle = "#3b82f6";
-    ctx.textAlign = "right";
-    ctx.fillText("NFC PLAYOFFS", nfcWcX + cardW, 105);
-
-    // ================= AFC ブラケット =================
-    // WC 3試合
-    const wcY = [135, 220, 305];
-    const afcWcMatchups = [
-      { hSeed: 2, aSeed: 7, win: afcWcWinners[0] },
-      { hSeed: 3, aSeed: 6, win: afcWcWinners[1] },
-      { hSeed: 4, aSeed: 5, win: afcWcWinners[2] },
-    ];
-
-    afcWcMatchups.forEach((m, i) => {
-      const topY = wcY[i];
-      const botY = topY + 40;
-      const hTeam = afcSeeds[m.hSeed - 1]?.team;
-      const aTeam = afcSeeds[m.aSeed - 1]?.team;
-
-      drawCard(afcWcX, topY, cardW, cardH, hTeam, m.hSeed, m.win === hTeam);
-      drawCard(afcWcX, botY, cardW, cardH, aTeam, m.aSeed, m.win === aTeam);
-
-      // DIVへの接続線
-      const targetDivY = i === 0 ? 175 : 285;
-      drawLine(afcWcX + cardW, topY + cardH / 2, afcDivX, targetDivY + (i === 1 ? 0 : 40), Boolean(m.win));
-    });
-
-    // AFC Divisional 2試合
-    const divY = [175, 285];
-    const div1Home = afcSeeds[0]?.team;
-    const div1Away = afcDivMatchups ? afcDivMatchups[0]?.away : undefined;
-    const div2Home = afcDivMatchups ? afcDivMatchups[1]?.home : undefined;
-    const div2Away = afcDivMatchups ? afcDivMatchups[1]?.away : undefined;
-
-    drawCard(afcDivX, divY[0], cardW, cardH, div1Home, 1, afcDivWinners[0] === div1Home);
-    drawCard(afcDivX, divY[0] + 40, cardW, cardH, div1Away, div1Away ? afcSeedMap.get(div1Away) : undefined, afcDivWinners[0] === div1Away);
-
-    drawCard(afcDivX, divY[1], cardW, cardH, div2Home, div2Home ? afcSeedMap.get(div2Home) : undefined, afcDivWinners[1] === div2Home);
-    drawCard(afcDivX, divY[1] + 40, cardW, cardH, div2Away, div2Away ? afcSeedMap.get(div2Away) : undefined, afcDivWinners[1] === div2Away);
-
-    // CCGへの接続線
-    drawLine(afcDivX + cardW, divY[0] + 20, afcChampX, 230, Boolean(afcDivWinners[0]));
-    drawLine(afcDivX + cardW, divY[1] + 20, afcChampX, 270, Boolean(afcDivWinners[1]));
-
-    // AFC Championship
-    drawCard(afcChampX, 215, cardW, cardH, afcDivWinners[0], afcDivWinners[0] ? afcSeedMap.get(afcDivWinners[0]) : undefined, afcChamp === afcDivWinners[0]);
-    drawCard(afcChampX, 255, cardW, cardH, afcDivWinners[1], afcDivWinners[1] ? afcSeedMap.get(afcDivWinners[1]) : undefined, afcChamp === afcDivWinners[1]);
-
-    // ================= NFC ブラケット =================
-    const nfcWcMatchups = [
-      { hSeed: 2, aSeed: 7, win: nfcWcWinners[0] },
-      { hSeed: 3, aSeed: 6, win: nfcWcWinners[1] },
-      { hSeed: 4, aSeed: 5, win: nfcWcWinners[2] },
-    ];
-
-    nfcWcMatchups.forEach((m, i) => {
-      const topY = wcY[i];
-      const botY = topY + 40;
-      const hTeam = nfcSeeds[m.hSeed - 1]?.team;
-      const aTeam = nfcSeeds[m.aSeed - 1]?.team;
-
-      drawCard(nfcWcX, topY, cardW, cardH, hTeam, m.hSeed, m.win === hTeam);
-      drawCard(nfcWcX, botY, cardW, cardH, aTeam, m.aSeed, m.win === aTeam);
-
-      const targetDivY = i === 0 ? 175 : 285;
-      drawLine(nfcWcX, topY + cardH / 2, nfcDivX + cardW, targetDivY + (i === 1 ? 0 : 40), Boolean(m.win));
-    });
-
-    // NFC Divisional 2試合
-    const nfcDiv1Home = nfcSeeds[0]?.team;
-    const nfcDiv1Away = nfcDivMatchups ? nfcDivMatchups[0]?.away : undefined;
-    const nfcDiv2Home = nfcDivMatchups ? nfcDivMatchups[1]?.home : undefined;
-    const nfcDiv2Away = nfcDivMatchups ? nfcDivMatchups[1]?.away : undefined;
-
-    drawCard(nfcDivX, divY[0], cardW, cardH, nfcDiv1Home, 1, nfcDivWinners[0] === nfcDiv1Home);
-    drawCard(nfcDivX, divY[0] + 40, cardW, cardH, nfcDiv1Away, nfcDiv1Away ? nfcSeedMap.get(nfcDiv1Away) : undefined, nfcDivWinners[0] === nfcDiv1Away);
-
-    drawCard(nfcDivX, divY[1], cardW, cardH, nfcDiv2Home, nfcDiv2Home ? nfcSeedMap.get(nfcDiv2Home) : undefined, nfcDivWinners[1] === nfcDiv2Home);
-    drawCard(nfcDivX, divY[1] + 40, cardW, cardH, nfcDiv2Away, nfcDiv2Away ? nfcSeedMap.get(nfcDiv2Away) : undefined, nfcDivWinners[1] === nfcDiv2Away);
-
-    drawLine(nfcDivX, divY[0] + 20, nfcChampX + cardW, 230, Boolean(nfcDivWinners[0]));
-    drawLine(nfcDivX, divY[1] + 20, nfcChampX + cardW, 270, Boolean(nfcDivWinners[1]));
-
-    // NFC Championship
-    drawCard(nfcChampX, 215, cardW, cardH, nfcDivWinners[0], nfcDivWinners[0] ? nfcSeedMap.get(nfcDivWinners[0]) : undefined, nfcChamp === nfcDivWinners[0]);
-    drawCard(nfcChampX, 255, cardW, cardH, nfcDivWinners[1], nfcDivWinners[1] ? nfcSeedMap.get(nfcDivWinners[1]) : undefined, nfcChamp === nfcDivWinners[1]);
-
-    // ================= 中央：SUPER BOWL LXI =================
-    const sbBoxW = 420;
-    const sbBoxH = 175;
-    const sbBoxX = (width - sbBoxW) / 2;
-    const sbBoxY = 405;
-
-    // 王者プレート
-    const goldGrad = ctx.createLinearGradient(sbBoxX, sbBoxY, sbBoxX + sbBoxW, sbBoxY + sbBoxH);
-    goldGrad.addColorStop(0, "rgba(234, 179, 8, 0.2)");
-    goldGrad.addColorStop(0.5, "rgba(234, 179, 8, 0.05)");
-    goldGrad.addColorStop(1, "rgba(234, 179, 8, 0.2)");
-
-    ctx.fillStyle = goldGrad;
-    ctx.strokeStyle = "#eab308";
-    ctx.lineWidth = 2;
+    // 3. 上部中央：ロンバルディ・トロフィー ＆ SUPER BOWL LXI
+    const trophyX = width / 2;
+    // トロフィーシルエット
+    ctx.fillStyle = "rgba(255, 255, 255, 0.15)";
     ctx.beginPath();
-    ctx.roundRect(sbBoxX, sbBoxY, sbBoxW, sbBoxH, 12);
+    ctx.ellipse(trophyX, 60, 18, 30, 0, 0, Math.PI * 2);
     ctx.fill();
-    ctx.stroke();
+    ctx.fillRect(trophyX - 4, 85, 8, 35);
+    ctx.fillRect(trophyX - 22, 115, 44, 8);
+
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "900 36px 'Arial Black', sans-serif";
+    ctx.fillText("LXI", trophyX, 100);
 
     ctx.fillStyle = "#eab308";
     ctx.font = "900 13px monospace";
     ctx.letterSpacing = "2px";
-    ctx.textAlign = "center";
-    ctx.fillText("★ SUPER BOWL LXI CHAMPION ★", width / 2, sbBoxY + 34);
+    ctx.fillText("SUPER BOWL", trophyX, 140);
 
-    if (superBowlChamp) {
-      const champ = getTeamInfo(superBowlChamp);
+    // 4. 公式スタイルカード描画（上下2チーム結合バナー ＋ 白地シード四角バッジ）
+    const cardW = 165;
+    const rowH = 26;
 
-      // 王者チーム名
-      ctx.fillStyle = "#ffffff";
-      ctx.font = "900 38px sans-serif";
-      ctx.fillText(champ.name, width / 2, sbBoxY + 86);
+    const drawCardMatchup = (
+      x: number,
+      y: number,
+      teamTop?: string,
+      seedTop?: number,
+      teamBot?: string,
+      seedBot?: number,
+      winner?: string
+    ) => {
+      // 枠線
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.25)";
+      ctx.lineWidth = 1;
+      ctx.strokeRect(x, y, cardW, rowH * 2);
 
-      // カラーチップ＆コード
-      ctx.fillStyle = champ.primaryColor;
-      ctx.fillRect(width / 2 - 35, sbBoxY + 104, 70, 4);
+      const renderTeam = (rowY: number, code?: string, seed?: number, isWon?: boolean) => {
+        if (!code) {
+          ctx.fillStyle = "rgba(255, 255, 255, 0.05)";
+          ctx.fillRect(x, rowY, cardW, rowH);
+          ctx.fillStyle = "rgba(255, 255, 255, 0.25)";
+          ctx.font = "bold 11px monospace";
+          ctx.textAlign = "center";
+          ctx.fillText("TBD", x + cardW / 2, rowY + 17);
+          return;
+        }
 
-      ctx.fillStyle = "rgba(255, 255, 255, 0.7)";
-      ctx.font = "bold 16px monospace";
-      ctx.fillText(`WORLD CHAMPIONS [ ${champ.code} ]`, width / 2, sbBoxY + 135);
-    } else {
-      ctx.fillStyle = "rgba(255, 255, 255, 0.3)";
-      ctx.font = "bold 20px sans-serif";
-      ctx.fillText("PREDICTION PENDING", width / 2, sbBoxY + 95);
-    }
+        const info = getTeamInfo(code);
+        // チームカラー背景
+        ctx.fillStyle = isWon ? info.primaryColor : "#151c2c";
+        ctx.fillRect(x, rowY, cardW, rowH);
+
+        // チームコード
+        ctx.fillStyle = "#ffffff";
+        ctx.font = isWon ? "bold 13px sans-serif" : "12px sans-serif";
+        ctx.textAlign = "left";
+        ctx.fillText(code, x + 10, rowY + 18);
+
+        // シード四角バッジ（右端の白四角の中に黒文字）
+        if (seed) {
+          ctx.fillStyle = "#ffffff";
+          ctx.fillRect(x + cardW - 26, rowY + 2, 24, rowH - 4);
+          ctx.fillStyle = "#000000";
+          ctx.font = "900 13px 'Arial Black', monospace";
+          ctx.textAlign = "center";
+          ctx.fillText(String(seed), x + cardW - 14, rowY + 18);
+        }
+
+        // 勝者ハイライト
+        if (isWon) {
+          ctx.strokeStyle = "#eab308";
+          ctx.lineWidth = 2;
+          ctx.strokeRect(x, rowY, cardW, rowH);
+        }
+      };
+
+      renderTeam(y, teamTop, seedTop, winner === teamTop);
+      renderTeam(y + rowH, teamBot, seedBot, winner === teamBot);
+    };
+
+    // 接続線
+    const drawLine = (x1: number, y1: number, x2: number, y2: number) => {
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.2)";
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(x1, y1);
+      const mid = (x1 + x2) / 2;
+      ctx.lineTo(mid, y1);
+      ctx.lineTo(mid, y2);
+      ctx.lineTo(x2, y2);
+      ctx.stroke();
+    };
+
+    // 座標定義（左右対称）
+    // NFC (左側)
+    const nfcWcX = 45;
+    const nfcDivX = 230;
+    const nfcCcgX = 390;
+
+    // AFC (右側)
+    const afcCcgX = 645;
+    const afcDivX = 805;
+    const afcWcX = 990;
+
+    // WC 3試合の Y 座標
+    const wcY = [110, 260, 410];
+
+    // ============= NFC 描画 (左) =============
+    const nfcWcList = [
+      { hSeed: 2, aSeed: 7, win: nfcWcWinners[0] },
+      { hSeed: 3, aSeed: 6, win: nfcWcWinners[1] },
+      { hSeed: 4, aSeed: 5, win: nfcWcWinners[2] },
+    ];
+    nfcWcList.forEach((m, i) => {
+      const topT = nfcSeeds[m.hSeed - 1]?.team;
+      const botT = nfcSeeds[m.aSeed - 1]?.team;
+      drawCardMatchup(nfcWcX, wcY[i], topT, m.hSeed, botT, m.aSeed, m.win);
+
+      const targetDivY = i === 0 ? 180 : 340;
+      drawLine(nfcWcX + cardW, wcY[i] + rowH, nfcDivX, targetDivY + (i === 1 ? 0 : rowH));
+    });
+
+    // NFC Divisional
+    const nfcD1Away = nfcDivMatchups ? nfcDivMatchups[0]?.away : undefined;
+    const nfcD2Home = nfcDivMatchups ? nfcDivMatchups[1]?.home : undefined;
+    const nfcD2Away = nfcDivMatchups ? nfcDivMatchups[1]?.away : undefined;
+
+    drawCardMatchup(nfcDivX, 180, nfcSeeds[0]?.team, 1, nfcD1Away, nfcD1Away ? nfcSeedMap.get(nfcD1Away) : undefined, nfcDivWinners[0]);
+    drawCardMatchup(nfcDivX, 340, nfcD2Home, nfcD2Home ? nfcSeedMap.get(nfcD2Home) : undefined, nfcD2Away, nfcD2Away ? nfcSeedMap.get(nfcD2Away) : undefined, nfcDivWinners[1]);
+
+    drawLine(nfcDivX + cardW, 180 + rowH, nfcCcgX, 260);
+    drawLine(nfcDivX + cardW, 340 + rowH, nfcCcgX, 260 + rowH);
+
+    // NFC Championship
+    drawCardMatchup(nfcCcgX, 260, nfcDivWinners[0], nfcDivWinners[0] ? nfcSeedMap.get(nfcDivWinners[0]) : undefined, nfcDivWinners[1], nfcDivWinners[1] ? nfcSeedMap.get(nfcDivWinners[1]) : undefined, nfcChamp ?? undefined);
+
+    // ============= AFC 描画 (右) =============
+    const afcWcList = [
+      { hSeed: 2, aSeed: 7, win: afcWcWinners[0] },
+      { hSeed: 3, aSeed: 6, win: afcWcWinners[1] },
+      { hSeed: 4, aSeed: 5, win: afcWcWinners[2] },
+    ];
+    afcWcList.forEach((m, i) => {
+      const topT = afcSeeds[m.hSeed - 1]?.team;
+      const botT = afcSeeds[m.aSeed - 1]?.team;
+      drawCardMatchup(afcWcX, wcY[i], topT, m.hSeed, botT, m.aSeed, m.win);
+
+      const targetDivY = i === 0 ? 180 : 340;
+      drawLine(afcWcX, wcY[i] + rowH, afcDivX + cardW, targetDivY + (i === 1 ? 0 : rowH));
+    });
+
+    // AFC Divisional
+    const afcD1Away = afcDivMatchups ? afcDivMatchups[0]?.away : undefined;
+    const afcD2Home = afcDivMatchups ? afcDivMatchups[1]?.home : undefined;
+    const afcD2Away = afcDivMatchups ? afcDivMatchups[1]?.away : undefined;
+
+    drawCardMatchup(afcDivX, 180, afcSeeds[0]?.team, 1, afcD1Away, afcD1Away ? afcSeedMap.get(afcD1Away) : undefined, afcDivWinners[0]);
+    drawCardMatchup(afcDivX, 340, afcD2Home, afcD2Home ? afcSeedMap.get(afcD2Home) : undefined, afcD2Away, afcD2Away ? afcSeedMap.get(afcD2Away) : undefined, afcDivWinners[1]);
+
+    drawLine(afcDivX, 180 + rowH, afcCcgX + cardW, 260);
+    drawLine(afcDivX, 340 + rowH, afcCcgX + cardW, 260 + rowH);
+
+    // AFC Championship
+    drawCardMatchup(afcCcgX, 260, afcDivWinners[0], afcDivWinners[0] ? afcSeedMap.get(afcDivWinners[0]) : undefined, afcDivWinners[1], afcDivWinners[1] ? afcSeedMap.get(afcDivWinners[1]) : undefined, afcChamp ?? undefined);
+
+    // ============= 中央：SUPER BOWL LXI =============
+    const sbX = (width - cardW) / 2;
+    const sbY = 480;
+
+    drawLine(nfcCcgX + cardW / 2, 260 + rowH * 2, sbX, sbY + rowH / 2);
+    drawLine(afcCcgX + cardW / 2, 260 + rowH * 2, sbX + cardW, sbY + rowH * 1.5);
+
+    drawCardMatchup(sbX, sbY, nfcChamp ?? undefined, nfcChamp ? nfcSeedMap.get(nfcChamp) : undefined, afcChamp ?? undefined, afcChamp ? afcSeedMap.get(afcChamp) : undefined, superBowlChamp ?? undefined);
 
     // サイトロゴ（右下に極小・目立たないウォーターマーク）
     ctx.textAlign = "right";
-    ctx.fillStyle = "rgba(255, 255, 255, 0.35)";
+    ctx.fillStyle = "rgba(255, 255, 255, 0.3)";
     ctx.font = "bold 11px monospace";
-    ctx.letterSpacing = "1px";
     ctx.fillText("NFL FAN HUB JAPAN · nfl-fanhub.onrender.com", width - 35, height - 20);
 
     setPreviewUrl(canvas.toDataURL("image/png"));
@@ -426,7 +355,6 @@ export function PlayoffPredictionModal({ isOpen, onClose, afcSeeds, nfcSeeds }: 
     }
   }, [isOpen, afcSeeds, nfcSeeds, afcWcWinners, nfcWcWinners, afcDivWinners, nfcDivWinners, afcChamp, nfcChamp, superBowlChamp]);
 
-  // 画像保存・シェア
   const handleShareOrSave = async () => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -452,7 +380,7 @@ export function PlayoffPredictionModal({ isOpen, onClose, afcSeeds, nfcSeeds }: 
             setIsGenerating(false);
             return;
           } catch {
-            // キャンセル時は何もしない
+            // キャンセル
           }
         }
 
@@ -480,324 +408,274 @@ export function PlayoffPredictionModal({ isOpen, onClose, afcSeeds, nfcSeeds }: 
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-2 sm:p-4 backdrop-blur-md overflow-y-auto">
-      <div className="relative w-full max-w-5xl rounded-2xl border border-slate-700/80 bg-[#0b101b] text-white shadow-2xl p-4 sm:p-6 my-auto">
-        {/* ヘッダー */}
-        <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-          <div className="flex items-center gap-2.5">
-            <div className="grid h-8 w-8 place-items-center rounded-lg bg-gradient-to-br from-amber-400 to-orange-500 text-slate-950 font-black">
-              <Trophy className="h-4 w-4" />
-            </div>
-            <div>
-              <h2 className="text-base sm:text-lg font-black tracking-tight">NFL プレイオフ勝敗予想 ＆ 画像生成</h2>
-              <p className="text-[11px] text-slate-400">タップして勝者をトーナメントに勝ち上がらせてください</p>
-            </div>
+      <div className="relative w-full max-w-5xl rounded-2xl border border-slate-700/80 bg-[#0b101b] text-white shadow-2xl p-3 sm:p-5 my-auto">
+        {/* モーダルヘッダー */}
+        <div className="flex items-center justify-between border-b border-slate-800 pb-2.5">
+          <div className="flex items-center gap-2">
+            <Trophy className="h-4 w-4 text-amber-400" />
+            <h2 className="text-sm sm:text-base font-black">プレイオフ勝敗予想 ＆ ブラケット画像シェア</h2>
           </div>
-          <button onClick={onClose} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-800 hover:text-white transition">
+          <button onClick={onClose} className="rounded-lg p-1 text-slate-400 hover:bg-slate-800 hover:text-white">
             <X className="h-5 w-5" />
           </button>
         </div>
 
-        {/* コントロール ＆ カンファレンスタブ */}
-        <div className="mt-3 flex flex-wrap items-center justify-between gap-2 bg-slate-900/80 p-2 rounded-xl border border-slate-800">
-          <div className="flex rounded-lg bg-slate-950 p-1 border border-slate-800 text-xs font-bold">
-            <button
-              onClick={() => setActiveTab("AFC")}
-              className={`px-3 py-1 rounded-md transition ${activeTab === "AFC" ? "bg-red-600 text-white shadow" : "text-slate-400 hover:text-white"}`}
-            >
-              AFC ブラケット
-            </button>
-            <button
-              onClick={() => setActiveTab("NFC")}
-              className={`px-3 py-1 rounded-md transition ${activeTab === "NFC" ? "bg-blue-600 text-white shadow" : "text-slate-400 hover:text-white"}`}
-            >
-              NFC ブラケット
-            </button>
-            <button
-              onClick={() => setActiveTab("SB")}
-              className={`px-3 py-1 rounded-md transition ${activeTab === "SB" ? "bg-amber-500 text-slate-950 shadow" : "text-slate-400 hover:text-white"}`}
-            >
-              スーパーボウル
-            </button>
-          </div>
-
+        {/* コントロールバー */}
+        <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2 bg-slate-900/80 p-2 rounded-xl border border-slate-800 text-xs">
+          <span className="text-slate-400 text-[11px]">チームをタップして勝ち上がらせてください</span>
           <div className="flex gap-2">
             <button
               onClick={autoFillHigherSeeds}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-amber-500/20 px-3 py-1.5 text-xs font-bold text-amber-300 border border-amber-500/40 hover:bg-amber-500/30 transition"
+              className="inline-flex items-center gap-1 rounded bg-amber-500/20 px-2.5 py-1 text-[11px] font-bold text-amber-300 border border-amber-500/40 hover:bg-amber-500/30"
             >
-              <Sparkles className="h-3.5 w-3.5" /> 上位シード全勝で入力
+              <Sparkles className="h-3 w-3" /> 上位シード全勝
             </button>
             <button
               onClick={resetAll}
-              className="inline-flex items-center gap-1 rounded-lg bg-slate-800 px-2.5 py-1.5 text-xs text-slate-300 hover:bg-slate-700 transition"
+              className="inline-flex items-center gap-1 rounded bg-slate-800 px-2.5 py-1 text-[11px] text-slate-300 hover:bg-slate-700"
             >
-              <RotateCcw className="h-3.5 w-3.5" /> リセット
+              <RotateCcw className="h-3 w-3" /> リセット
             </button>
           </div>
         </div>
 
-        {/* ブラケット入力セクション */}
-        <div className="mt-4">
-          {activeTab === "AFC" && (
-            <div className="space-y-4 rounded-xl border border-red-950/60 bg-red-950/10 p-3 sm:p-4">
-              <div className="flex items-center justify-between text-xs font-bold">
-                <span className="text-red-400 font-mono tracking-wider">AFC TOURNAMENT</span>
-                <span className="text-slate-400">#1 {getTeamInfo(afcSeeds[0]?.team).name} ({afcSeeds[0]?.team}) はシード1位でBYE</span>
-              </div>
+        {/* タブなし！スマホでも左右同時に見られる2カラムグリッド */}
+        <div className="mt-3 grid grid-cols-2 gap-2 sm:gap-4">
+          {/* 左：NFC カラム */}
+          <div className="rounded-xl border border-blue-950/60 bg-blue-950/15 p-2 sm:p-3 space-y-2.5">
+            <div className="flex items-center justify-between font-mono text-[11px] font-black text-blue-400 border-b border-blue-900/40 pb-1">
+              <span>NFC TOURNAMENT</span>
+              <span className="text-[9px] text-slate-400">#1 {nfcSeeds[0]?.team} はBYE</span>
+            </div>
 
-              {/* Wild Card */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-                {[
-                  { hSeed: 2, aSeed: 7, idx: 0 },
-                  { hSeed: 3, aSeed: 6, idx: 1 },
-                  { hSeed: 4, aSeed: 5, idx: 2 },
-                ].map(({ hSeed, aSeed, idx }) => {
-                  const hCode = afcSeeds[hSeed - 1]?.team;
-                  const aCode = afcSeeds[aSeed - 1]?.team;
-                  const won = afcWcWinners[idx];
-                  return (
-                    <div key={idx} className="rounded-xl border border-slate-800 bg-slate-900/90 p-2.5">
-                      <div className="text-[10px] font-mono text-slate-400 mb-1.5">WILD CARD {idx + 1}</div>
-                      <div className="space-y-1.5">
-                        {[
-                          { code: hCode, seed: hSeed },
-                          { code: aCode, seed: aSeed },
-                        ].map((t) => (
-                          <button
-                            key={t.code}
-                            onClick={() => setAfcWcWinners((prev) => ({ ...prev, [idx]: t.code }))}
-                            className={`w-full flex items-center justify-between rounded-lg px-2.5 py-1.5 text-xs font-bold border transition ${
-                              won === t.code
-                                ? "bg-amber-500 text-slate-950 border-amber-400 shadow-sm"
-                                : "bg-slate-800 text-slate-200 border-slate-700 hover:bg-slate-700"
-                            }`}
-                          >
-                            <span className="truncate">#{t.seed} {getTeamInfo(t.code).name}</span>
-                            <span className="text-[10px] opacity-75 font-mono">{t.code}</span>
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-
-              {/* Divisional */}
-              {afcDivMatchups && (
-                <div className="pt-2 border-t border-red-950/80">
-                  <div className="text-[10px] font-mono text-slate-400 mb-2">DIVISIONAL ROUND (リシーディング適用済み)</div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                    {afcDivMatchups.map((m, idx) => (
-                      <div key={idx} className="rounded-xl border border-slate-800 bg-slate-900/90 p-2.5">
-                        <div className="text-[10px] font-mono text-slate-400 mb-1.5">DIV GAME {idx + 1}</div>
-                        <div className="space-y-1.5">
-                          {[m.home, m.away].map((code) => (
-                            <button
-                              key={code}
-                              onClick={() => setAfcDivWinners((prev) => ({ ...prev, [idx]: code }))}
-                              className={`w-full flex items-center justify-between rounded-lg px-2.5 py-1.5 text-xs font-bold border transition ${
-                                afcDivWinners[idx] === code
-                                  ? "bg-amber-500 text-slate-950 border-amber-400 shadow-sm"
-                                  : "bg-slate-800 text-slate-200 border-slate-700 hover:bg-slate-700"
-                              }`}
-                            >
-                              <span className="truncate">#{afcSeedMap.get(code)} {getTeamInfo(code).name}</span>
-                              <span className="text-[10px] opacity-75 font-mono">{code}</span>
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Championship */}
-              {afcDivWinners[0] && afcDivWinners[1] && (
-                <div className="pt-2 border-t border-red-950/80">
-                  <div className="text-[10px] font-mono text-red-400 mb-1.5 font-bold">AFC CHAMPIONSHIP</div>
-                  <div className="flex gap-2">
-                    {[afcDivWinners[0], afcDivWinners[1]].map((code) => (
+            {/* WC */}
+            <div className="space-y-1.5">
+              <span className="text-[9px] font-mono text-slate-400 block">WILD CARD</span>
+              {[
+                { hSeed: 2, aSeed: 7, idx: 0 },
+                { hSeed: 3, aSeed: 6, idx: 1 },
+                { hSeed: 4, aSeed: 5, idx: 2 },
+              ].map(({ hSeed, aSeed, idx }) => {
+                const hCode = nfcSeeds[hSeed - 1]?.team;
+                const aCode = nfcSeeds[aSeed - 1]?.team;
+                const won = nfcWcWinners[idx];
+                return (
+                  <div key={idx} className="flex gap-1">
+                    {[
+                      { code: hCode, seed: hSeed },
+                      { code: aCode, seed: aSeed },
+                    ].map((t) => (
                       <button
-                        key={code}
-                        onClick={() => setAfcChamp(code)}
-                        className={`flex-1 rounded-xl p-2.5 text-center font-bold text-xs border transition ${
-                          afcChamp === code
-                            ? "bg-red-600 text-white border-red-400 shadow-lg scale-[1.02]"
-                            : "bg-slate-900 text-slate-300 border-slate-800 hover:bg-slate-800"
+                        key={t.code}
+                        onClick={() => setNfcWcWinners((prev) => ({ ...prev, [idx]: t.code }))}
+                        className={`flex-1 rounded py-1 px-1 text-center text-[10px] font-bold border truncate transition ${
+                          won === t.code
+                            ? "bg-amber-500 text-slate-950 border-amber-400"
+                            : "bg-slate-900/90 text-slate-200 border-slate-800 hover:bg-slate-800"
                         }`}
                       >
-                        🏆 AFC王者: {getTeamInfo(code).name}
+                        #{t.seed} {t.code}
                       </button>
                     ))}
                   </div>
-                </div>
-              )}
+                );
+              })}
             </div>
-          )}
 
-          {activeTab === "NFC" && (
-            <div className="space-y-4 rounded-xl border border-blue-950/60 bg-blue-950/10 p-3 sm:p-4">
-              <div className="flex items-center justify-between text-xs font-bold">
-                <span className="text-blue-400 font-mono tracking-wider">NFC TOURNAMENT</span>
-                <span className="text-slate-400">#1 {getTeamInfo(nfcSeeds[0]?.team).name} ({nfcSeeds[0]?.team}) はシード1位でBYE</span>
-              </div>
-
-              {/* Wild Card */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-                {[
-                  { hSeed: 2, aSeed: 7, idx: 0 },
-                  { hSeed: 3, aSeed: 6, idx: 1 },
-                  { hSeed: 4, aSeed: 5, idx: 2 },
-                ].map(({ hSeed, aSeed, idx }) => {
-                  const hCode = nfcSeeds[hSeed - 1]?.team;
-                  const aCode = nfcSeeds[aSeed - 1]?.team;
-                  const won = nfcWcWinners[idx];
-                  return (
-                    <div key={idx} className="rounded-xl border border-slate-800 bg-slate-900/90 p-2.5">
-                      <div className="text-[10px] font-mono text-slate-400 mb-1.5">WILD CARD {idx + 1}</div>
-                      <div className="space-y-1.5">
-                        {[
-                          { code: hCode, seed: hSeed },
-                          { code: aCode, seed: aSeed },
-                        ].map((t) => (
-                          <button
-                            key={t.code}
-                            onClick={() => setNfcWcWinners((prev) => ({ ...prev, [idx]: t.code }))}
-                            className={`w-full flex items-center justify-between rounded-lg px-2.5 py-1.5 text-xs font-bold border transition ${
-                              won === t.code
-                                ? "bg-amber-500 text-slate-950 border-amber-400 shadow-sm"
-                                : "bg-slate-800 text-slate-200 border-slate-700 hover:bg-slate-700"
-                            }`}
-                          >
-                            <span className="truncate">#{t.seed} {getTeamInfo(t.code).name}</span>
-                            <span className="text-[10px] opacity-75 font-mono">{t.code}</span>
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-
-              {/* Divisional */}
-              {nfcDivMatchups && (
-                <div className="pt-2 border-t border-blue-950/80">
-                  <div className="text-[10px] font-mono text-slate-400 mb-2">DIVISIONAL ROUND (リシーディング適用済み)</div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                    {nfcDivMatchups.map((m, idx) => (
-                      <div key={idx} className="rounded-xl border border-slate-800 bg-slate-900/90 p-2.5">
-                        <div className="text-[10px] font-mono text-slate-400 mb-1.5">DIV GAME {idx + 1}</div>
-                        <div className="space-y-1.5">
-                          {[m.home, m.away].map((code) => (
-                            <button
-                              key={code}
-                              onClick={() => setNfcDivWinners((prev) => ({ ...prev, [idx]: code }))}
-                              className={`w-full flex items-center justify-between rounded-lg px-2.5 py-1.5 text-xs font-bold border transition ${
-                                nfcDivWinners[idx] === code
-                                  ? "bg-amber-500 text-slate-950 border-amber-400 shadow-sm"
-                                  : "bg-slate-800 text-slate-200 border-slate-700 hover:bg-slate-700"
-                              }`}
-                            >
-                              <span className="truncate">#{nfcSeedMap.get(code)} {getTeamInfo(code).name}</span>
-                              <span className="text-[10px] opacity-75 font-mono">{code}</span>
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Championship */}
-              {nfcDivWinners[0] && nfcDivWinners[1] && (
-                <div className="pt-2 border-t border-blue-950/80">
-                  <div className="text-[10px] font-mono text-blue-400 mb-1.5 font-bold">NFC CHAMPIONSHIP</div>
-                  <div className="flex gap-2">
-                    {[nfcDivWinners[0], nfcDivWinners[1]].map((code) => (
+            {/* DIV */}
+            {nfcDivMatchups && (
+              <div className="space-y-1.5 pt-1.5 border-t border-blue-900/40">
+                <span className="text-[9px] font-mono text-slate-400 block">DIVISIONAL</span>
+                {nfcDivMatchups.map((m, idx) => (
+                  <div key={idx} className="flex gap-1">
+                    {[m.home, m.away].map((code) => (
                       <button
                         key={code}
-                        onClick={() => setNfcChamp(code)}
-                        className={`flex-1 rounded-xl p-2.5 text-center font-bold text-xs border transition ${
-                          nfcChamp === code
-                            ? "bg-blue-600 text-white border-blue-400 shadow-lg scale-[1.02]"
-                            : "bg-slate-900 text-slate-300 border-slate-800 hover:bg-slate-800"
+                        onClick={() => setNfcDivWinners((prev) => ({ ...prev, [idx]: code }))}
+                        className={`flex-1 rounded py-1 px-1 text-center text-[10px] font-bold border truncate transition ${
+                          nfcDivWinners[idx] === code
+                            ? "bg-amber-500 text-slate-950 border-amber-400"
+                            : "bg-slate-900/90 text-slate-200 border-slate-800 hover:bg-slate-800"
                         }`}
                       >
-                        🏆 NFC王者: {getTeamInfo(code).name}
+                        #{nfcSeedMap.get(code)} {code}
                       </button>
                     ))}
                   </div>
-                </div>
-              )}
-            </div>
-          )}
+                ))}
+              </div>
+            )}
 
-          {activeTab === "SB" && (
-            <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-4 text-center">
-              <span className="font-mono text-xs text-amber-400 font-black tracking-widest">SUPER BOWL LXI</span>
-              <h3 className="text-base font-bold mt-1 mb-3">ワールドチャンピオンを選択</h3>
-              {afcChamp && nfcChamp ? (
-                <div className="flex flex-col sm:flex-row gap-3 justify-center max-w-lg mx-auto">
-                  {[
-                    { code: afcChamp, conf: "AFC" },
-                    { code: nfcChamp, conf: "NFC" },
-                  ].map(({ code, conf }) => (
+            {/* CCG */}
+            {nfcDivWinners[0] && nfcDivWinners[1] && (
+              <div className="space-y-1.5 pt-1.5 border-t border-blue-900/40">
+                <span className="text-[9px] font-mono text-blue-300 block">NFC CHAMPIONSHIP</span>
+                <div className="flex gap-1">
+                  {[nfcDivWinners[0], nfcDivWinners[1]].map((code) => (
                     <button
                       key={code}
-                      onClick={() => setSuperBowlChamp(code)}
-                      className={`flex-1 rounded-xl p-3 text-center font-bold border transition ${
-                        superBowlChamp === code
-                          ? "bg-gradient-to-r from-amber-500 to-orange-500 text-slate-950 border-amber-400 shadow-xl scale-105"
-                          : "bg-slate-900 text-white border-slate-700 hover:bg-slate-800"
+                      onClick={() => setNfcChamp(code)}
+                      className={`flex-1 rounded py-1.5 px-1 text-center text-[11px] font-bold border truncate transition ${
+                        nfcChamp === code
+                          ? "bg-blue-600 text-white border-blue-400 shadow"
+                          : "bg-slate-900 text-slate-300 border-slate-800 hover:bg-slate-800"
                       }`}
                     >
-                      <div className="text-[10px] opacity-75 font-mono">{conf} CHAMPION</div>
-                      <div className="text-sm font-black mt-0.5">{getTeamInfo(code).name}</div>
+                      #{nfcSeedMap.get(code)} {code}
                     </button>
                   ))}
                 </div>
-              ) : (
-                <p className="text-xs text-slate-400">AFCとNFCの王者を決定すると選択可能になります</p>
-              )}
+              </div>
+            )}
+          </div>
+
+          {/* 右：AFC カラム */}
+          <div className="rounded-xl border border-red-950/60 bg-red-950/15 p-2 sm:p-3 space-y-2.5">
+            <div className="flex items-center justify-between font-mono text-[11px] font-black text-red-400 border-b border-red-900/40 pb-1">
+              <span>AFC TOURNAMENT</span>
+              <span className="text-[9px] text-slate-400">#1 {afcSeeds[0]?.team} はBYE</span>
             </div>
-          )}
+
+            {/* WC */}
+            <div className="space-y-1.5">
+              <span className="text-[9px] font-mono text-slate-400 block">WILD CARD</span>
+              {[
+                { hSeed: 2, aSeed: 7, idx: 0 },
+                { hSeed: 3, aSeed: 6, idx: 1 },
+                { hSeed: 4, aSeed: 5, idx: 2 },
+              ].map(({ hSeed, aSeed, idx }) => {
+                const hCode = afcSeeds[hSeed - 1]?.team;
+                const aCode = afcSeeds[aSeed - 1]?.team;
+                const won = afcWcWinners[idx];
+                return (
+                  <div key={idx} className="flex gap-1">
+                    {[
+                      { code: hCode, seed: hSeed },
+                      { code: aCode, seed: aSeed },
+                    ].map((t) => (
+                      <button
+                        key={t.code}
+                        onClick={() => setAfcWcWinners((prev) => ({ ...prev, [idx]: t.code }))}
+                        className={`flex-1 rounded py-1 px-1 text-center text-[10px] font-bold border truncate transition ${
+                          won === t.code
+                            ? "bg-amber-500 text-slate-950 border-amber-400"
+                            : "bg-slate-900/90 text-slate-200 border-slate-800 hover:bg-slate-800"
+                        }`}
+                      >
+                        #{t.seed} {t.code}
+                      </button>
+                    ))}
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* DIV */}
+            {afcDivMatchups && (
+              <div className="space-y-1.5 pt-1.5 border-t border-red-900/40">
+                <span className="text-[9px] font-mono text-slate-400 block">DIVISIONAL</span>
+                {afcDivMatchups.map((m, idx) => (
+                  <div key={idx} className="flex gap-1">
+                    {[m.home, m.away].map((code) => (
+                      <button
+                        key={code}
+                        onClick={() => setAfcDivWinners((prev) => ({ ...prev, [idx]: code }))}
+                        className={`flex-1 rounded py-1 px-1 text-center text-[10px] font-bold border truncate transition ${
+                          afcDivWinners[idx] === code
+                            ? "bg-amber-500 text-slate-950 border-amber-400"
+                            : "bg-slate-900/90 text-slate-200 border-slate-800 hover:bg-slate-800"
+                        }`}
+                      >
+                        #{afcSeedMap.get(code)} {code}
+                      </button>
+                    ))}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* CCG */}
+            {afcDivWinners[0] && afcDivWinners[1] && (
+              <div className="space-y-1.5 pt-1.5 border-t border-red-900/40">
+                <span className="text-[9px] font-mono text-red-300 block">AFC CHAMPIONSHIP</span>
+                <div className="flex gap-1">
+                  {[afcDivWinners[0], afcDivWinners[1]].map((code) => (
+                    <button
+                      key={code}
+                      onClick={() => setAfcChamp(code)}
+                      className={`flex-1 rounded py-1.5 px-1 text-center text-[11px] font-bold border truncate transition ${
+                        afcChamp === code
+                          ? "bg-red-600 text-white border-red-400 shadow"
+                          : "bg-slate-900 text-slate-300 border-slate-800 hover:bg-slate-800"
+                      }`}
+                    >
+                      #{afcSeedMap.get(code)} {code}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
         </div>
 
-        {/* プレビュー表示エリア */}
-        <div className="mt-4">
-          <div className="flex items-center justify-between mb-1.5">
-            <span className="text-[11px] font-mono text-slate-400">生成プレビュー（1200×675 / X最適化サイズ）</span>
+        {/* 最下部中央：SUPER BOWL LXI */}
+        {afcChamp && nfcChamp && (
+          <div className="mt-3 rounded-xl border border-amber-500/50 bg-amber-500/10 p-2 sm:p-3 text-center animate-in fade-in duration-200">
+            <span className="font-mono text-[10px] text-amber-400 font-black tracking-widest block">SUPER BOWL LXI</span>
+            <div className="mt-1.5 flex gap-2 justify-center max-w-sm mx-auto">
+              {[
+                { code: nfcChamp, conf: "NFC", seedMap: nfcSeedMap },
+                { code: afcChamp, conf: "AFC", seedMap: afcSeedMap },
+              ].map(({ code, conf, seedMap }) => (
+                <button
+                  key={code}
+                  onClick={() => setSuperBowlChamp(code)}
+                  className={`flex-1 rounded-xl p-2 text-center font-bold border transition ${
+                    superBowlChamp === code
+                      ? "bg-gradient-to-r from-amber-500 to-orange-500 text-slate-950 border-amber-400 shadow-lg scale-105"
+                      : "bg-slate-900 text-white border-slate-700 hover:bg-slate-800"
+                  }`}
+                >
+                  <div className="text-[9px] opacity-75 font-mono">{conf} CHAMP</div>
+                  <div className="text-xs font-black">#{seedMap.get(code)} {code}</div>
+                </button>
+              ))}
+            </div>
           </div>
-          <div className="relative overflow-hidden rounded-xl border border-slate-800 bg-slate-950 shadow-inner flex items-center justify-center min-h-[160px]">
+        )}
+
+        {/* プレビュー表示エリア */}
+        <div className="mt-3">
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-[10px] font-mono text-slate-400">生成プレビュー（1200×675 / X最適化サイズ）</span>
+          </div>
+          <div className="relative overflow-hidden rounded-xl border border-slate-800 bg-slate-950 shadow-inner flex items-center justify-center min-h-[140px]">
             {previewUrl ? (
-              <img src={previewUrl} alt="Bracket Preview" className="w-full h-auto object-contain max-h-[300px]" />
+              <img src={previewUrl} alt="Bracket Preview" className="w-full h-auto object-contain max-h-[260px]" />
             ) : (
-              <span className="py-8 text-xs text-slate-500">予想を入力すると高解像度カードが生成されます</span>
+              <span className="py-6 text-xs text-slate-500">予想を入力すると高解像度カードが生成されます</span>
             )}
           </div>
         </div>
 
         {/* アクションボタン */}
-        <div className="mt-4 flex flex-wrap items-center justify-end gap-2.5 pt-3 border-t border-slate-800">
+        <div className="mt-3 flex flex-wrap items-center justify-end gap-2 pt-2.5 border-t border-slate-800">
           <button
             onClick={openTwitterIntent}
-            className="inline-flex items-center gap-1.5 rounded-xl border border-slate-700 bg-slate-800 px-3.5 py-2 text-xs font-bold text-white hover:bg-slate-700 transition"
+            className="inline-flex items-center gap-1 rounded-xl border border-slate-700 bg-slate-800 px-3 py-1.5 text-xs font-bold text-white hover:bg-slate-700"
           >
             X でポスト
           </button>
           <button
             onClick={handleShareOrSave}
             disabled={isGenerating || !superBowlChamp}
-            className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 px-4 py-2 text-xs font-black text-slate-950 shadow-md transition hover:from-amber-400 hover:to-orange-400 active:scale-95 disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 px-3.5 py-1.5 text-xs font-black text-slate-950 shadow-md transition hover:from-amber-400 hover:to-orange-400 active:scale-95 disabled:opacity-50"
           >
-            <Share2 className="h-4 w-4" />
+            <Share2 className="h-3.5 w-3.5" />
             <span>スマホ保存 / Xでシェア（画像添付）</span>
           </button>
         </div>
 
-        {/* 描画用隠しCanvas */}
         <canvas ref={canvasRef} className="hidden" />
       </div>
     </div>
