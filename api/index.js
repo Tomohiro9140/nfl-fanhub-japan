@@ -4142,8 +4142,9 @@ function playerCategories(tables, awayCode, homeCode) {
   return { passing: byCategory("PASSING"), rushing: byCategory("RUSHING"), receiving: byCategory("RECEIVING"), defense: byCategory("DEFENSE") };
 }
 function isOfficialFinal2(state) {
+  if (!state) return false;
   const normalized = state.toUpperCase();
-  return normalized === "FINAL" || normalized === "COMPLETED";
+  return normalized.includes("FINAL") || normalized === "COMPLETED" || normalized === "POST";
 }
 async function getOfficialGameStats(gameUrl) {
   const game = await getOfficialScoreboardGameByUrl(gameUrl);
@@ -4197,6 +4198,25 @@ var playoffRouter = router({
         eq4(officialGames.homeAway, "home")
       )
     );
+    const dedupedRowsMap = /* @__PURE__ */ new Map();
+    for (const row of scheduledRows) {
+      const match = row.weekLabel?.match(/WEEK\s*(\d+)/i);
+      const week = match ? Number.parseInt(match[1], 10) : 1;
+      const key = `W${week}_${row.teamCode}_${row.opponentCode}`;
+      const existing = dedupedRowsMap.get(key);
+      if (!existing) {
+        dedupedRowsMap.set(key, row);
+        continue;
+      }
+      const existingIsTbd = existing.kickoffAt ? new Date(existing.kickoffAt).getSeconds() === 59 : true;
+      const rowIsTbd = row.kickoffAt ? new Date(row.kickoffAt).getSeconds() === 59 : true;
+      if (existingIsTbd && !rowIsTbd) {
+        dedupedRowsMap.set(key, row);
+      } else if (existingIsTbd === rowIsTbd && row.id > existing.id) {
+        dedupedRowsMap.set(key, row);
+      }
+    }
+    const uniqueScheduledRows = Array.from(dedupedRowsMap.values());
     const statsRows = await db.select({
       team: teamWeekStats.team,
       week: teamWeekStats.week,
@@ -4212,7 +4232,7 @@ var playoffRouter = router({
         pa: row.pointsAgainst
       });
     }
-    const games = scheduledRows.map((row) => {
+    const games = uniqueScheduledRows.map((row) => {
       const match = row.weekLabel?.match(/WEEK\s*(\d+)/i);
       const week = match ? Number.parseInt(match[1], 10) : 1;
       const homeStat = statsMap.get(`${row.teamCode}_W${week}`);
