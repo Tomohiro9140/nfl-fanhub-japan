@@ -82,7 +82,6 @@ export default function PlayoffMachine() {
 
   const [isPredictionOpen, setIsPredictionOpen] = useState(false);
   const [presetDropdownOpen, setPresetDropdownOpen] = useState(false);
-  const [fillMode, setFillMode] = useState<"fill_remaining" | "overwrite_all">("fill_remaining");
 
   const alphabeticalTeams = useMemo(() => {
     return Object.values(NFL_TEAMS).sort((a, b) => a.name.localeCompare(b.name));
@@ -244,13 +243,13 @@ export default function PlayoffMachine() {
     return records;
   }, [games]);
 
+  // プリセット適用（常に全試合一括上書き）
   const applyPreset = (preset: "better_record" | "home_wins" | "run_the_table" | "underdogs") => {
     setPresetDropdownOpen(false);
 
     setGames((prev) =>
       prev.map((g) => {
         if (g.isFinished) return g;
-        if (fillMode === "fill_remaining" && g.outcome) return g;
 
         const awayPct = allTeamRecords[g.awayTeam]?.pct ?? 0.5;
         const homePct = allTeamRecords[g.homeTeam]?.pct ?? 0.5;
@@ -442,12 +441,12 @@ export default function PlayoffMachine() {
         </div>
       </header>
 
-      {/* コントロールバー（応援チーム・一括シミュレーション・プレイオフ予想をスッキリ横一列に統合） */}
+      {/* コントロールバー */}
       <div className="border-b border-slate-200 bg-white shadow-xs">
-        <div className="container mx-auto flex flex-col gap-2 px-3 py-2 sm:px-6 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-2 flex-wrap w-full sm:w-auto">
+        <div className="container mx-auto flex flex-col gap-2.5 px-3 py-2.5 sm:px-6 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-2.5 flex-wrap w-full sm:w-auto">
             {/* 応援チーム選択 */}
-            <div className="flex-1 sm:w-48 sm:flex-none">
+            <div className="w-full sm:w-52">
               <Select
                 value={focusTeam}
                 onValueChange={(val) => {
@@ -472,87 +471,67 @@ export default function PlayoffMachine() {
               </Select>
             </div>
 
-            {/* 一括プリセット */}
+            {/* 一括プリセット（スマホでも画面外に突き抜けない配置） */}
             <div className="relative">
               <Button
                 type="button"
                 variant="outline"
                 size="sm"
                 onClick={() => setPresetDropdownOpen(!presetDropdownOpen)}
-                className="h-8 border-slate-200 bg-slate-50 text-xs font-bold text-slate-700 hover:bg-slate-100 px-2.5"
+                className="h-8 border-slate-200 bg-slate-50 text-xs font-bold text-slate-700 hover:bg-slate-100 px-3"
               >
-                <Sparkles className="mr-1 h-3.5 w-3.5 text-[#e85d2a]" />
-                <span>プリセット</span>
+                <Sparkles className="mr-1.5 h-3.5 w-3.5 text-[#e85d2a]" />
+                <span>一括プリセット</span>
                 <ChevronDown className={`ml-1 h-3 w-3 ${presetDropdownOpen ? "rotate-180" : ""}`} />
               </Button>
 
               {presetDropdownOpen && (
-                <div className="absolute left-0 top-full z-50 mt-1 w-56 rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl">
+                <div className="absolute left-0 top-full z-50 mt-1.5 w-56 max-w-[calc(100vw-2rem)] rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl">
                   <button
                     type="button"
                     onClick={() => applyPreset("better_record")}
-                    className="flex w-full flex-col rounded-lg px-2 py-1.5 text-left hover:bg-slate-50"
+                    className="flex w-full flex-col rounded-lg px-2.5 py-1.5 text-left hover:bg-slate-50"
                   >
                     <span className="text-xs font-bold text-slate-800">🏆 勝率上位（Better Record）</span>
                   </button>
                   <button
                     type="button"
                     onClick={() => applyPreset("home_wins")}
-                    className="flex w-full flex-col rounded-lg px-2 py-1.5 text-left hover:bg-slate-50"
+                    className="flex w-full flex-col rounded-lg px-2.5 py-1.5 text-left hover:bg-slate-50"
                   >
                     <span className="text-xs font-bold text-slate-800">🏠 ホーム全勝（Home Wins）</span>
                   </button>
                   <button
                     type="button"
                     onClick={() => applyPreset("run_the_table")}
-                    className="flex w-full flex-col rounded-lg px-2 py-1.5 text-left hover:bg-slate-50"
+                    className="flex w-full flex-col rounded-lg px-2.5 py-1.5 text-left hover:bg-slate-50"
                   >
                     <span className="text-xs font-bold text-[#e85d2a]">🔥 {focusTeamInfo?.name ?? focusTeam} 全勝</span>
                   </button>
                   <button
                     type="button"
                     onClick={() => applyPreset("underdogs")}
-                    className="flex w-full flex-col rounded-lg px-2 py-1.5 text-left hover:bg-slate-50"
+                    className="flex w-full flex-col rounded-lg px-2.5 py-1.5 text-left hover:bg-slate-50"
                   >
                     <span className="text-xs font-bold text-emerald-700">⚡ 最大波乱（Chaos）</span>
                   </button>
                 </div>
               )}
             </div>
-
-            {/* 上書きトグル */}
-            <div className="flex h-8 items-center rounded-lg border border-slate-200 bg-slate-100 p-0.5 text-[10px]">
-              <button
-                type="button"
-                onClick={() => setFillMode("fill_remaining")}
-                className={`h-full rounded px-1.5 font-semibold ${
-                  fillMode === "fill_remaining" ? "bg-white text-slate-900 shadow-xs" : "text-slate-500"
-                }`}
-              >
-                未選択
-              </button>
-              <button
-                type="button"
-                onClick={() => setFillMode("overwrite_all")}
-                className={`h-full rounded px-1.5 font-semibold ${
-                  fillMode === "overwrite_all" ? "bg-white text-slate-900 shadow-xs" : "text-slate-500"
-                }`}
-              >
-                全上書き
-              </button>
-            </div>
           </div>
 
-          {/* プレイオフ予想モーダル起動ボタン */}
-          <Button
-            type="button"
-            onClick={() => setIsPredictionOpen(true)}
-            className="w-full sm:w-auto h-8 gap-1.5 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white font-bold text-xs shadow-xs"
-            size="sm"
-          >
-            <Trophy className="h-3.5 w-3.5" />
-            <span>プレイオフ勝敗予想</span>
-          </Button>
+          {/* プレイオフ予想ボタン */}
+          <div className="w-full sm:w-auto">
+            <Button
+              type="button"
+              onClick={() => setIsPredictionOpen(true)}
+              className="w-full sm:w-auto h-8 gap-1.5 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white font-bold text-xs shadow-xs"
+              size="sm"
+            >
+              <Trophy className="h-3.5 w-3.5" />
+              <span>プレイオフ勝敗予想</span>
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -713,7 +692,6 @@ export default function PlayoffMachine() {
 
           {/* 右カラム: 週選択 ＆ 対戦カード（スマホ横2列・縦幅半減） */}
           <div className="space-y-3 lg:col-span-5 min-w-0">
-            {/* Week 選択 ＆ タブ一体型ヘッダー */}
             <div className="rounded-xl border border-slate-200 bg-white p-2 shadow-xs">
               <div className="flex items-center justify-between pb-1.5 border-b border-slate-100">
                 <div className="flex items-center gap-1">
@@ -768,7 +746,7 @@ export default function PlayoffMachine() {
               </div>
             </div>
 
-            {/* 対戦カード（スマホ横2列・縦幅半減の超スリム設計） */}
+            {/* 対戦カード（スマホ横2列・縦幅半減） */}
             {activeTab === "simulator" && (
               <div className="grid grid-cols-2 gap-1.5 sm:gap-2">
                 {weekGames.map((game) => (
@@ -878,7 +856,6 @@ export default function PlayoffMachine() {
         </div>
       </main>
 
-      {/* プレイオフ勝敗予想 & 画像シェアモーダル */}
       <PlayoffPredictionModal
         isOpen={isPredictionOpen}
         onClose={() => setIsPredictionOpen(false)}
@@ -886,7 +863,6 @@ export default function PlayoffMachine() {
         nfcSeeds={nfcPlayoffSeeds}
       />
 
-      {/* タイブレーカー解説モーダル */}
       {explanationModalSeed && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs"
