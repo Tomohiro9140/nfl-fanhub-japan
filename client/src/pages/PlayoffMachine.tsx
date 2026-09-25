@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { EmbeddedAppNav } from "@/components/EmbeddedAppNav";
+import { PlayoffPredictionModal } from "@/components/PlayoffPredictionModal";
 import { trpc } from "@/lib/trpc";
 import { NFL_TEAMS } from "@/lib/tiebreaker/nflTeams";
 import { calculateAllStandings } from "@/lib/tiebreaker/playoffEngine";
@@ -81,6 +82,9 @@ export default function PlayoffMachine() {
   const [explanationModalSeed, setExplanationModalSeed] = useState<PlayoffSeed | null>(null);
   const [showLowGuides, setShowLowGuides] = useState<boolean>(false);
 
+  // プレイオフ予想モーダルの開閉ステート
+  const [isPredictionOpen, setIsPredictionOpen] = useState(false);
+
   // 一括シミュレーションのステート
   const [presetDropdownOpen, setPresetDropdownOpen] = useState(false);
   const [fillMode, setFillMode] = useState<"fill_remaining" | "overwrite_all">("fill_remaining");
@@ -131,6 +135,21 @@ export default function PlayoffMachine() {
   // タイブレーカーエンジンによる即時シード計算
   const standings = useMemo(() => calculateAllStandings(games), [games]);
   const currentConfStandings = standings[activeConf];
+
+  // プレイオフ進出シード 1〜7 位（AFC / NFC）
+  const afcPlayoffSeeds = useMemo(() => {
+    return [
+      ...(standings.afc?.divisionWinners ?? []),
+      ...(standings.afc?.wildCards ?? []),
+    ];
+  }, [standings.afc]);
+
+  const nfcPlayoffSeeds = useMemo(() => {
+    return [
+      ...(standings.nfc?.divisionWinners ?? []),
+      ...(standings.nfc?.wildCards ?? []),
+    ];
+  }, [standings.nfc]);
 
   // 全32チームのリアルタイム成績（ドラフト・プリセット用）
   const allTeamRecords = useMemo(() => {
@@ -442,7 +461,7 @@ export default function PlayoffMachine() {
         </div>
       </header>
 
-      {/* コントロールバー: 応援チーム選択 ＆ 一括シミュレーション（Week選択は対戦カード側へ移動してスッキリ整理） */}
+      {/* コントロールバー: 応援チーム選択 ＆ 一括シミュレーション ＆ プレイオフ予想ボタン */}
       <div className="border-b border-slate-200 bg-white shadow-xs">
         <div className="container mx-auto flex flex-col gap-3 px-4 py-3 sm:px-6 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex flex-wrap items-center gap-3">
@@ -554,6 +573,19 @@ export default function PlayoffMachine() {
                 </div>
               )}
             </div>
+          </div>
+
+          {/* プレイオフ勝敗予想 ＆ 画像シェアボタン */}
+          <div className="flex items-center">
+            <Button
+              type="button"
+              onClick={() => setIsPredictionOpen(true)}
+              className="h-9 gap-1.5 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white font-bold shadow-xs transition active:scale-95"
+              size="sm"
+            >
+              <Trophy className="h-4 w-4" />
+              <span>プレイオフ勝敗予想</span>
+            </Button>
           </div>
         </div>
       </div>
@@ -994,6 +1026,14 @@ export default function PlayoffMachine() {
           </div>
         </div>
       </main>
+
+      {/* プレイオフ勝敗予想 & 画像シェアモーダル */}
+      <PlayoffPredictionModal
+        isOpen={isPredictionOpen}
+        onClose={() => setIsPredictionOpen(false)}
+        afcSeeds={afcPlayoffSeeds}
+        nfcSeeds={nfcPlayoffSeeds}
+      />
 
       {/* タイブレーカー解説モーダル */}
       {explanationModalSeed && (
