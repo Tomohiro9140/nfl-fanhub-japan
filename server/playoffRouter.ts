@@ -40,6 +40,32 @@ export const playoffRouter = router({
           )
         );
 
+      // 同一週・同一対戦カードの重複を排除（確定日程、またはより新しいレコードを優先）
+      const dedupedRowsMap = new Map<string, (typeof scheduledRows)[number]>();
+      for (const row of scheduledRows) {
+        const match = row.weekLabel?.match(/WEEK\s*(\d+)/i);
+        const week = match ? Number.parseInt(match[1], 10) : 1;
+        const key = `W${week}_${row.teamCode}_${row.opponentCode}`;
+
+        const existing = dedupedRowsMap.get(key);
+        if (!existing) {
+          dedupedRowsMap.set(key, row);
+          continue;
+        }
+
+        // 秒が 59（TBD仮日程）かどうかの判定
+        const existingIsTbd = existing.kickoffAt ? new Date(existing.kickoffAt).getSeconds() === 59 : true;
+        const rowIsTbd = row.kickoffAt ? new Date(row.kickoffAt).getSeconds() === 59 : true;
+
+        // 確定日程（TBDでない方）を優先。両方同条件なら新しいIDを採用
+        if (existingIsTbd && !rowIsTbd) {
+          dedupedRowsMap.set(key, row);
+        } else if (existingIsTbd === rowIsTbd && row.id > existing.id) {
+          dedupedRowsMap.set(key, row);
+        }
+      }
+      const uniqueScheduledRows = Array.from(dedupedRowsMap.values());
+
       // 2. 消化済み週のスタッツ（勝敗判定用）を取得
       const statsRows = await db
         .select({
@@ -62,7 +88,7 @@ export const playoffRouter = router({
       }
 
       // 3. 各試合の週番号と勝敗（終了済みの場合は確定結果）を構築
-      const games = scheduledRows
+      const games = uniqueScheduledRows
         .map((row) => {
           const match = row.weekLabel?.match(/WEEK\s*(\d+)/i);
           const week = match ? Number.parseInt(match[1], 10) : 1;
