@@ -75,6 +75,10 @@ export function OfficialLatestResults({ favorite, dashboard, loading, spoilerMod
               const homeWon = !spoilerMode && hasOfficialScore && homeScore > awayScore;
               const gameDate = jstResultDate(game.kickoffAt, game.gameDate);
               const hasExactKickoff = Boolean(game.kickoffAt);
+
+              // FINAL, FINAL/OT, COMPLETED, POST などの終了ステータスを網羅的に判定
+              const isGameFinal = Boolean(game.gameState && /final|completed|post/i.test(game.gameState));
+
               return (
                 <div key={game.id} className="grid min-h-[84px] grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 py-7 pb-2.5">
                   <a href={game.gameUrl} target="_blank" rel="noreferrer" className="min-w-0 self-center overflow-visible text-[13px] leading-[1.45]">
@@ -88,7 +92,24 @@ export function OfficialLatestResults({ favorite, dashboard, loading, spoilerMod
                       <p className="font-mono text-[8px] font-bold leading-[10px] tracking-[.08em] text-[#64748b]">{game.weekLabel ?? "OFFICIAL"}</p>
                     </div>
                     <p className="relative font-mono text-[26px] font-black leading-[.85] tracking-[-.06em]"><span className={spoilerMode ? "invisible" : undefined}><span className={awayWon ? "text-[#a84420]" : undefined}>{game.awayScore ?? "—"}</span><span> - </span><span className={homeWon ? "text-[#a84420]" : undefined}>{game.homeScore ?? "—"}</span></span>{spoilerMode ? <span aria-label="スコア非表示" className="absolute inset-0 grid place-items-center">—</span> : null}</p>
-                    {game.gameState === "FINAL" && onOpenGameStats ? <div className="relative mt-2 h-3">{!spoilerMode ? <button type="button" onClick={() => onOpenGameStats(game.gameUrl)} onPointerEnter={() => onWarmGameStats?.(game.gameUrl)} onPointerDown={() => onWarmGameStats?.(game.gameUrl)} onFocus={() => onWarmGameStats?.(game.gameUrl)} className="absolute right-0 inline-flex h-3 items-center gap-1 font-mono text-[8px] font-black tracking-[.06em] text-[#a84420] underline decoration-[#e85d2a] decoration-2 underline-offset-2"><BarChart3 className="h-3 w-3" /> GAME STATS</button> : <span aria-hidden="true" className="block h-3" />}</div> : null}
+                    {isGameFinal && onOpenGameStats ? (
+                      <div className="relative mt-2 h-3">
+                        {!spoilerMode ? (
+                          <button
+                            type="button"
+                            onClick={() => onOpenGameStats(game.gameUrl)}
+                            onPointerEnter={() => onWarmGameStats?.(game.gameUrl)}
+                            onPointerDown={() => onWarmGameStats?.(game.gameUrl)}
+                            onFocus={() => onWarmGameStats?.(game.gameUrl)}
+                            className="absolute right-0 inline-flex h-3 items-center gap-1 font-mono text-[8px] font-black tracking-[.06em] text-[#a84420] underline decoration-[#e85d2a] decoration-2 underline-offset-2"
+                          >
+                            <BarChart3 className="h-3 w-3" /> GAME STATS
+                          </button>
+                        ) : (
+                          <span aria-hidden="true" className="block h-3" />
+                        )}
+                      </div>
+                    ) : null}
                   </div>
                 </div>
               );
