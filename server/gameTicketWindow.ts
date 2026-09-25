@@ -29,16 +29,44 @@ export function isWithinJstReplayWindow(game: Pick<GameTicketCandidate, "kickoff
 
 function regularWeekNumber(game?: Pick<GameTicketCandidate, "seasonPhase" | "weekLabel">) {
   if (game?.seasonPhase !== "regular") return null;
-  const week = game.weekLabel?.match(/^WEEK\s+(\d+)$/i)?.[1];
+  const week = game?.weekLabel?.match(/^WEEK\s+(\d+)$/i)?.[1];
   return week ? Number(week) : null;
 }
 
 /** Identifies the intervening regular-season week only after the prior game's replay window has closed. */
-export function getRegularSeasonByeWeek<T extends GameTicketCandidate>({ now, scheduledGame, latestCompletedGame }: { now: Date; scheduledGame?: T; latestCompletedGame?: T }) {
+export function getRegularSeasonByeWeek<T extends GameTicketCandidate>({
+  now,
+  scheduledGame,
+  latestCompletedGame,
+  activeGame,
+}: {
+  now: Date;
+  scheduledGame?: T;
+  latestCompletedGame?: T;
+  activeGame?: T;
+}) {
+  // 1. 試合中（LIVE）、または未終了の当日試合が存在する場合は絶対に Bye Week ではない
+  if (activeGame && !isOfficialFinal(activeGame)) {
+    return undefined;
+  }
+
   const nextWeek = regularWeekNumber(scheduledGame);
   const previousWeek = regularWeekNumber(latestCompletedGame);
-  if (!scheduledGame || !latestCompletedGame || nextWeek === null || previousWeek === null) return undefined;
-  if (nextWeek !== previousWeek + 2 || isWithinJstReplayWindow(latestCompletedGame, now)) return undefined;
+  if (!scheduledGame || !latestCompletedGame || nextWeek === null || previousWeek === null) {
+    return undefined;
+  }
+
+  // 2. 直前完了試合のリプレイ期間中、または2週の空きがない場合は Bye Week ではない
+  if (nextWeek !== previousWeek + 2 || isWithinJstReplayWindow(latestCompletedGame, now)) {
+    return undefined;
+  }
+
+  // 3. activeGame の週が previousWeek + 1 の場合も Bye Week ではない
+  const activeWeek = regularWeekNumber(activeGame);
+  if (activeWeek === previousWeek + 1) {
+    return undefined;
+  }
+
   return { weekLabel: `WEEK ${previousWeek + 1}`, nextGameWeekLabel: scheduledGame.weekLabel };
 }
 
