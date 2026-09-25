@@ -432,7 +432,22 @@ export async function getOfficialTeamSnapshot(teamCode: string, skipGameUrl?: st
     skipReplayWindow: Boolean(skipGameUrl && (latestCompletedGame?.sourceUrl === skipGameUrl || (latestCompletedGame?.sourceUrl && skipGameUrl.includes(latestCompletedGame.sourceUrl)))),
     forceLastGame
   });
-  const byeWeek = getRegularSeasonByeWeek({ now, scheduledGame: scheduledWithScore, latestCompletedGame });
+
+  // 試合中（LIVE）または未確定の試合が存在する場合は絶対に Bye Week と判定しない
+  const isLiveOrActive = Boolean(
+    (activeWithScore && !isOfficialFinal(activeWithScore)) ||
+    activeScoreboardCandidates.some((score) => !isOfficialFinal(score))
+  );
+
+  const rawByeWeek = !isLiveOrActive
+    ? getRegularSeasonByeWeek({
+        now,
+        scheduledGame: scheduledWithScore,
+        latestCompletedGame,
+        activeGame: activeWithScore,
+      })
+    : undefined;
+
   const rosterCounts = Array.from(roster.reduce((counts, entry) => {
     counts.set(entry.rosterStatus, (counts.get(entry.rosterStatus) ?? 0) + 1);
     return counts;
@@ -453,6 +468,9 @@ export async function getOfficialTeamSnapshot(teamCode: string, skipGameUrl?: st
     sourceUrl: nextGame.sourceUrl,
     fetchedAt: nextGame.fetchedAt,
   } : undefined;
+
+  // 試合中または終了直後の当日試合が存在する場合、チケット上での Bye Week 重複を完全に遮断
+  const byeWeek = (gameDayStatus && !isOfficialFinal(gameDayStatus)) ? undefined : rawByeWeek;
 
   const inactiveReport = buildSnapshotInactiveReport(inactiveAnnouncements);
 
@@ -477,8 +495,9 @@ export async function hasOfficialScorePulseWindow(now = new Date()) {
   if (!db) return false;
   const jst = new Date(now.getTime() + 9 * 60 * 60 * 1_000);
   const japanDayStart = new Date(Date.UTC(jst.getUTCFullYear(), jst.getUTCMonth(), jst.getUTCDate()) - 9 * 60 * 60 * 1_000);
-  const windowStart = new Date(japanDayStart.getTime() - 6 * 60 * 60 * 1_000);
-  const windowEnd = new Date(japanDayStart.getTime() + 24 * 60 * 60 * 1_000);
+  // キックオフ前後の時間帯を広くカバーし、TNFやMNFの試合終了後も確実にスコア同期を稼働させる
+  const windowStart = new Date(japanDayStart.getTime() - 12 * 60 * 60 * 1_000);
+  const windowEnd = new Date(japanDayStart.getTime() + 30 * 60 * 60 * 1_000);
   const games = await db.select({ id: officialGames.id }).from(officialGames)
     .where(and(gte(officialGames.kickoffAt, windowStart), lt(officialGames.kickoffAt, windowEnd))).limit(1);
   return games.length > 0;
