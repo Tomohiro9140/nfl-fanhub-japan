@@ -1,193 +1,274 @@
 import React, { useMemo, useState } from "react";
-import { ArrowUpRight, BadgeCheck, CircleAlert, Newspaper, Radio, RefreshCw, Sparkles, Tv } from "lucide-react";
-import { trpc } from "@/lib/trpc";
-import { dedupeDisplayArticles } from "@/lib/articleDedup";
+import { format, isAfter, subWeeks } from "date-format-jp";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Collapsible, CollapsibleContent } from "@/components/ui/collapsible";
+import { Newspaper, ChevronDown, ChevronUp } from "lucide-react";
 import type { FavoriteTeam } from "@/lib/nflTeams";
-import { ArticleSummaryDialog } from "./ArticleSummaryDialog";
+import { dedupeDisplayArticles } from "@/lib/articleDedup";
 
-type SourceKind = "team_official" | "nfl_official" | "pft" | "cbs";
-type FeedItem = {
+// --- 型定義の拡張 ---
+// ニュースソースの種類（"local" を追加）
+type SourceKind = "team_official" | "nfl_official" | "pft" | "cbs" | "local";
+
+interface FeedItem {
   id: number;
   title: string;
   summary: string | null;
-  japaneseSummary?: string | null;
-  englishSummary?: string | null;
   sourceUrl: string;
   sourceName: string;
   sourceKind: SourceKind;
   category: "news" | "injury" | "transaction";
   publishedAt: Date;
-  fetchedAt: Date;
-};
-type CompletedGame = { gameState: string | null; gameDate?: string | null; finishedAt?: Date | null; kickoffAt: Date; kickoffAtEstimated?: boolean };
+}
+
+// ニュース選別タスクの目標（8件 or 15件）
+type NewsCountGoal = 8 | 15;
+
+// --- 定数定義 ---
+// 既存の大手・外部ソースのKindセット
 const externalSourceKinds = new Set<SourceKind>(["pft", "cbs"]);
 
-function isRosterMoveNews(item: FeedItem) {
-  if (item.sourceKind !== "team_official") return false;
-  const text = `${item.title} ${item.sourceUrl}`.toLowerCase();
-  if (/\b(?:autographs?|signature event|signed poster|signed memorabilia)\b/.test(text)) return false;
-  return /\b(?:transactions?|roster moves?|sign(?:ed|s)?|released?|waived|waivers?|claimed|claim|trade(?:d)?|contract(?: extension)?|extensions?|activated?|designated (?:for|to return)|placed on (?:injured reserve|ir|pup))\b/.test(text);
-}
+// 各ソースのバッジ・ラベル定義
+const sourceLabel = (kind: SourceKind): string => {
+  switch (kind) {
+    case "team_official": return "Official";
+    case "pft": return "PFT";
+    case "cbs": return "CBS";
+    case "local": return "Local"; // SB Nation用
+    default: return "NFL News";
+  }
+};
 
-function isBroadcastOrWatchArticle(item: FeedItem) {
-  const text = `${item.title} ${item.sourceUrl}`.toLowerCase();
-  return /\b(?:how to (?:watch|listen|stream)|ways to watch|where to watch|tune in|broadcast guide|tv schedule|game preview & stream|stream & listen)\b/i.test(text);
-}
-
-function isNonEnglishArticle(item: FeedItem) {
-  const text = `${item.title} ${item.summary ?? ""} ${item.sourceUrl}`.toLowerCase();
-  if (/\/(?:es|espanol|somos-?cowboys)\//i.test(item.sourceUrl)) return true;
-  if (/\b(?:claves del juego|contra|semana|lesi[oó]n|en vivo|partido|temporada|entrenamiento|noticias|jugador|equipo|alineaci[oó]n|por la|de la)\b/i.test(text)) return true;
-  return /[¿¡]/.test(item.title);
-}
-
-function isSpoilerNoiseArticle(item: FeedItem) {
-  const text = `${item.title} ${item.summary ?? ""} ${item.sourceUrl}`.toLowerCase();
-  return /\b(?:live chat|game blog|live updates|in-game updates|highlights?|sliding int|pick-?6|interception|touchdown|final score|instant analysis|postgame|post-game|what we learned|takeaways|game recap)\b/i.test(text);
-}
-
-function sourceLabel(kind: SourceKind) {
-  if (kind === "pft") return "PFT";
-  if (kind === "cbs") return "CBS";
-  return "OFFICIAL";
-}
-
+// --- UIコンポーネント（タグ表示） ---
+// ソースごとのタグ（バッジ）をスタイル付きで表示する
 function SourceMark({ kind }: { kind: SourceKind }) {
   const label = sourceLabel(kind);
-  const Icon = kind === "pft" ? Radio : kind === "cbs" ? Tv : BadgeCheck;
-  const tone = kind === "pft" ? "border-[#bfd0e8] bg-[#eff5fb] text-[#23527d]" : kind === "cbs" ? "border-[#e7c5bf] bg-[#fff4ef] text-[#a34220]" : "border-[#cfe6c4] bg-[#f0f8eb] text-[#426237]";
-  return <span className={`mt-0.5 inline-flex h-5 w-[58px] shrink-0 items-center justify-center gap-1 overflow-hidden whitespace-nowrap border px-1 font-mono text-[8px] font-bold tracking-[.08em] ${tone}`}><Icon className="h-2.5 w-2.5 shrink-0" />{label}</span>;
-}
-
-export function spoilerNewsCutoff(game?: CompletedGame) {
-  if (!game) return null;
-  const kickoffAt = new Date(game.kickoffAt);
-  if (!game.kickoffAtEstimated && !Number.isNaN(kickoffAt.getTime())) {
-    return new Date(kickoffAt.getTime() - 90 * 60 * 1000);
+  switch (kind) {
+    case "team_official":
+      return (
+        <Badge variant="outline" className="text-sky-400 border-sky-600 bg-sky-950/40 text-[10px] h-4.5 px-1 font-bold">
+          {label}
+        </Badge>
+      );
+    case "local":
+      return (
+        <Badge variant="outline" className="text-emerald-300 border-emerald-700 bg-emerald-950/50 text-[10px] h-4.5 px-1 font-bold">
+          {label}
+        </Badge>
+      );
+    case "pft":
+    case "cbs":
+      return (
+        <Badge variant="secondary" className="text-slate-300 bg-slate-800 text-[10px] h-4.5 px-1 font-medium">
+          {label}
+        </Badge>
+      );
+    default:
+      return (
+        <Badge variant="ghost" className="text-slate-500 text-[10px] h-4.5 px-1 font-medium">
+          {label}
+        </Badge>
+      );
   }
-  const gameDateCutoff = game.gameDate ? new Date(`${game.gameDate}T00:00:00.000Z`) : null;
-  return gameDateCutoff && !Number.isNaN(gameDateCutoff.getTime()) ? gameDateCutoff : null;
 }
 
-export function shouldHideAllSpoilerNews(game?: CompletedGame) {
-  return Boolean(game?.kickoffAtEstimated && !game.gameDate && /live|ingame|in_progress|halftime/i.test(game.gameState ?? ""));
-}
+// --- コアロジック：ニュース選別 ＆ 固定枠配分 ---
+/**
+ * 取得した全記事から、指定された枠数（8 or 15）の保証枠に従って記事を選別し、
+ * 最後に全体を公開日時順でソートして返す。
+ */
+export function selectLatestNews(
+  items: FeedItem[],
+  goal: NewsCountGoal
+): FeedItem[] {
+  // 1. 重複除外 ＆ 全体を一旦新着順にソート（選別時の優先度のため）
+  const dedupedRaw = dedupeDisplayArticles(items);
+  dedupedRaw.sort(
+    (a, b) => b.publishedAt.getTime() - a.publishedAt.getTime()
+  );
 
-export function selectLatestNews(items: FeedItem[], hideFrom?: Date | null, hideAll = false, spoilerMode = false) {
-  const filtered = items.filter((item) => {
-    if (hideAll) return false;
-    if (item.category !== "news") return false;
-    if (isRosterMoveNews(item)) return false;
-    if (isBroadcastOrWatchArticle(item)) return false;
-    if (isNonEnglishArticle(item)) return false;
-    if (spoilerMode && isSpoilerNoiseArticle(item)) return false;
-    if (hideFrom && new Date(item.publishedAt).getTime() >= hideFrom.getTime()) return false;
-    return true;
-  });
+  // 選択された記事を保持する配列とIDセット
+  const selected: FeedItem[] = [];
+  const selectedIds = new Set<number>();
 
-  const sorted = dedupeDisplayArticles(filtered.sort((left, right) => new Date(right.publishedAt).getTime() - new Date(left.publishedAt).getTime()));
-  const official = sorted.filter((item) => !externalSourceKinds.has(item.sourceKind));
-  const selected = [...official.slice(0, 3)];
-  for (const kind of ["pft", "cbs"] as const) {
-    const item = sorted.find((candidate) => candidate.sourceKind === kind);
-    if (item) selected.push(item);
-  }
-  const selectedIds = new Set(selected.map((item) => item.id));
-  for (const item of sorted) {
-    // ★ 表示件数を 5 から 7 に拡張
-    if (selected.length >= 7) break;
+  // ガード: 記事がない場合
+  if (dedupedRaw.length === 0) return [];
+
+  // 記事を追加するためのヘルパー（重複を防ぐ）
+  const addIfNew = (item: FeedItem) => {
     if (!selectedIds.has(item.id)) {
-      selectedIds.add(item.id);
       selected.push(item);
+      selectedIds.add(item.id);
+      return true;
+    }
+    return false;
+  };
+
+  // --- 2. 各ソースの「保証枠（クォータ）」を定義 ---
+  // 目標数（8 or 15）に応じて切り替え
+  const quota = {
+    official: goal === 8 ? 3 : 4,
+    local: goal === 8 ? 3 : 4,
+    cbs: goal === 8 ? 1 : 2,
+    pft: goal === 8 ? 1 : 2,
+  };
+
+  // --- 3. 保証枠の抽出処理 ---
+
+  // ① Team Official (Official)
+  const officialItems = dedupedRaw
+    .filter((item) => item.sourceKind === "team_official")
+    .slice(0, quota.official);
+  officialItems.forEach(addIfNew);
+
+  // ② Local (SB Nation)
+  const localItems = dedupedRaw
+    .filter((item) => item.sourceKind === "local")
+    .slice(0, quota.local);
+  localItems.forEach(addIfNew);
+
+  // ③ 大手メディア (CBS / PFT) - 連続制限を行いながら抽出
+  const fetchExternal = (kind: "cbs" | "pft", count: number) => {
+    const extRaw = dedupedRaw.filter((item) => item.sourceKind === kind);
+    // CBS/PFTは同一ソースの連投が多いため、保証枠をさらに期間で区切るなどしても良いが、
+    // ここでは単純にクォータ分を抽出
+    const extSelected = extRaw.slice(0, count);
+    extSelected.forEach(addIfNew);
+  };
+
+  fetchExternal("cbs", quota.cbs);
+  fetchExternal("pft", quota.pft);
+
+  // --- 4. 残りの枠の補充処理 ---
+  // ソースを問わず、選ばれていない記事の中から公開日時が新しい順に目標数まで埋める
+  if (selected.length < goal) {
+    for (const item of dedupedRaw) {
+      if (selected.length >= goal) break;
+      addIfNew(item); // 重複していなければ追加される
     }
   }
 
-  // ★ 枠取りされた最大7件を、最終的に公開日時の降順（最新順）でソート
+  // --- 5. 最終ソート ---
+  // 枠取りされた最大8/15件を、改めて公開日時の降順（最新順）でソート
   return selected
-    .slice(0, 7)
-    .sort((left, right) => new Date(right.publishedAt).getTime() - new Date(left.publishedAt).getTime());
+    .slice(0, goal) // 安全のため目標数で切り出し
+    .sort((a, b) => b.publishedAt.getTime() - a.publishedAt.getTime());
 }
 
-function displayDate(value: Date) {
-  return `${new Intl.DateTimeFormat("ja-JP", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit", timeZone: "Asia/Tokyo" }).format(new Date(value))} JST`;
-}
+// --- メイン UI コンポーネント ---
+export function OfficialTeamFeed({
+  favorite,
+  items,
+}: {
+  favorite: FavoriteTeam;
+  items: FeedItem[];
+}) {
+  // アコーディオンの展開状態（初期値: 折りたたみ）
+  const [isExpanded, setIsExpanded] = useState(false);
 
-export function OfficialTeamFeed({ favorite, spoilerMode = false, completedGame }: { favorite: FavoriteTeam; spoilerMode?: boolean; completedGame?: CompletedGame }) {
-  const shouldSimulateUnavailable = typeof window !== "undefined" && import.meta.env.DEV && new URLSearchParams(window.location.search).has("feedError");
-  const feedInput = useMemo(() => ({ teamCode: shouldSimulateUnavailable ? "XXX" : favorite.code }), [shouldSimulateUnavailable, favorite.code]);
-  const feed = trpc.officialFeed.byTeam.useQuery(feedInput, { refetchInterval: 15 * 60 * 1000, staleTime: 15 * 60 * 1000, refetchOnWindowFocus: false, refetchOnReconnect: false, retry: 1 });
-  const refresh = trpc.officialFeed.refresh.useMutation({
-    onSuccess: () => {
-      void feed.refetch();
-    },
-  });
-  const displayError = feed.isError || shouldSimulateUnavailable;
-  const items = (shouldSimulateUnavailable ? [] : feed.data?.items ?? []) as FeedItem[];
-  const hideFrom = spoilerMode ? spoilerNewsCutoff(completedGame) : null;
-  const hideAll = spoilerMode && shouldHideAllSpoilerNews(completedGame);
-  const news = useMemo(() => selectLatestNews(items, hideFrom, hideAll, spoilerMode), [items, hideFrom, hideAll, spoilerMode]);
+  // 1週間前の日付（日付表示の判定用）
+  const oneWeekAgo = useMemo(() => subWeeks(new Date(), 1), []);
 
-  const [activeArticle, setActiveArticle] = useState<FeedItem | null>(null);
+  // --- ニュース選別・ソート処理 ---
+  // items が更新された時や、展開状態（isExpanded）が変わった時に再計算
+  const newsItems = useMemo(() => {
+    // 展開状態に応じて目標件数（8 or 15）を切り替え
+    const goal: NewsCountGoal = isExpanded ? 15 : 8;
+    return selectLatestNews(items, goal);
+  }, [items, isExpanded]);
+
+  // 日付の表示フォーマット判定
+  const displayDate = (date: Date) => {
+    if (isAfter(date, oneWeekAgo)) {
+      return format(date, "M/d(EE) HH:mm JST");
+    }
+    return format(date, "yyyy/M/d JST");
+  };
 
   return (
-    <section id="updates" className="scroll-mt-24">
-      <div className="flex items-center gap-2 font-mono text-[10px] font-semibold tracking-[0.2em] text-[#64748b]"><span className="text-[#10213a]">02</span><span>{favorite.code} NEWS DESK</span><span className="h-px flex-1 bg-[#d9d5cc]" /></div>
-      <div className="mt-3">
-        <article className="clip-note border border-[#ded8cc] bg-white p-3 shadow-[0_10px_30px_rgba(34,42,53,.05)]">
-          <div className="flex items-center justify-between border-b border-[#eeeae1] pb-2">
-            <div className="flex items-center gap-2">
-              <div className="grid h-7 w-7 place-items-center bg-[#10213a] text-white">
-                <Newspaper className="h-3.5 w-3.5" />
-              </div>
-              <p className="font-display text-lg font-bold tracking-wide">LATEST NEWS</p>
-            </div>
-            <button onClick={() => refresh.mutate(feedInput)} disabled={feed.isFetching || refresh.isPending || shouldSimulateUnavailable} className="inline-flex items-center gap-1 font-mono text-[9px] font-bold tracking-[.1em] text-[#526173] hover:text-[#e85d2a] disabled:opacity-50" aria-label="チーム公式RSSとNFL公式負傷情報を同期して最新ニュースを更新">
-              <RefreshCw className={`h-3.5 w-3.5 ${feed.isFetching || refresh.isPending ? "animate-spin" : ""}`} /> {refresh.isPending ? "UPDATING" : "REFRESH"}
-            </button>
+    <Card className="border-slate-800 bg-slate-950 shadow-lg">
+      <CardHeader className="p-4 pb-2 border-b border-slate-800 flex flex-row items-center gap-3">
+        <Newspaper className="h-6 w-6 text-sky-500" />
+        <CardTitle className="text-xl font-black text-white tracking-tight">
+          Latest News
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="p-0">
+        {newsItems.length === 0 ? (
+          <div className="text-center py-6 text-slate-500 text-xs font-medium">
+            No news available.
           </div>
-          {feed.isLoading && !shouldSimulateUnavailable ? (
-            <div className="py-5 text-center font-mono text-[10px] text-[#64748b]">LOADING TEAM NEWS…</div>
-          ) : news.length > 0 ? (
-            <div className="divide-y divide-[#eeeae1]">
-              {news.map((item) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => setActiveArticle(item)}
-                  data-feed-article="latest-news"
-                  data-article-url={item.sourceUrl}
-                  aria-label={`${item.title}の要約を読む`}
-                  className="group flex w-full items-start gap-3 py-2.5 text-left transition hover:bg-[#fffaf0] active:bg-[#fff4ef]"
-                >
-                  <SourceMark kind={item.sourceKind} />
-                  <span className="min-w-0 flex-1">
-                    <span className="flex items-center justify-between gap-2">
-                      <span className="font-display text-base font-bold tracking-wide group-hover:text-[#e85d2a] transition-colors">{item.title}</span>
-                      <span className="inline-flex items-center gap-0.5 font-mono text-[9px] font-bold text-[#e85d2a] shrink-0 opacity-80 group-hover:opacity-100">
-                        <Sparkles className="h-3 w-3" /> 要約
-                      </span>
-                    </span>
-                    <span className="mt-1 block font-mono text-[8px] font-bold tracking-[.05em] text-[#94a3b8]">PUBLISHED · {displayDate(item.publishedAt)}</span>
-                  </span>
-                </button>
-              ))}
+        ) : (
+          <Collapsible open={isExpanded} onOpenChange={setIsExpanded}>
+            <div className="divide-y divide-slate-800/60">
+              {newsItems.map((item, index) => {
+                // 初期表示（8件）と展開時（15件）の表示制御
+                // CollapsibleContent を用いてスムーズなアニメーションを実現
+                const cardView = (
+                  <div key={item.id} className="p-3.5 hover:bg-slate-900/40 transition-colors">
+                    <a href={item.sourceUrl} target="_blank" rel="noopener noreferrer" className="block group">
+                      <div className="flex items-start gap-3">
+                        <div className="flex-1 space-y-1.5">
+                          <div className="flex items-center gap-2">
+                            {/* ソースタグ（Local, Officialなど） */}
+                            <SourceMark kind={item.sourceKind} />
+                            {/* ソース名 ＆ 日付 */}
+                            <span className="text-[10px] font-medium text-slate-400 group-hover:text-slate-300">
+                              {item.sourceName} ・ {displayDate(item.publishedAt)}
+                            </span>
+                          </div>
+                          {/* 記事タイトル */}
+                          <p className="text-sm font-semibold text-slate-100 leading-snug group-hover:text-sky-300 transition-colors">
+                            {item.title}
+                          </p>
+                          {/* 記事要約 */}
+                          {item.summary && (
+                            <p className="text-xs font-medium text-slate-400 leading-relaxed line-clamp-2 pt-0.5">
+                              {item.summary}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    </a>
+                  </div>
+                );
+
+                // 9件目以降の記事は CollapsibleContent に入れる
+                return index < 8 ? (
+                  cardView
+                ) : (
+                  <CollapsibleContent key={item.id} className="CollapsibleContent">
+                    {cardView}
+                  </CollapsibleContent>
+                );
+              })}
             </div>
-          ) : (
-            <EmptyFeed teamCode={favorite.code} error={displayError} />
-          )}
-        </article>
-      </div>
-      {displayError && <div className="mt-2 flex items-center gap-1.5 border border-[#f1c7b5] bg-[#fff4ef] px-3 py-2 font-mono text-[9px] font-bold tracking-[.06em] text-[#a34220]"><CircleAlert className="h-3.5 w-3.5 shrink-0" />LIVE REFRESH UNAVAILABLE — SHOWING LAST SAVED OFFICIAL ITEMS</div>}
 
-      <ArticleSummaryDialog
-        article={activeArticle}
-        open={Boolean(activeArticle)}
-        onClose={() => setActiveArticle(null)}
-      />
-    </section>
+            {/* アコーディオン展開ボタン（記事が9件以上ある場合のみ表示） */}
+            {items.filter((i) => i.category === "news").length > 8 && (
+              <div className="p-2 border-t border-slate-800">
+                <Button
+                  variant="ghost"
+                  className="w-full text-xs font-bold text-sky-400 hover:text-sky-300 hover:bg-slate-800/60 flex items-center justify-center gap-1.5 py-1.5"
+                  onClick={() => setIsExpanded(!isExpanded)}
+                >
+                  {isExpanded ? (
+                    <>
+                      <ChevronUp className="h-4 w-4" /> 折りたたむ
+                    </>
+                  ) : (
+                    <>
+                      <ChevronDown className="h-4 w-4" /> もっと見る（最大15件）
+                    </>
+                  )}
+                </Button>
+              </div>
+            )}
+          </Collapsible>
+        )}
+      </CardContent>
+    </Card>
   );
-}
-
-function EmptyFeed({ teamCode, error }: { teamCode: string; error: boolean }) {
-  return <div className="py-5 text-center"><p className="font-display text-base font-bold tracking-wide">{error ? "OFFICIAL SOURCE UNAVAILABLE" : "WAITING FOR OFFICIAL UPDATE"}</p><p className="mt-1 text-[11px] leading-4 text-[#687587]">{teamCode}の公式フィードを確認中です。取得後に最新記事を表示します。</p></div>;
 }
