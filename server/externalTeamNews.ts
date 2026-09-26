@@ -1,154 +1,182 @@
-import { createHash } from "node:crypto";
-import type { InsertOfficialFeedItem } from "../drizzle/schema";
+import { fetchRss } from "./rss";
+import { FavoriteTeamCode } from "@/@types/favoriteTeam";
+import { InsertOfficialFeedItem } from "../drizzle/schema";
 import { upsertOfficialFeedItems } from "./db";
 
-const MAX_ITEMS_PER_SOURCE_TEAM = 2;
-const EXTERNAL_NEWS_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1_000;
-
-export const externalNewsSources = [
-  { kind: "pft" as const, name: "PFT · NBC SPORTS", url: "https://www.nbcsports.com/profootballtalk.rss" },
-  { kind: "cbs" as const, name: "CBS SPORTS", url: "https://www.cbssports.com/rss/headlines/nfl/" },
-] as const;
-
-const teamMatchers: Record<string, string[]> = {
-  ARI: ["arizona cardinals", "cardinals"], ATL: ["atlanta falcons", "falcons"], BAL: ["baltimore ravens", "ravens"], BUF: ["buffalo bills", "bills"],
-  CAR: ["carolina panthers", "panthers"], CHI: ["chicago bears", "bears"], CIN: ["cincinnati bengals", "bengals"], CLE: ["cleveland browns", "browns"],
-  DAL: ["dallas cowboys", "cowboys"], DEN: ["denver broncos", "broncos"], DET: ["detroit lions", "lions"], GB: ["green bay packers", "packers"],
-  HOU: ["houston texans", "texans"], IND: ["indianapolis colts", "colts"], JAX: ["jacksonville jaguars", "jaguars"], KC: ["kansas city chiefs", "chiefs"],
-  LAC: ["los angeles chargers", "chargers"], LAR: ["los angeles rams", "rams"], LV: ["las vegas raiders", "raiders"], MIA: ["miami dolphins", "dolphins"],
-  MIN: ["minnesota vikings", "vikings"], NE: ["new england patriots", "patriots"], NO: ["new orleans saints", "saints"], NYG: ["new york giants", "giants"],
-  NYJ: ["new york jets", "jets"], PHI: ["philadelphia eagles", "eagles"], PIT: ["pittsburgh steelers", "steelers"], SF: ["san francisco 49ers", "49ers", "niners"],
-  SEA: ["seattle seahawks", "seahawks"], TB: ["tampa bay buccaneers", "buccaneers", "bucs"], TEN: ["tennessee titans", "titans"], WAS: ["washington commanders", "commanders"],
+// SB Nation 系の各チーム専門サイト（Localソース）のマッピングテーブル
+const LOCAL_NEWS_SOURCES: Record<
+  FavoriteTeamCode,
+  { name: string; url: string }
+> = {
+  BUF: {
+    name: "Buffalo Rumblings",
+    url: "https://www.buffalorumblings.com/rss/index.xml",
+  },
+  MIA: { name: "The Phinsider", url: "https://www.thephinsider.com/rss/index.xml" },
+  NE: { name: "Pats Pulpit", url: "https://www.patspulpit.com/rss/index.xml" },
+  NYJ: {
+    name: "Gang Green Nation",
+    url: "https://www.ganggreennation.com/rss/index.xml",
+  },
+  BAL: {
+    name: "Baltimore Beatdown",
+    url: "https://www.baltimorebeatdown.com/rss/index.xml",
+  },
+  CIN: { name: "Cincy Jungle", url: "https://www.cincyjungle.com/rss/index.xml" },
+  CLE: {
+    name: "Dawgs By Nature",
+    url: "https://www.dawgsbynature.com/rss/index.xml",
+  },
+  PIT: {
+    name: "Behind the Steel Curtain",
+    url: "https://www.behindthesteelcurtain.com/rss/index.xml",
+  },
+  HOU: {
+    name: "Battle Red Blog",
+    url: "https://www.battleredblog.com/rss/index.xml",
+  },
+  IND: { name: "Stampede Blue", url: "https://www.stampedeblue.com/rss/index.xml" },
+  JAX: {
+    name: "Big Cat Country",
+    url: "https://www.bigcatcountry.com/rss/index.xml",
+  },
+  TEN: {
+    name: "Music City Miracles",
+    url: "https://www.musiccitymiracles.com/rss/index.xml",
+  },
+  DEN: {
+    name: "Mile High Report",
+    url: "https://www.milehighreport.com/rss/index.xml",
+  },
+  KC: {
+    name: "Arrowhead Pride",
+    url: "https://www.arrowheadpride.com/rss/index.xml",
+  },
+  LV: {
+    name: "Silver and Black Pride",
+    url: "https://www.silverandblackpride.com/rss/index.xml",
+  },
+  LAC: {
+    name: "Bolts From The Blue",
+    url: "https://www.boltsfromtheblue.com/rss/index.xml",
+  },
+  DAL: {
+    name: "Blogging The Boys",
+    url: "https://www.bloggingtheboys.com/rss/index.xml",
+  },
+  NYG: { name: "Big Blue View", url: "https://www.bigblueview.com/rss/index.xml" },
+  PHI: {
+    name: "Bleeding Green Nation",
+    url: "https://www.bleedinggreennation.com/rss/index.xml",
+  },
+  WAS: { name: "Hogs Haven", url: "https://www.hogshaven.com/rss/index.xml" },
+  CHI: {
+    name: "Windy City Gridiron",
+    url: "https://www.windycitygridiron.com/rss/index.xml",
+  },
+  DET: {
+    name: "Pride Of Detroit",
+    url: "https://www.prideofdetroit.com/rss/index.xml",
+  },
+  GB: {
+    name: "Acme Packing Company",
+    url: "https://www.acmepackingcompany.com/rss/index.xml",
+  },
+  MIN: { name: "Daily Norseman", url: "https://www.dailynorseman.com/rss/index.xml" },
+  ATL: { name: "The Falcoholic", url: "https://www.thefalcoholic.com/rss/index.xml" },
+  CAR: {
+    name: "Cat Scratch Reader",
+    url: "https://www.catscratchreader.com/rss/index.xml",
+  },
+  NO: {
+    name: "Canal Street Chronicles",
+    url: "https://www.canalstreetchronicles.com/rss/index.xml",
+  },
+  TB: { name: "Bucs Nation", url: "https://www.bucsnation.com/rss/index.xml" },
+  ARI: {
+    name: "Revenge of the Birds",
+    url: "https://www.revengeofthebirds.com/rss/index.xml",
+  },
+  LAR: {
+    name: "Turf Show Times",
+    url: "https://www.turfshowtimes.com/rss/index.xml",
+  },
+  SF: { name: "Niners Nation", url: "https://www.ninersnation.com/rss/index.xml" },
+  SEA: { name: "Field Gulls", url: "https://www.fieldgulls.com/rss/index.xml" },
 };
 
-function decodeEntities(value: string) {
-  let decoded = value;
-  for (let pass = 0; pass < 3; pass += 1) {
-    const next = decoded
-      .replace(/&amp;/gi, "&")
-      .replace(/&quot;/gi, '"')
-      .replace(/&apos;|&rsquo;/gi, "'")
-      .replace(/&nbsp;/gi, " ")
-      .replace(/&lt;/gi, "<")
-      .replace(/&gt;/gi, ">")
-      .replace(/&#(?:x([0-9a-f]+)|([0-9]+));/gi, (entity, hexadecimal: string | undefined, decimal: string | undefined) => {
-        const codePoint = Number.parseInt(hexadecimal ?? decimal ?? "", hexadecimal ? 16 : 10);
-        return Number.isInteger(codePoint) && codePoint >= 0 && codePoint <= 0x10ffff ? String.fromCodePoint(codePoint) : entity;
-      });
-    if (next === decoded) break;
-    decoded = next;
-  }
-  return decoded;
-}
+const MAX_ITEMS_PER_SOURCE_TEAM = 3; // 各ソース・チームごとの保存上限
+const EXTERNAL_NEWS_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1_000; // 7日間
 
-function clean(value: string) {
-  return decodeEntities(value)
-    .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1")
-    .replace(/<[^>]+>/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
+// 大手メディア（速報系）の共通RSSソース
+export const externalNewsSources = [
+  {
+    kind: "pft" as const,
+    name: "PFT - NBC SPORTS",
+    url: "https://www.nbcsports.com/profootballtalk.rss",
+  },
+  {
+    kind: "cbs" as const,
+    name: "CBS SPORTS",
+    url: "https://www.cbssports.com/rss/headlines/nfl/",
+  },
+] as const;
 
-function field(item: string, name: string) {
-  const match = item.match(new RegExp(`<${name}(?:\\s[^>]*)?>([\\s\\S]*?)<\\/${name}>`, "i"));
-  return match ? clean(match[1]) : "";
-}
-
-function isEditorialNews(title: string, summary: string, sourceUrl: string) {
-  const text = `${title} ${summary} ${sourceUrl}`.toLowerCase();
-  return !/\b(?:betting|odds|best bets|fantasy|dfs|picks|prop bets?|how to watch|watch live|gambling|bonus code)\b/.test(text);
-}
-
-/** Parses public PFT/CBS RSS summaries; only title, RSS summary and canonical URL are cached. */
-export function parseExternalTeamNewsRss(
-  xml: string,
-  source: (typeof externalNewsSources)[number],
-  requestedTeamCodes: readonly string[],
-  now = new Date(),
+/**
+ * チームごとの外部ニュースフィード（Local + PFT/CBS）をリフレッシュしてDBに保存する
+ */
+export async function refreshExternalTeamNews(
+  favoriteTeamCode: FavoriteTeamCode
 ) {
-  const blocks = xml.match(/<item(?:\s[^>]*)?>[\s\S]*?<\/item>/gi) ?? [];
-  const candidates: InsertOfficialFeedItem[] = [];
-  for (const block of blocks) {
-    const item = block.replace(/^<item(?:\s[^>]*)?>/i, "").replace(/<\/item>$/i, "");
-    const title = field(item, "title");
-    const sourceUrl = field(item, "link");
-    const summary = (field(item, "description") || field(item, "content:encoded")).slice(0, 560) || null;
-    const publishedAt = new Date(field(item, "pubDate"));
-    if (!title || !sourceUrl || !isEditorialNews(title, summary ?? "", sourceUrl) || Number.isNaN(publishedAt.getTime())) continue;
-    if (publishedAt.getTime() < now.getTime() - EXTERNAL_NEWS_MAX_AGE_MS || publishedAt.getTime() > now.getTime() + 24 * 60 * 60 * 1_000) continue;
-
-    const titleLower = title.toLowerCase();
-    const rawSummaryLower = (summary ?? "").toLowerCase();
-
-    // 1. 対戦相手としての言及フレーズ（against the ..., loss to ... 等）を除去
-    const sanitizedSummary = rawSummaryLower.replace(
-      /\b(?:against|vs\.?|versus|loss to|lost to|fell to|defeated by|facing|faced|beat by|over)\s+(?:the\s+)?([a-z0-9\s]+?)(?=[,.;]|\s+(?:on|in|after|during|with|and|who|which)\b|$)/gi,
-      " "
-    );
-
-    const matchesTeam = (text: string, code: string) => {
-      const matchers = teamMatchers[code] ?? [];
-      return matchers.some((m) => {
-        const escaped = m.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-        return new RegExp(`\\b${escaped}\\b`, "i").test(text);
-      });
-    };
-
-    // 2. タイトルにチーム名が含まれているか（主語の判定）
-    const titleMatchedTeams = requestedTeamCodes.filter((code) => matchesTeam(titleLower, code));
-
-    let matchedTeamCodes: string[] = [];
-    if (titleMatchedTeams.length > 0) {
-      // タイトルにチーム名がある場合：そのチーム「のみ」を対象（対戦相手の混入を完全遮断）
-      matchedTeamCodes = titleMatchedTeams;
-    } else {
-      // タイトルにチーム名がない場合（選手名のみの記事など）：対戦相手表現を除去したサマリーから判定
-      matchedTeamCodes = requestedTeamCodes.filter((code) => matchesTeam(sanitizedSummary, code));
-    }
-
-    for (const teamCode of matchedTeamCodes) {
-      candidates.push({
-        externalId: createHash("sha256").update(`${source.kind}:${teamCode}:${sourceUrl}`).digest("hex"),
-        teamCode,
-        sourceKind: source.kind,
-        sourceName: source.name,
-        sourceUrl,
-        title,
-        summary,
-        category: "news",
-        publishedAt,
-        fetchedAt: now,
-      });
-    }
-  }
-  const seenByTeam = new Map<string, number>();
-  return candidates
-    .sort((left, right) => right.publishedAt.getTime() - left.publishedAt.getTime())
-    .filter((item) => {
-      const count = seenByTeam.get(item.teamCode) ?? 0;
-      if (count >= MAX_ITEMS_PER_SOURCE_TEAM) return false;
-      seenByTeam.set(item.teamCode, count + 1);
-      return true;
-    });
-}
-
-async function fetchRss(url: string) {
-  const response = await fetch(url, {
-    headers: { Accept: "application/rss+xml, application/xml, text/xml;q=0.9", "User-Agent": "NFLFanHubJapan/1.0 (public-news-links)" },
-    signal: AbortSignal.timeout(15_000),
-  });
-  if (!response.ok) throw new Error(`External news RSS failed: ${response.status}`);
-  return response.text();
-}
-
-/** Refreshes short, team-matched link cards from approved public feeds. Editorial sources never replace official data. */
-export async function refreshExternalTeamNews(teamCodes: readonly string[]) {
-  const sourceResults = await Promise.allSettled(externalNewsSources.map(async (source) => ({ source, xml: await fetchRss(source.url) })));
   const now = new Date();
-  const items = sourceResults.flatMap((result) => result.status === "fulfilled" ? parseExternalTeamNewsRss(result.value.xml, result.value.source, teamCodes, now) : []);
-  await upsertOfficialFeedItems(items);
+  const cutoff = new Date(now.getTime() - EXTERNAL_NEWS_MAX_AGE_MS);
+
+  // 1. そのチームに対応する Local ソース（SB Nation）を取得
+  const localSource = LOCAL_NEWS_SOURCES[favoriteTeamCode];
+  
+  // 2. Local ＋ 大手メディア の全ソースリストを作成
+  const sourcesToFetch = [
+    ...(localSource ? [{ ...localSource, kind: "local" as const }] : []),
+    ...externalNewsSources,
+  ];
+
+  // 3. 全ソースから並行してRSSを取得・パース
+  const sourceResults = await Promise.allSettled(
+    sourcesToFetch.map(async (source) => ({
+      source,
+      xml: await fetchRss(source.url),
+    }))
+  );
+
+  // 4. パースして保存用アイテムに整形
+  const newsItems: InsertOfficialFeedItem[] = [];
+
+  for (const result of sourceResults) {
+    if (result.status === "rejected") {
+      console.error(
+        `Failed to fetch RSS for ${result.reason?.source?.name ?? "unknown"}`
+      );
+      continue;
+    }
+
+    const { source, xml } = result.value;
+    const items = parseExternalTeamNewsRss(xml, source, favoriteTeamCode, now);
+    
+    // 期間内かつチームにマッチした記事のみを上限数まで追加
+    const validItems = items
+      .filter((item) => new Date(item.publishedAt) >= cutoff)
+      .slice(0, MAX_ITEMS_PER_SOURCE_TEAM);
+
+    newsItems.push(...validItems);
+  }
+
+  // 5. DBに保存（upsert）
+  if (newsItems.length > 0) {
+    await upsertOfficialFeedItems(newsItems);
+  }
+
   return {
-    stored: items.length,
-    sources: sourceResults.map((result, index) => ({ source: externalNewsSources[index].kind, ok: result.status === "fulfilled", count: result.status === "fulfilled" ? items.filter((item) => item.sourceKind === externalNewsSources[index].kind).length : 0 })),
+    stored: newsItems.length,
+    sources: sourcesToFetch.map((s) => s.name),
   };
 }
