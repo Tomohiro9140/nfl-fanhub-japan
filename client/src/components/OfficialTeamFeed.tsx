@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from "react";
+// 誤った import を削除し、元の date-format-jp を使用
 import { format, isAfter, subWeeks } from "date-format-jp";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -7,15 +8,18 @@ import { Collapsible, CollapsibleContent } from "@/components/ui/collapsible";
 import { Newspaper, ChevronDown, ChevronUp } from "lucide-react";
 import type { FavoriteTeam } from "@/lib/nflTeams";
 import { dedupeDisplayArticles } from "@/lib/articleDedup";
+// 元のダイアログを復元
+import { ArticlesSummaryDialog } from "./ArticlesSummaryDialog";
 
 // --- 型定義の拡張 ---
-// ニュースソースの種類（"local" を追加）
 type SourceKind = "team_official" | "nfl_official" | "pft" | "cbs" | "local";
 
 interface FeedItem {
   id: number;
   title: string;
   summary: string | null;
+  japaneseSummary?: string | null;
+  englishSummary?: string | null;
   sourceUrl: string;
   sourceName: string;
   sourceKind: SourceKind;
@@ -42,7 +46,6 @@ const sourceLabel = (kind: SourceKind): string => {
 };
 
 // --- UIコンポーネント（タグ表示） ---
-// ソースごとのタグ（バッジ）をスタイル付きで表示する
 function SourceMark({ kind }: { kind: SourceKind }) {
   const label = sourceLabel(kind);
   switch (kind) {
@@ -76,7 +79,7 @@ function SourceMark({ kind }: { kind: SourceKind }) {
 
 // --- コアロジック：ニュース選別 ＆ 固定枠配分 ---
 /**
- * 取得した全記事から、指定された枠数（8 or 15）の保証枠に従って記事を選別し、
+ * ご指定いただいた配分ロジックに基づいて記事を選別し、
  * 最後に全体を公開日時順でソートして返す。
  */
 export function selectLatestNews(
@@ -85,18 +88,15 @@ export function selectLatestNews(
 ): FeedItem[] {
   // 1. 重複除外 ＆ 全体を一旦新着順にソート（選別時の優先度のため）
   const dedupedRaw = dedupeDisplayArticles(items);
-  dedupedRaw.sort(
-    (a, b) => b.publishedAt.getTime() - a.publishedAt.getTime()
-  );
+  dedupedRaw.sort((a, b) => b.publishedAt.getTime() - a.publishedAt.getTime());
 
   // 選択された記事を保持する配列とIDセット
   const selected: FeedItem[] = [];
   const selectedIds = new Set<number>();
 
-  // ガード: 記事がない場合
   if (dedupedRaw.length === 0) return [];
 
-  // 記事を追加するためのヘルパー（重複を防ぐ）
+  // 重複を防いで追加するヘルパー
   const addIfNew = (item: FeedItem) => {
     if (!selectedIds.has(item.id)) {
       selected.push(item);
@@ -106,8 +106,7 @@ export function selectLatestNews(
     return false;
   };
 
-  // --- 2. 各ソースの「保証枠（クォータ）」を定義 ---
-  // 目標数（8 or 15）に応じて切り替え
+  // --- 2. 各ソースの「保証枠」を目標数（8 or 15）に応じて定義 ---
   const quota = {
     official: goal === 8 ? 3 : 4,
     local: goal === 8 ? 3 : 4,
@@ -115,7 +114,7 @@ export function selectLatestNews(
     pft: goal === 8 ? 1 : 2,
   };
 
-  // --- 3. 保証枠の抽出処理 ---
+  // --- 3. 保証枠の抽出 ---
 
   // ① Team Official (Official)
   const officialItems = dedupedRaw
@@ -129,31 +128,29 @@ export function selectLatestNews(
     .slice(0, quota.local);
   localItems.forEach(addIfNew);
 
-  // ③ 大手メディア (CBS / PFT) - 連続制限を行いながら抽出
+  // ③ 大手メディア (CBS / PFT)
   const fetchExternal = (kind: "cbs" | "pft", count: number) => {
-    const extRaw = dedupedRaw.filter((item) => item.sourceKind === kind);
-    // CBS/PFTは同一ソースの連投が多いため、保証枠をさらに期間で区切るなどしても良いが、
-    // ここでは単純にクォータ分を抽出
-    const extSelected = extRaw.slice(0, count);
-    extSelected.forEach(addIfNew);
+    dedupedRaw
+      .filter((item) => item.sourceKind === kind)
+      .slice(0, count)
+      .forEach(addIfNew);
   };
-
   fetchExternal("cbs", quota.cbs);
   fetchExternal("pft", quota.pft);
 
-  // --- 4. 残りの枠の補充処理 ---
+  // --- 4. 残りの枠の補充 ---
   // ソースを問わず、選ばれていない記事の中から公開日時が新しい順に目標数まで埋める
   if (selected.length < goal) {
     for (const item of dedupedRaw) {
       if (selected.length >= goal) break;
-      addIfNew(item); // 重複していなければ追加される
+      addIfNew(item);
     }
   }
 
   // --- 5. 最終ソート ---
-  // 枠取りされた最大8/15件を、改めて公開日時の降順（最新順）でソート
+  // 枠取りされた記事を、改めて公開日時の降順（最新順）でソート
   return selected
-    .slice(0, goal) // 安全のため目標数で切り出し
+    .slice(0, goal)
     .sort((a, b) => b.publishedAt.getTime() - a.publishedAt.getTime());
 }
 
@@ -165,21 +162,17 @@ export function OfficialTeamFeed({
   favorite: FavoriteTeam;
   items: FeedItem[];
 }) {
-  // アコーディオンの展開状態（初期値: 折りたたみ）
   const [isExpanded, setIsExpanded] = useState(false);
+  // 元のダイアログ表示状態を復元
+  const [activeArticle, setActiveArticle] = useState<FeedItem | null>(null);
 
-  // 1週間前の日付（日付表示の判定用）
   const oneWeekAgo = useMemo(() => subWeeks(new Date(), 1), []);
 
-  // --- ニュース選別・ソート処理 ---
-  // items が更新された時や、展開状態（isExpanded）が変わった時に再計算
   const newsItems = useMemo(() => {
-    // 展開状態に応じて目標件数（8 or 15）を切り替え
     const goal: NewsCountGoal = isExpanded ? 15 : 8;
     return selectLatestNews(items, goal);
   }, [items, isExpanded]);
 
-  // 日付の表示フォーマット判定
   const displayDate = (date: Date) => {
     if (isAfter(date, oneWeekAgo)) {
       return format(date, "M/d(EE) HH:mm JST");
@@ -204,26 +197,21 @@ export function OfficialTeamFeed({
           <Collapsible open={isExpanded} onOpenChange={setIsExpanded}>
             <div className="divide-y divide-slate-800/60">
               {newsItems.map((item, index) => {
-                // 初期表示（8件）と展開時（15件）の表示制御
-                // CollapsibleContent を用いてスムーズなアニメーションを実現
                 const cardView = (
                   <div key={item.id} className="p-3.5 hover:bg-slate-900/40 transition-colors">
-                    <a href={item.sourceUrl} target="_blank" rel="noopener noreferrer" className="block group">
+                    {/* 元のダイアログを開く処理を復元 */}
+                    <button onClick={() => setActiveArticle(item)} className="block w-full text-left group">
                       <div className="flex items-start gap-3">
                         <div className="flex-1 space-y-1.5">
                           <div className="flex items-center gap-2">
-                            {/* ソースタグ（Local, Officialなど） */}
                             <SourceMark kind={item.sourceKind} />
-                            {/* ソース名 ＆ 日付 */}
                             <span className="text-[10px] font-medium text-slate-400 group-hover:text-slate-300">
                               {item.sourceName} ・ {displayDate(item.publishedAt)}
                             </span>
                           </div>
-                          {/* 記事タイトル */}
                           <p className="text-sm font-semibold text-slate-100 leading-snug group-hover:text-sky-300 transition-colors">
                             {item.title}
                           </p>
-                          {/* 記事要約 */}
                           {item.summary && (
                             <p className="text-xs font-medium text-slate-400 leading-relaxed line-clamp-2 pt-0.5">
                               {item.summary}
@@ -231,22 +219,20 @@ export function OfficialTeamFeed({
                           )}
                         </div>
                       </div>
-                    </a>
+                    </button>
                   </div>
                 );
 
-                // 9件目以降の記事は CollapsibleContent に入れる
                 return index < 8 ? (
                   cardView
                 ) : (
-                  <CollapsibleContent key={item.id} className="CollapsibleContent">
+                  <CollapsibleContent key={item.id}>
                     {cardView}
                   </CollapsibleContent>
                 );
               })}
             </div>
 
-            {/* アコーディオン展開ボタン（記事が9件以上ある場合のみ表示） */}
             {items.filter((i) => i.category === "news").length > 8 && (
               <div className="p-2 border-t border-slate-800">
                 <Button
@@ -269,6 +255,13 @@ export function OfficialTeamFeed({
           </Collapsible>
         )}
       </CardContent>
+      {/* 元の記事詳細ダイアログを復元 */}
+      {activeArticle && (
+        <ArticlesSummaryDialog
+          item={activeArticle}
+          onClose={() => setActiveArticle(null)}
+        />
+      )}
     </Card>
   );
 }
