@@ -4615,12 +4615,47 @@ import { z as z5 } from "zod";
 
 // server/externalTeamNews.ts
 import { createHash as createHash4 } from "node:crypto";
-var MAX_ITEMS_PER_SOURCE_TEAM = 2;
+var MAX_ITEMS_PER_SOURCE_TEAM = 3;
+var MAX_LOCAL_ITEMS_PER_TEAM = 5;
 var EXTERNAL_NEWS_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1e3;
 var externalNewsSources = [
   { kind: "pft", name: "PFT \xB7 NBC SPORTS", url: "https://www.nbcsports.com/profootballtalk.rss" },
   { kind: "cbs", name: "CBS SPORTS", url: "https://www.cbssports.com/rss/headlines/nfl/" }
 ];
+var LOCAL_NEWS_SOURCES = {
+  BUF: { name: "Buffalo Rumblings", url: "https://www.buffalorumblings.com/rss/index.xml" },
+  MIA: { name: "The Phinsider", url: "https://www.thephinsider.com/rss/index.xml" },
+  NE: { name: "Pats Pulpit", url: "https://www.patspulpit.com/rss/index.xml" },
+  NYJ: { name: "Gang Green Nation", url: "https://www.ganggreennation.com/rss/index.xml" },
+  BAL: { name: "Baltimore Beatdown", url: "https://www.baltimorebeatdown.com/rss/index.xml" },
+  CIN: { name: "Cincy Jungle", url: "https://www.cincyjungle.com/rss/index.xml" },
+  CLE: { name: "Dawgs By Nature", url: "https://www.dawgsbynature.com/rss/index.xml" },
+  PIT: { name: "Behind the Steel Curtain", url: "https://www.behindthesteelcurtain.com/rss/index.xml" },
+  HOU: { name: "Battle Red Blog", url: "https://www.battleredblog.com/rss/index.xml" },
+  IND: { name: "Stampede Blue", url: "https://www.stampedeblue.com/rss/index.xml" },
+  JAX: { name: "Big Cat Country", url: "https://www.bigcatcountry.com/rss/index.xml" },
+  TEN: { name: "Music City Miracles", url: "https://www.musiccitymiracles.com/rss/index.xml" },
+  DEN: { name: "Mile High Report", url: "https://www.milehighreport.com/rss/index.xml" },
+  KC: { name: "Arrowhead Pride", url: "https://www.arrowheadpride.com/rss/index.xml" },
+  LV: { name: "Silver and Black Pride", url: "https://www.silverandblackpride.com/rss/index.xml" },
+  LAC: { name: "Bolts From The Blue", url: "https://www.boltsfromtheblue.com/rss/index.xml" },
+  DAL: { name: "Blogging The Boys", url: "https://www.bloggingtheboys.com/rss/index.xml" },
+  NYG: { name: "Big Blue View", url: "https://www.bigblueview.com/rss/index.xml" },
+  PHI: { name: "Bleeding Green Nation", url: "https://www.bleedinggreennation.com/rss/index.xml" },
+  WAS: { name: "Hogs Haven", url: "https://www.hogshaven.com/rss/index.xml" },
+  CHI: { name: "Windy City Gridiron", url: "https://www.windycitygridiron.com/rss/index.xml" },
+  DET: { name: "Pride Of Detroit", url: "https://www.prideofdetroit.com/rss/index.xml" },
+  GB: { name: "Acme Packing Company", url: "https://www.acmepackingcompany.com/rss/index.xml" },
+  MIN: { name: "Daily Norseman", url: "https://www.dailynorseman.com/rss/index.xml" },
+  ATL: { name: "The Falcoholic", url: "https://www.thefalcoholic.com/rss/index.xml" },
+  CAR: { name: "Cat Scratch Reader", url: "https://www.catscratchreader.com/rss/index.xml" },
+  NO: { name: "Canal Street Chronicles", url: "https://www.canalstreetchronicles.com/rss/index.xml" },
+  TB: { name: "Bucs Nation", url: "https://www.bucsnation.com/rss/index.xml" },
+  ARI: { name: "Revenge of the Birds", url: "https://www.revengeofthebirds.com/rss/index.xml" },
+  LAR: { name: "Turf Show Times", url: "https://www.turfshowtimes.com/rss/index.xml" },
+  SF: { name: "Niners Nation", url: "https://www.ninersnation.com/rss/index.xml" },
+  SEA: { name: "Field Gulls", url: "https://www.fieldgulls.com/rss/index.xml" }
+};
 var teamMatchers = {
   ARI: ["arizona cardinals", "cardinals"],
   ATL: ["atlanta falcons", "falcons"],
@@ -4732,6 +4767,32 @@ function parseExternalTeamNewsRss(xml, source, requestedTeamCodes, now = /* @__P
     return true;
   });
 }
+function parseLocalTeamNewsRss(xml, source, teamCode, now = /* @__PURE__ */ new Date()) {
+  const blocks = xml.match(/<item(?:\s[^>]*)?>[\s\S]*?<\/item>/gi) ?? [];
+  const candidates = [];
+  for (const block of blocks) {
+    const item = block.replace(/^<item(?:\s[^>]*)?>/i, "").replace(/<\/item>$/i, "");
+    const title = field2(item, "title");
+    const sourceUrl = field2(item, "link");
+    const summary = (field2(item, "description") || field2(item, "content:encoded")).slice(0, 560) || null;
+    const publishedAt = new Date(field2(item, "pubDate"));
+    if (!title || !sourceUrl || !isEditorialNews(title, summary ?? "", sourceUrl) || Number.isNaN(publishedAt.getTime())) continue;
+    if (publishedAt.getTime() < now.getTime() - EXTERNAL_NEWS_MAX_AGE_MS || publishedAt.getTime() > now.getTime() + 24 * 60 * 60 * 1e3) continue;
+    candidates.push({
+      externalId: createHash4("sha256").update(`local:${teamCode}:${sourceUrl}`).digest("hex"),
+      teamCode,
+      sourceKind: "local",
+      sourceName: source.name,
+      sourceUrl,
+      title,
+      summary,
+      category: "news",
+      publishedAt,
+      fetchedAt: now
+    });
+  }
+  return candidates.sort((left, right) => right.publishedAt.getTime() - left.publishedAt.getTime()).slice(0, MAX_LOCAL_ITEMS_PER_TEAM);
+}
 async function fetchRss2(url) {
   const response = await fetch(url, {
     headers: { Accept: "application/rss+xml, application/xml, text/xml;q=0.9", "User-Agent": "NFLFanHubJapan/1.0 (public-news-links)" },
@@ -4741,13 +4802,40 @@ async function fetchRss2(url) {
   return response.text();
 }
 async function refreshExternalTeamNews(teamCodes) {
-  const sourceResults = await Promise.allSettled(externalNewsSources.map(async (source) => ({ source, xml: await fetchRss2(source.url) })));
   const now = /* @__PURE__ */ new Date();
-  const items = sourceResults.flatMap((result) => result.status === "fulfilled" ? parseExternalTeamNewsRss(result.value.xml, result.value.source, teamCodes, now) : []);
-  await upsertOfficialFeedItems(items);
+  const sourceResults = await Promise.allSettled(
+    externalNewsSources.map(async (source) => ({ source, xml: await fetchRss2(source.url) }))
+  );
+  const generalItems = sourceResults.flatMap(
+    (result) => result.status === "fulfilled" ? parseExternalTeamNewsRss(result.value.xml, result.value.source, teamCodes, now) : []
+  );
+  const localTargets = teamCodes.map((code) => ({ code, source: LOCAL_NEWS_SOURCES[code] })).filter((target) => Boolean(target.source));
+  const localResults = await Promise.allSettled(
+    localTargets.map(async ({ code, source }) => ({
+      code,
+      source,
+      xml: await fetchRss2(source.url)
+    }))
+  );
+  const localItems = localResults.flatMap(
+    (result) => result.status === "fulfilled" ? parseLocalTeamNewsRss(result.value.xml, result.value.source, result.value.code, now) : []
+  );
+  const allItems = [...generalItems, ...localItems];
+  await upsertOfficialFeedItems(allItems);
   return {
-    stored: items.length,
-    sources: sourceResults.map((result, index2) => ({ source: externalNewsSources[index2].kind, ok: result.status === "fulfilled", count: result.status === "fulfilled" ? items.filter((item) => item.sourceKind === externalNewsSources[index2].kind).length : 0 }))
+    stored: allItems.length,
+    sources: [
+      ...sourceResults.map((result, index2) => ({
+        source: externalNewsSources[index2].kind,
+        ok: result.status === "fulfilled",
+        count: result.status === "fulfilled" ? generalItems.filter((item) => item.sourceKind === externalNewsSources[index2].kind).length : 0
+      })),
+      {
+        source: "local",
+        ok: localResults.some((r) => r.status === "fulfilled"),
+        count: localItems.length
+      }
+    ]
   };
 }
 
