@@ -2,8 +2,8 @@ import { createHash } from "node:crypto";
 import type { InsertOfficialFeedItem } from "../drizzle/schema";
 import { upsertOfficialFeedItems } from "./db";
 
-const MAX_ITEMS_PER_SOURCE_TEAM = 3; // 15件表示のクォータに対応できるよう 2 から 3 に拡張
-const MAX_LOCAL_ITEMS_PER_TEAM = 5;  // SB Nation (Local) の最大保持件数
+const MAX_ITEMS_PER_SOURCE_TEAM = 3;
+const MAX_LOCAL_ITEMS_PER_TEAM = 5;
 const EXTERNAL_NEWS_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1_000;
 
 export const externalNewsSources = [
@@ -166,28 +166,38 @@ export function parseExternalTeamNewsRss(
     });
 }
 
-/** SB Nation（各チーム専門フィード）用のパーサー。チーム専用ブログのため本文判定を行わず確実に登録する */
+/** SB Nation（Atom形式 <entry> / RSS形式 <item> 両対応）パーサー */
 function parseLocalTeamNewsRss(
   xml: string,
   source: { name: string; url: string },
   teamCode: string,
   now = new Date(),
 ) {
-  const blocks = xml.match(/<item(?:\s[^>]*)?>[\s\S]*?<\/item>/gi) ?? [];
+  const blocks = xml.match(/<(?:entry|item)(?:\s[^>]*)?>[\s\S]*?<\/(?:entry|item)>/gi) ?? [];
   const candidates: InsertOfficialFeedItem[] = [];
+
   for (const block of blocks) {
-    const item = block.replace(/^<item(?:\s[^>]*)?>/i, "").replace(/<\/item>$/i, "");
+    const item = block.replace(/^<(?:entry|item)(?:\s[^>]*)?>/i, "").replace(/<\/(?:entry|item)>$/i, "");
     const title = field(item, "title");
-    const sourceUrl = field(item, "link");
-    const summary = (field(item, "description") || field(item, "content:encoded")).slice(0, 560) || null;
-    const publishedAt = new Date(field(item, "pubDate"));
+
+    // Atomの <link href="..."> または RSSの <link>...</link> または <id>
+    const linkMatch = item.match(/<link(?:\s[^>]*)?href=["']([^"']+)["']/i);
+    const sourceUrl = linkMatch ? linkMatch[1] : (field(item, "link") || field(item, "id"));
+
+    // Atomの <summary>/<content> または RSSの <description>
+    const summary = (field(item, "summary") || field(item, "content") || field(item, "description") || field(item, "content:encoded")).slice(0, 560) || null;
+
+    // Atomの <published>/<updated> または RSSの <pubDate>
+    const dateStr = field(item, "published") || field(item, "updated") || field(item, "pubDate");
+    const publishedAt = new Date(dateStr);
+
     if (!title || !sourceUrl || !isEditorialNews(title, summary ?? "", sourceUrl) || Number.isNaN(publishedAt.getTime())) continue;
     if (publishedAt.getTime() < now.getTime() - EXTERNAL_NEWS_MAX_AGE_MS || publishedAt.getTime() > now.getTime() + 24 * 60 * 60 * 1_000) continue;
 
     candidates.push({
       externalId: createHash("sha256").update(`local:${teamCode}:${sourceUrl}`).digest("hex"),
       teamCode,
-      sourceKind: "local" as any,
+      sourceKind: "local",
       sourceName: source.name,
       sourceUrl,
       title,
@@ -197,6 +207,7 @@ function parseLocalTeamNewsRss(
       fetchedAt: now,
     });
   }
+
   return candidates
     .sort((left, right) => right.publishedAt.getTime() - left.publishedAt.getTime())
     .slice(0, MAX_LOCAL_ITEMS_PER_TEAM);
@@ -204,14 +215,17 @@ function parseLocalTeamNewsRss(
 
 async function fetchRss(url: string) {
   const response = await fetch(url, {
-    headers: { Accept: "application/rss+xml, application/xml, text/xml;q=0.9", "User-Agent": "NFLFanHubJapan/1.0 (public-news-links)" },
+    headers: {
+      Accept: "application/atom+xml, application/rss+xml, application/xml, text/xml;q=0.9",
+      "User-Agent": "NFLFanHubJapan/1.0 (public-news-links)",
+    },
     signal: AbortSignal.timeout(15_000),
   });
   if (!response.ok) throw new Error(`External news RSS failed: ${response.status}`);
   return response.text();
 }
 
-/** Refreshes short, team-matched link cards from approved public feeds. Editorial sources never replace official data. */
+/** Refreshes short, team-matched link cards from approved public feeds. */
 export async function refreshExternalTeamNews(teamCodes: readonly string[]) {
   const now = new Date();
 
