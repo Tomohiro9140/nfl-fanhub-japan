@@ -30,7 +30,7 @@ export const officialFeedItems = mysqlTable("official_feed_items", {
   id: int("id").autoincrement().primaryKey(),
   externalId: varchar("external_id", { length: 191 }).notNull(),
   teamCode: varchar("team_code", { length: 3 }).notNull(),
-  sourceKind: mysqlEnum("source_kind", ["team_official", "nfl_official", "pft", "cbs"]).notNull(),
+  sourceKind: mysqlEnum("source_kind", ["team_official", "nfl_official", "pft", "cbs", "local"]).notNull(),
   sourceName: varchar("source_name", { length: 128 }).notNull(),
   sourceUrl: varchar("source_url", { length: 1024 }).notNull(),
   title: text("title").notNull(),
