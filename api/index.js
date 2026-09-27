@@ -204,7 +204,7 @@ var officialFeedItems = mysqlTable("official_feed_items", {
   id: int("id").autoincrement().primaryKey(),
   externalId: varchar("external_id", { length: 191 }).notNull(),
   teamCode: varchar("team_code", { length: 3 }).notNull(),
-  sourceKind: mysqlEnum("source_kind", ["team_official", "nfl_official", "pft", "cbs"]).notNull(),
+  sourceKind: mysqlEnum("source_kind", ["team_official", "nfl_official", "pft", "cbs", "local"]).notNull(),
   sourceName: varchar("source_name", { length: 128 }).notNull(),
   sourceUrl: varchar("source_url", { length: 1024 }).notNull(),
   title: text("title").notNull(),
@@ -4768,14 +4768,16 @@ function parseExternalTeamNewsRss(xml, source, requestedTeamCodes, now = /* @__P
   });
 }
 function parseLocalTeamNewsRss(xml, source, teamCode, now = /* @__PURE__ */ new Date()) {
-  const blocks = xml.match(/<item(?:\s[^>]*)?>[\s\S]*?<\/item>/gi) ?? [];
+  const blocks = xml.match(/<(?:entry|item)(?:\s[^>]*)?>[\s\S]*?<\/(?:entry|item)>/gi) ?? [];
   const candidates = [];
   for (const block of blocks) {
-    const item = block.replace(/^<item(?:\s[^>]*)?>/i, "").replace(/<\/item>$/i, "");
+    const item = block.replace(/^<(?:entry|item)(?:\s[^>]*)?>/i, "").replace(/<\/(?:entry|item)>$/i, "");
     const title = field2(item, "title");
-    const sourceUrl = field2(item, "link");
-    const summary = (field2(item, "description") || field2(item, "content:encoded")).slice(0, 560) || null;
-    const publishedAt = new Date(field2(item, "pubDate"));
+    const linkMatch = item.match(/<link(?:\s[^>]*)?href=["']([^"']+)["']/i);
+    const sourceUrl = linkMatch ? linkMatch[1] : field2(item, "link") || field2(item, "id");
+    const summary = (field2(item, "summary") || field2(item, "content") || field2(item, "description") || field2(item, "content:encoded")).slice(0, 560) || null;
+    const dateStr = field2(item, "published") || field2(item, "updated") || field2(item, "pubDate");
+    const publishedAt = new Date(dateStr);
     if (!title || !sourceUrl || !isEditorialNews(title, summary ?? "", sourceUrl) || Number.isNaN(publishedAt.getTime())) continue;
     if (publishedAt.getTime() < now.getTime() - EXTERNAL_NEWS_MAX_AGE_MS || publishedAt.getTime() > now.getTime() + 24 * 60 * 60 * 1e3) continue;
     candidates.push({
@@ -4795,7 +4797,10 @@ function parseLocalTeamNewsRss(xml, source, teamCode, now = /* @__PURE__ */ new 
 }
 async function fetchRss2(url) {
   const response = await fetch(url, {
-    headers: { Accept: "application/rss+xml, application/xml, text/xml;q=0.9", "User-Agent": "NFLFanHubJapan/1.0 (public-news-links)" },
+    headers: {
+      Accept: "application/atom+xml, application/rss+xml, application/xml, text/xml;q=0.9",
+      "User-Agent": "NFLFanHubJapan/1.0 (public-news-links)"
+    },
     signal: AbortSignal.timeout(15e3)
   });
   if (!response.ok) throw new Error(`External news RSS failed: ${response.status}`);
