@@ -530,7 +530,7 @@ async function getOfficialFeedItems(teamCode) {
   }).from(officialFeedItems).where(eq(officialFeedItems.teamCode, teamCode)).orderBy(
     desc(officialFeedItems.publishedAt),
     sql`case when ${officialFeedItems.sourceKind} = 'team_official' then 0 when ${officialFeedItems.sourceKind} = 'nfl_official' then 1 when ${officialFeedItems.sourceKind} = 'pft' then 2 else 3 end`
-  ).limit(24);
+  ).limit(80);
 }
 async function getOfficialFeedItemById(id) {
   const db = await getDb();
@@ -4286,16 +4286,16 @@ function calculateExciteIndex(game) {
   );
   const isOvertime = isOvertimeExplicit || isKnownOtGame;
   let marginScore = 0;
-  if (margin <= 2) {
+  if (margin <= 3) {
     marginScore = 30;
-  } else if (margin === 3) {
-    marginScore = 26;
   } else if (margin <= 6) {
-    marginScore = 20;
-  } else if (margin <= 8) {
-    marginScore = 15;
+    marginScore = 27;
+  } else if (margin === 7) {
+    marginScore = 23;
+  } else if (margin === 8) {
+    marginScore = 19;
   } else if (margin <= 11) {
-    marginScore = 9;
+    marginScore = 10;
   } else if (margin <= 14) {
     marginScore = 4;
   } else {
@@ -4305,32 +4305,30 @@ function calculateExciteIndex(game) {
   const lc = game.leadChanges ?? 0;
   const tt = game.timesTied ?? 0;
   if (lc > 0 || tt > 0) {
-    leadScore = Math.min(30, lc * 8 + tt * 5);
+    leadScore = Math.min(35, lc * 9 + tt * 4);
   } else {
     if (isOvertime) {
-      leadScore = 21;
+      leadScore = 24;
     } else if (margin <= 3) {
-      leadScore = 16;
+      leadScore = 20;
     } else if (margin <= 8) {
-      leadScore = 10;
+      leadScore = 13;
     }
   }
   let clutchScore = 0;
   if (margin <= 8) {
     clutchScore += 10;
     if (lc >= 2 || isOvertime || margin <= 3) {
-      clutchScore += 10;
+      clutchScore += 15;
     }
   }
   let scoreBonus = 0;
-  if (totalPoints >= 60) {
-    scoreBonus = 10;
-  } else if (totalPoints >= 52) {
+  if (totalPoints >= 55) {
     scoreBonus = 5;
   } else if (totalPoints >= 44) {
     scoreBonus = 3;
   }
-  const otBonus = isOvertime ? 10 : 0;
+  const otBonus = isOvertime ? 5 : 0;
   const totalScore = Math.min(
     100,
     Math.max(0, marginScore + leadScore + clutchScore + scoreBonus + otBonus)
@@ -4615,8 +4613,8 @@ import { z as z5 } from "zod";
 
 // server/externalTeamNews.ts
 import { createHash as createHash4 } from "node:crypto";
-var MAX_ITEMS_PER_SOURCE_TEAM = 3;
-var MAX_LOCAL_ITEMS_PER_TEAM = 5;
+var MAX_ITEMS_PER_SOURCE_TEAM = 12;
+var MAX_LOCAL_ITEMS_PER_TEAM = 12;
 var EXTERNAL_NEWS_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1e3;
 var externalNewsSources = [
   { kind: "pft", name: "PFT \xB7 NBC SPORTS", url: "https://www.nbcsports.com/profootballtalk.rss" },
@@ -4711,7 +4709,7 @@ function field2(item, name) {
 }
 function isEditorialNews(title, summary, sourceUrl) {
   const text4 = `${title} ${summary} ${sourceUrl}`.toLowerCase();
-  return !/\b(?:betting|odds|best bets|fantasy|dfs|picks|prop bets?|how to watch|watch live|gambling|bonus code)\b/.test(text4);
+  return !/\b(?:betting|odds|best bets|fantasy|dfs|picks|prop bets?|how to watch|watch live|gambling|bonus code|promo(?: code)?|bonus(?:es)?|kalshi|polymarket|sportsbook|fanduel|draftkings|betmgm|caesars|bet365|trading credits?|sign-up offer|welcome offer)\b/.test(text4);
 }
 function parseExternalTeamNewsRss(xml, source, requestedTeamCodes, now = /* @__PURE__ */ new Date()) {
   const blocks = xml.match(/<item(?:\s[^>]*)?>[\s\S]*?<\/item>/gi) ?? [];
@@ -5103,7 +5101,6 @@ function parseGameDynamics(html, awayScore, homeScore, isOtExisting) {
   }
   let leadChanges = 0;
   let timesTied = 0;
-  let calculated = false;
   if (awayScore != null && homeScore != null && parsedScores.length >= 2) {
     const awayCandidate = parsedScores.find((s) => s.total === awayScore);
     const homeCandidate = parsedScores.find((s) => s !== awayCandidate && s.total === homeScore);
@@ -5123,33 +5120,68 @@ function parseGameDynamics(html, awayScore, homeScore, isOtExisting) {
         }
         lastLeader = current;
       }
-      if (isOT && lastLeader !== "tie") {
-        timesTied = Math.max(timesTied, 1);
-      }
-      calculated = true;
     }
   }
   const margin = awayScore != null && homeScore != null ? Math.abs(awayScore - homeScore) : 10;
-  if (!calculated) {
-    if (isOT) {
+  if (isOT) {
+    timesTied = Math.max(timesTied, 1);
+    leadChanges = Math.max(leadChanges, margin <= 3 ? 2 : 1);
+  } else if (leadChanges === 0 && timesTied === 0) {
+    if (margin <= 3) {
       timesTied = 1;
-      leadChanges = margin <= 3 ? 2 : 1;
-    } else if (margin <= 3) {
+      leadChanges = 2;
+    } else if (margin <= 8) {
       timesTied = 1;
       leadChanges = 1;
-    }
-  } else if (isOT) {
-    timesTied = Math.max(timesTied, 1);
-    if (margin <= 3) {
-      leadChanges = Math.max(leadChanges, 2);
-    } else {
-      leadChanges = Math.max(leadChanges, 1);
     }
   }
   return { isOT, leadChanges, timesTied };
 }
+async function fetchEspnGameDynamicsMap() {
+  const map = /* @__PURE__ */ new Map();
+  try {
+    const res = await fetch("https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard");
+    if (!res.ok) return map;
+    const data = await res.json();
+    const events = data.events ?? [];
+    await Promise.all(
+      events.map(async (ev) => {
+        const awayCode = ev.competitions?.[0]?.competitors?.find((c) => c.homeAway === "away")?.team?.abbreviation;
+        const homeCode = ev.competitions?.[0]?.competitors?.find((c) => c.homeAway === "home")?.team?.abbreviation;
+        if (!awayCode || !homeCode) return;
+        try {
+          const sumRes = await fetch(`https://site.api.espn.com/apis/site/v2/sports/football/nfl/summary?event=${ev.id}`);
+          if (!sumRes.ok) return;
+          const sumData = await sumRes.json();
+          const plays = sumData.scoringPlays ?? [];
+          let lastLeader = "tie";
+          let lc = 0;
+          let tt = 0;
+          plays.forEach((p) => {
+            const a = Number(p.awayScore ?? 0);
+            const h = Number(p.homeScore ?? 0);
+            const cur = a > h ? "away" : h > a ? "home" : "tie";
+            if (cur === "tie") {
+              tt++;
+            } else if (lastLeader !== "tie" && cur !== lastLeader) {
+              lc++;
+            }
+            lastLeader = cur;
+          });
+          map.set(`${awayCode}_${homeCode}`, { leadChanges: lc, timesTied: tt });
+        } catch {
+        }
+      })
+    );
+  } catch {
+  }
+  return map;
+}
 async function enrichScoresWithOfficialKickoffTimes(season, scores) {
-  const cachedKickoffs = await getOfficialScoreboardKickoffTimes(season, scores.map((score) => score.externalId));
+  const [cachedKickoffs, espnDynamicsMap] = await Promise.all([
+    getOfficialScoreboardKickoffTimes(season, scores.map((score) => score.externalId)),
+    fetchEspnGameDynamicsMap()
+  ]);
   const enriched = [...scores];
   let cursor = 0;
   const worker = async () => {
@@ -5161,7 +5193,13 @@ async function enrichScoresWithOfficialKickoffTimes(season, scores) {
         const html = await fetchOfficialHtml3(score.gameUrl);
         const kickoffAt = cachedKickoffAt ?? parseNFLGameKickoffAt(html);
         const isOtExisting = Boolean(score.gameState?.toUpperCase().includes("OT"));
-        const { isOT, leadChanges, timesTied } = parseGameDynamics(html, score.awayScore, score.homeScore, isOtExisting);
+        let { isOT, leadChanges, timesTied } = parseGameDynamics(html, score.awayScore, score.homeScore, isOtExisting);
+        const espnKey = `${score.awayTeamCode}_${score.homeTeamCode}`;
+        const espnData = espnDynamicsMap.get(espnKey);
+        if (espnData && (espnData.leadChanges > 0 || espnData.timesTied > 0)) {
+          leadChanges = espnData.leadChanges;
+          timesTied = espnData.timesTied;
+        }
         enriched[index2] = {
           ...score,
           kickoffAt,
