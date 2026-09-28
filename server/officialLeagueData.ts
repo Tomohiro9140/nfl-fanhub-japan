@@ -119,7 +119,6 @@ export function parseNFLScoresPage(html: string, season: number, sourceUrl = off
     const gameUrl = `https://www.nfl.com${match[2]}`;
     const { seasonPhase, weekLabel } = phaseAndWeek(html, match[2]);
 
-    // 一覧ラベルにOT表記が含まれているかを判定
     const isOT = /OT\b|OVERTIME/i.test(label ?? "") || /OT\b|OVERTIME/i.test(finalStatus ?? "") || gameState.toUpperCase().includes("OT");
     const resolvedGameState = isOT ? "FINAL/OT" : gameState;
 
@@ -157,7 +156,6 @@ function parseGameDynamics(html: string, awayScore: number | null, homeScore: nu
     /accessibility-label=["']Overtime["']/i.test(html) ||
     false;
 
-  // エスケープされたJSON、通常JSONの双方に対応するクォーター得点抽出
   const scoreObjRegex = /\\?"score\\?"\s*:\s*\{[^{}]*\\?"q1\\?"\s*:\s*(\d+)[^{}]*\\?"q2\\?"\s*:\s*(\d+)[^{}]*\\?"q3\\?"\s*:\s*(\d+)[^{}]*\\?"q4\\?"\s*:\s*(\d+)(?:[^{}]*\\?"ot\\?"\s*:\s*(\d+))?[^{}]*\\?"total\\?"\s*:\s*(\d+)[^{}]*\}/g;
 
   const parsedScores: Array<{ q1: number; q2: number; q3: number; q4: number; ot: number; total: number }> = [];
@@ -199,7 +197,6 @@ function parseGameDynamics(html: string, awayScore: number | null, homeScore: nu
     }
   }
 
-  // 接戦度・OTに応じた最低保証補正
   const margin = awayScore != null && homeScore != null ? Math.abs(awayScore - homeScore) : 10;
   if (isOT) {
     timesTied = Math.max(timesTied, 1);
@@ -217,8 +214,61 @@ function parseGameDynamics(html: string, awayScore: number | null, homeScore: nu
   return { isOT, leadChanges, timesTied };
 }
 
+/** ESPN API から全得点イベント（Scoring Summary）を元に各試合の正確なダイナミクスを取得 */
+async function fetchEspnGameDynamicsMap(): Promise<Map<string, { leadChanges: number; timesTied: number }>> {
+  const map = new Map<string, { leadChanges: number; timesTied: number }>();
+  try {
+    const res = await fetch("https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard");
+    if (!res.ok) return map;
+    const data = await res.json();
+    const events: any[] = data.events ?? [];
+
+    await Promise.all(
+      events.map(async (ev) => {
+        const awayCode = ev.competitions?.[0]?.competitors?.find((c: any) => c.homeAway === "away")?.team?.abbreviation;
+        const homeCode = ev.competitions?.[0]?.competitors?.find((c: any) => c.homeAway === "home")?.team?.abbreviation;
+        if (!awayCode || !homeCode) return;
+
+        try {
+          const sumRes = await fetch(`https://site.api.espn.com/apis/site/v2/sports/football/nfl/summary?event=${ev.id}`);
+          if (!sumRes.ok) return;
+          const sumData = await sumRes.json();
+          const plays: any[] = sumData.scoringPlays ?? [];
+
+          let lastLeader: "away" | "home" | "tie" = "tie";
+          let lc = 0;
+          let tt = 0;
+
+          plays.forEach((p: any) => {
+            const a = Number(p.awayScore ?? 0);
+            const h = Number(p.homeScore ?? 0);
+            const cur: "away" | "home" | "tie" = a > h ? "away" : h > a ? "home" : "tie";
+            if (cur === "tie") {
+              tt++;
+            } else if (lastLeader !== "tie" && cur !== lastLeader) {
+              lc++;
+            }
+            lastLeader = cur;
+          });
+
+          map.set(`${awayCode}_${homeCode}`, { leadChanges: lc, timesTied: tt });
+        } catch {
+          // 単一試合の取得失敗時はスキップ
+        }
+      })
+    );
+  } catch {
+    // スコアボード通信失敗時は空マップを返却
+  }
+  return map;
+}
+
 async function enrichScoresWithOfficialKickoffTimes(season: number, scores: InsertOfficialScoreboardGame[]) {
-  const cachedKickoffs = await getOfficialScoreboardKickoffTimes(season, scores.map((score) => score.externalId));
+  const [cachedKickoffs, espnDynamicsMap] = await Promise.all([
+    getOfficialScoreboardKickoffTimes(season, scores.map((score) => score.externalId)),
+    fetchEspnGameDynamicsMap(),
+  ]);
+
   const enriched = [...scores];
   let cursor = 0;
 
@@ -232,7 +282,15 @@ async function enrichScoresWithOfficialKickoffTimes(season: number, scores: Inse
         const html = await fetchOfficialHtml(score.gameUrl);
         const kickoffAt = cachedKickoffAt ?? parseNFLGameKickoffAt(html);
         const isOtExisting = Boolean(score.gameState?.toUpperCase().includes("OT"));
-        const { isOT, leadChanges, timesTied } = parseGameDynamics(html, score.awayScore, score.homeScore, isOtExisting);
+        let { isOT, leadChanges, timesTied } = parseGameDynamics(html, score.awayScore, score.homeScore, isOtExisting);
+
+        // ESPN API 由来の正確な得点推移データが存在する場合は優先して適用
+        const espnKey = `${score.awayTeamCode}_${score.homeTeamCode}`;
+        const espnData = espnDynamicsMap.get(espnKey);
+        if (espnData && (espnData.leadChanges > 0 || espnData.timesTied > 0)) {
+          leadChanges = espnData.leadChanges;
+          timesTied = espnData.timesTied;
+        }
 
         enriched[index] = {
           ...score,
