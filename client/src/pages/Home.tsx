@@ -233,6 +233,16 @@ export default function Home() {
     new URLSearchParams(window.location.search).get("scheduleFallbackTest") === "empty";
   const displaySnapshot = forceScheduleEmpty && snapshot ? { ...snapshot, nextGame: undefined } : snapshot;
 
+  /** 自チームの直近完了試合（ネタバレ足切り基準用） */
+  const latestCompletedGameForResult = useMemo(() => {
+    const results = latestResultQuery.data?.results ?? [];
+    return results.find(
+      (game) =>
+        (game.awayTeamCode === favorite.code || game.homeTeamCode === favorite.code) &&
+        /final|completed/i.test(game.gameState ?? "")
+    );
+  }, [latestResultQuery.data, favorite.code]);
+
   const divisionGroups = useMemo(
     () =>
       ["East", "North", "South", "West"].map((division) => ({
@@ -255,6 +265,19 @@ export default function Home() {
     setWatchedTicketUrl(window.localStorage.getItem(`${watchedTicketStorageKey}:${favorite.code}`));
     setForceLastGame(false);
   }, [debugTeamCode, favorite.code]);
+
+  /** 週を跨いだ古いスキップ情報が残っていた場合に自動破棄する安全策 */
+  useEffect(() => {
+    if (!latestCompletedGameForResult || !watchedTicketUrl || typeof window === "undefined") return;
+    const currentMatchKey = `${latestCompletedGameForResult.gameDate ?? ""}_${new Date(latestCompletedGameForResult.kickoffAt).getTime()}`;
+    const savedMatchKey = window.localStorage.getItem(`${watchedTicketStorageKey}:${favorite.code}:matchKey`);
+    if (savedMatchKey && savedMatchKey !== currentMatchKey) {
+      window.localStorage.removeItem(`${watchedTicketStorageKey}:${favorite.code}`);
+      window.localStorage.removeItem(`${watchedTicketStorageKey}:${favorite.code}:matchKey`);
+      setWatchedTicketUrl(null);
+      setForceLastGame(false);
+    }
+  }, [latestCompletedGameForResult, watchedTicketUrl, favorite.code]);
 
   useEffect(() => {
     if (forceLastGame && snapshot && !snapshot.canRestoreLastGame) setForceLastGame(false);
@@ -294,12 +317,26 @@ export default function Home() {
   const warmGameStats = (gameSourceUrl: string) => {
     void homeUtils.gameStats.byGameUrl.prefetch({ gameUrl: gameSourceUrl });
   };
+
   const markTicketWatched = (gameSourceUrl: string) => {
-    window.localStorage.setItem(`${watchedTicketStorageKey}:${favorite.code}`, gameSourceUrl);
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(`${watchedTicketStorageKey}:${favorite.code}`, gameSourceUrl);
+      if (latestCompletedGameForResult) {
+        const currentMatchKey = `${latestCompletedGameForResult.gameDate ?? ""}_${new Date(latestCompletedGameForResult.kickoffAt).getTime()}`;
+        window.localStorage.setItem(`${watchedTicketStorageKey}:${favorite.code}:matchKey`, currentMatchKey);
+      }
+    }
     setWatchedTicketUrl(gameSourceUrl);
     setForceLastGame(false);
   };
+
+  /** RETURN TO LAST GAME 押下時は localStorage を完全に破棄して確実に固定 */
   const restoreLastGame = () => {
+    if (typeof window !== "undefined") {
+      window.localStorage.removeItem(`${watchedTicketStorageKey}:${favorite.code}`);
+      window.localStorage.removeItem(`${watchedTicketStorageKey}:${favorite.code}:matchKey`);
+    }
+    setWatchedTicketUrl(null);
     setForceLastGame(true);
   };
 
@@ -505,7 +542,7 @@ export default function Home() {
             <OfficialTeamFeed
               favorite={favorite}
               spoilerMode={spoilerMode}
-              completedGame={displaySnapshot?.gameDayStatus ?? displaySnapshot?.nextGame}
+              completedGame={latestCompletedGameForResult ?? displaySnapshot?.gameDayStatus ?? displaySnapshot?.nextGame}
             />
           </div>
           <div ref={statusSectionRef}>
