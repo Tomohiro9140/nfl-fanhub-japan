@@ -21,12 +21,12 @@ export interface ExciteIndexResult {
 /**
  * 試合の熱狂度指数（Excite Index: 0〜100点）と★評価を算出する
  * 
- * 採点要素（合計100点満点）：
- * 1. 最終点差（最大30点）
- * 2. リードチェンジ & 同点展開（最大30点）
- * 3. 終盤のクラッチ・緊張感（最大20点）
- * 4. 総得点・ハイスコアボーナス（最大10点）
- * 5. 延長戦ボーナス（10点）
+ * 採点要素（合計100点満点 / 海外評価・戦術的リアリティ反映版）：
+ * 1. 最終点差（最大30点：7点差と8点差を厳密に分離）
+ * 2. リードチェンジ & 同点展開（最大35点）
+ * 3. 終盤のクラッチ・緊張感（最大25点）
+ * 4. 総得点・ハイスコアボーナス（最大5点）
+ * 5. 延長戦ボーナス（5点）
  */
 export function calculateExciteIndex(game: ExciteGameInput): ExciteIndexResult {
   const away = game.awayScore ?? 0;
@@ -43,7 +43,7 @@ export function calculateExciteIndex(game: ExciteGameInput): ExciteIndexResult {
     stateUpper.includes("OVERTIME")
   );
 
-  // 2026 Week 1 等の既知の延長戦試合に対する安全フォールバック（gameState が "FINAL" に固定されていても確実に検知）
+  // 既知の延長戦試合に対する安全フォールバック
   const isKnownOtGame = Boolean(
     (game.awayTeamCode === "NO" && game.homeTeamCode === "DET") ||
     (game.awayTeamCode === "DET" && game.homeTeamCode === "NO") ||
@@ -53,63 +53,61 @@ export function calculateExciteIndex(game: ExciteGameInput): ExciteIndexResult {
 
   const isOvertime = isOvertimeExplicit || isKnownOtGame;
 
-  // 1. 最終点差（最大30点）
+  // 1. 最終点差（最大30点：7点差と8点差を戦術的に分離）
   let marginScore = 0;
-  if (margin <= 2) {
-    marginScore = 30;
-  } else if (margin === 3) {
-    marginScore = 26;
+  if (margin <= 3) {
+    marginScore = 30; // FG圏内
   } else if (margin <= 6) {
-    marginScore = 20;
-  } else if (margin <= 8) {
-    marginScore = 15;
+    marginScore = 27; // TD逆転圏内
+  } else if (margin === 7) {
+    marginScore = 23; // TD + XP同点圏内
+  } else if (margin === 8) {
+    marginScore = 19; // 2ptコンバージョン必須圏内
   } else if (margin <= 11) {
-    marginScore = 9;
+    marginScore = 10;
   } else if (margin <= 14) {
     marginScore = 4;
   } else {
     marginScore = 0;
   }
 
-  // 2. シーソーゲーム展開（最大30点）
+  // 2. シーソーゲーム展開・カムバック（最大35点）
   let leadScore = 0;
   const lc = game.leadChanges ?? 0;
   const tt = game.timesTied ?? 0;
 
   if (lc > 0 || tt > 0) {
-    leadScore = Math.min(30, lc * 8 + tt * 5);
+    leadScore = Math.min(35, lc * 9 + tt * 4);
   } else {
-    // データ未取得時のフォールバック（OTなら21点）
+    // データ未取得時のフォールバック
     if (isOvertime) {
-      leadScore = 21;
+      leadScore = 24;
     } else if (margin <= 3) {
-      leadScore = 16;
+      leadScore = 20;
     } else if (margin <= 8) {
-      leadScore = 10;
+      leadScore = 13;
     }
   }
 
-  // 3. 終盤のクラッチ・緊張感（最大20点）
+  // 3. 終盤のクラッチ・緊張感（最大25点）
   let clutchScore = 0;
   if (margin <= 8) {
-    clutchScore += 10;
+    clutchScore += 10; // ワンポゼッション基礎点
     if (lc >= 2 || isOvertime || margin <= 3) {
-      clutchScore += 10;
+      clutchScore += 15; // 終盤劇的ボーナス（満額25点へ）
     }
   }
 
-  // 4. ハイスコアボーナス（最大10点）：NFL基準
+  // 4. ハイスコアボーナス（最大5点：インフレ抑制）
   let scoreBonus = 0;
-  if (totalPoints >= 60) {
-    scoreBonus = 10;
-  } else if (totalPoints >= 52) {
+  if (totalPoints >= 55) {
     scoreBonus = 5;
   } else if (totalPoints >= 44) {
     scoreBonus = 3;
   }
 
-  // 5. 延長戦ボーナス（10点）
-  const otBonus = isOvertime ? 10 : 0;
+  // 5. 延長戦ボーナス（5点）
+  const otBonus = isOvertime ? 5 : 0;
 
   // 合計スコア（0〜100点）
   const totalScore = Math.min(
