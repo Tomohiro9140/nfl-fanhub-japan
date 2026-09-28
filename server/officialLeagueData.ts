@@ -174,7 +174,6 @@ function parseGameDynamics(html: string, awayScore: number | null, homeScore: nu
 
   let leadChanges = 0;
   let timesTied = 0;
-  let calculated = false;
 
   if (awayScore != null && homeScore != null && parsedScores.length >= 2) {
     const awayCandidate = parsedScores.find((s) => s.total === awayScore);
@@ -197,30 +196,21 @@ function parseGameDynamics(html: string, awayScore: number | null, homeScore: nu
         }
         lastLeader = current;
       }
-
-      if (isOT && lastLeader !== "tie") {
-        timesTied = Math.max(timesTied, 1);
-      }
-      calculated = true;
     }
   }
 
-  // 解析できなかった場合のフォールバック（接戦度・OTに応じた適正補正）
+  // 接戦度・OTに応じた最低保証補正
   const margin = awayScore != null && homeScore != null ? Math.abs(awayScore - homeScore) : 10;
-  if (!calculated) {
-    if (isOT) {
+  if (isOT) {
+    timesTied = Math.max(timesTied, 1);
+    leadChanges = Math.max(leadChanges, margin <= 3 ? 2 : 1);
+  } else if (leadChanges === 0 && timesTied === 0) {
+    if (margin <= 3) {
       timesTied = 1;
-      leadChanges = margin <= 3 ? 2 : 1;
-    } else if (margin <= 3) {
+      leadChanges = 2;
+    } else if (margin <= 8) {
       timesTied = 1;
       leadChanges = 1;
-    }
-  } else if (isOT) {
-    timesTied = Math.max(timesTied, 1);
-    if (margin <= 3) {
-      leadChanges = Math.max(leadChanges, 2);
-    } else {
-      leadChanges = Math.max(leadChanges, 1);
     }
   }
 
