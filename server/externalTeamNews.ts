@@ -2,8 +2,9 @@ import { createHash } from "node:crypto";
 import type { InsertOfficialFeedItem } from "../drizzle/schema";
 import { upsertOfficialFeedItems } from "./db";
 
-const MAX_ITEMS_PER_SOURCE_TEAM = 3;
-const MAX_LOCAL_ITEMS_PER_TEAM = 5;
+// 試合前のプレビュー記事が試合後の反省記事で押し出されないよう保持件数を拡張
+const MAX_ITEMS_PER_SOURCE_TEAM = 12;
+const MAX_LOCAL_ITEMS_PER_TEAM = 12;
 const EXTERNAL_NEWS_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1_000;
 
 export const externalNewsSources = [
@@ -91,9 +92,10 @@ function field(item: string, name: string) {
   return match ? clean(match[1]) : "";
 }
 
+/** 日本人ファンに無関係なプロモコード・ベッティング・予測市場広告を徹底遮断 */
 function isEditorialNews(title: string, summary: string, sourceUrl: string) {
   const text = `${title} ${summary} ${sourceUrl}`.toLowerCase();
-  return !/\b(?:betting|odds|best bets|fantasy|dfs|picks|prop bets?|how to watch|watch live|gambling|bonus code)\b/.test(text);
+  return !/\b(?:betting|odds|best bets|fantasy|dfs|picks|prop bets?|how to watch|watch live|gambling|bonus code|promo(?: code)?|bonus(?:es)?|kalshi|polymarket|sportsbook|fanduel|draftkings|betmgm|caesars|bet365|trading credits?|sign-up offer|welcome offer)\b/.test(text);
 }
 
 /** Parses public PFT/CBS RSS summaries; only title, RSS summary and canonical URL are cached. */
