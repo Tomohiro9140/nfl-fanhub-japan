@@ -108,8 +108,8 @@ async function searchYouTubeOfficialHighlight(game: HighlightableGame): Promise<
 }
 
 /** 試合終了後のハイライト自動取得・同期メイン関数 */
-export async function refreshOfficialGameHighlights() {
-  const games = (await getOfficialScoreboardGamesForHighlightMatching()) as HighlightableGame[];
+export async function refreshOfficialGameHighlights(options?: { force?: boolean }) {
+  const games = (await getOfficialScoreboardGamesForHighlightMatching(options?.force ?? false)) as HighlightableGame[];
   if (!games.length) return { candidates: 0, linked: 0, sourceUrl: nflHighlightsSourceUrl };
 
   const links: NflHighlightLink[] = [];
