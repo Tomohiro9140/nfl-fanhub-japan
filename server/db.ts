@@ -569,11 +569,16 @@ export async function getOfficialScoreboardKickoffTimes(season: number, external
   return new Map(rows.flatMap((row) => row.kickoffAt ? [[row.externalId, row.kickoffAt] as const] : []));
 }
 
-export async function getOfficialScoreboardGamesForHighlightMatching() {
+export async function getOfficialScoreboardGamesForHighlightMatching(force = false) {
   const db = await getDb();
   if (!db) return [];
-  const games = await db.select().from(officialScoreboardGames).where(eq(officialScoreboardGames.gameState, "FINAL"));
-  return games.filter((game) => !game.nflHighlightUrl || !game.nflHighlightUrl.includes("youtube.com"));
+  const games = await db.select().from(officialScoreboardGames);
+  // FINAL または FINAL/OT で終了した試合を抽出
+  const finishedGames = games.filter((game) =>
+    (game.gameState ?? "").toUpperCase().startsWith("FINAL")
+  );
+  if (force) return finishedGames;
+  return finishedGames.filter((game) => !game.nflHighlightUrl || !game.nflHighlightUrl.includes("youtube.com"));
 }
 
 export async function upsertOfficialScoreboardHighlights(links: Array<{ externalId: string; nflHighlightUrl: string; sourceUrl: string }>) {
