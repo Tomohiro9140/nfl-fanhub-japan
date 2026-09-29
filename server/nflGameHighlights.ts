@@ -29,25 +29,23 @@ function parseWeekNumber(weekLabel: string | null): number | null {
   return m ? Number(m[1]) : null;
 }
 
-/** チームコードからニックネーム（最後の単語）を取得 */
+/** チームコードからニックネームを取得 */
 function getTeamNickname(teamCode: string): string {
   const fullName = TEAM_NAMES[teamCode] ?? teamCode;
   return fullName.split(/\s+/).pop()?.toLowerCase() ?? teamCode.toLowerCase();
 }
 
-/** YouTube 検索から NFL公式チャンネルの当シーズンハイライト動画のみを厳密に抽出 */
+/** YouTube 検索から NFL公式チャンネルのハイライト動画を厳密に抽出 */
 async function searchYouTubeOfficialHighlight(game: HighlightableGame): Promise<string | null> {
   const awayName = TEAM_NAMES[game.awayTeamCode] ?? game.awayTeamCode;
   const homeName = TEAM_NAMES[game.homeTeamCode] ?? game.homeTeamCode;
   const weekNum = parseWeekNumber(game.weekLabel);
-  const season = game.season || 2026;
 
-  // 検索クエリ
-  const query = encodeURIComponent(`NFL ${awayName} vs ${homeName} ${season} Week ${weekNum ?? ""} game highlights`);
+  const query = encodeURIComponent(`NFL ${awayName} vs ${homeName} Week ${weekNum ?? ""} highlights`);
   const searchUrl = `https://www.youtube.com/results?search_query=${query}`;
 
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 10_000);
+  const timeout = setTimeout(() => controller.abort(), 6000);
 
   try {
     const res = await fetch(searchUrl, {
@@ -65,7 +63,6 @@ async function searchYouTubeOfficialHighlight(game: HighlightableGame): Promise<
     const data = JSON.parse(jsonMatch[1]);
 
     const contents = data.contents?.twoColumnSearchResultsRenderer?.primaryContents?.sectionListRenderer?.contents?.[0]?.itemSectionRenderer?.contents || [];
-
     const awayNick = getTeamNickname(game.awayTeamCode);
     const homeNick = getTeamNickname(game.homeTeamCode);
 
@@ -85,22 +82,19 @@ async function searchYouTubeOfficialHighlight(game: HighlightableGame): Promise<
       // 2. ハイライト動画であること
       if (!title.includes("highlight")) continue;
 
-      // 3. 当該シーズン（2026年等）の照合（過去シーズンの誤検知を完全排除）
-      if (!title.includes(String(season))) continue;
-
-      // 4. 週番号の照合
+      // 3. 週番号の照合
       if (weekNum !== null) {
         const hasWeek = new RegExp(`(?:week|wk)\\s*${weekNum}\\b`, "i").test(title);
         if (!hasWeek) continue;
       }
 
-      // 5. 両チームのニックネームが含まれていること
+      // 4. 両チームのニックネームが含まれていること
       if (title.includes(awayNick) && title.includes(homeNick)) {
         return `https://www.youtube.com/watch?v=${videoId}`;
       }
     }
   } catch {
-    // タイムアウトまたはパース失敗時は null を返却
+    return null;
   } finally {
     clearTimeout(timeout);
   }
@@ -115,17 +109,17 @@ export async function refreshOfficialGameHighlights(options?: { force?: boolean 
   const links: NflHighlightLink[] = [];
 
   for (const game of games) {
-    // 公式ハイライトを精密検索
     const youtubeUrl = await searchYouTubeOfficialHighlight(game);
 
     if (youtubeUrl) {
+      // YouTube公式動画を最優先バインド
       links.push({
         externalId: game.externalId,
         nflHighlightUrl: youtubeUrl,
         sourceUrl: youtubeUrl,
       });
-    } else if (game.gameUrl) {
-      // YouTube公式動画が見つからない場合は、偽動画ではなく NFL.com 公式ゲーム詳細へフォールバック
+    } else if (game.gameUrl && !game.nflHighlightUrl) {
+      // YouTube公式動画が未公開の場合のみ、一時的なつなぎとして NFL.com 公式ページへ退避
       links.push({
         externalId: game.externalId,
         nflHighlightUrl: game.gameUrl,
