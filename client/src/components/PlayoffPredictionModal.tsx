@@ -294,10 +294,10 @@ export function PlayoffPredictionModal({ isOpen, onClose, afcSeeds, nfcSeeds }: 
           ctx.fillText(String(seed), x + cardW - badgeW / 2 - 4, rowY + rowH / 2 + 9);
         }
 
-        // 勝者ハイライト枠
+        // 勝者ハイライト枠（3.5px -> 5.5px に強調）
         if (isWinner) {
           ctx.strokeStyle = "#eab308";
-          ctx.lineWidth = 3.5;
+          ctx.lineWidth = 5.5;
           ctx.strokeRect(x, rowY, cardW, rowH);
         }
       };
@@ -385,7 +385,6 @@ export function PlayoffPredictionModal({ isOpen, onClose, afcSeeds, nfcSeeds }: 
     drawCard(nfcCcgX, 227, nfcDivWinners[0], nfcDivWinners[0] ? nfcSeedMap.get(nfcDivWinners[0]) : undefined, nfcDivWinners[1], nfcDivWinners[1] ? nfcSeedMap.get(nfcDivWinners[1]) : undefined, nfcChamp ?? undefined);
 
     // ============= 【中央最下部：SUPER BOWL LXI】極限サイズアップ ＆ 隙間ゼロ化 =============
-    // 幅285px / 行高96px (全高192px) / ロゴ72px / フォント52px超巨大
     const sbCardW = 285;
     const sbRowH = 96;
     const sbX = (width - sbCardW) / 2;
@@ -426,13 +425,13 @@ export function PlayoffPredictionModal({ isOpen, onClose, afcSeeds, nfcSeeds }: 
         }
       }
 
-      // 【特大チームコード (52px 巨大フォント)】隙間なくロゴのすぐ右から配置
+      // 【特大チームコード (52px 巨大フォント)】
       ctx.fillStyle = "#ffffff";
       ctx.font = isWon ? "900 52px sans-serif" : "bold 48px sans-serif";
       ctx.textAlign = "left";
       ctx.fillText(code, sbX + 92, rowY + sbRowH / 2 + 18);
 
-      // 【特大シードバッジ (幅60px、フォント48px)】チームコードのすぐ右隣に密着！
+      // 【特大シードバッジ (幅60px、フォント48px)】
       if (seed) {
         const sbBadgeW = 60;
         ctx.fillStyle = "#ffffff";
@@ -443,10 +442,10 @@ export function PlayoffPredictionModal({ isOpen, onClose, afcSeeds, nfcSeeds }: 
         ctx.fillText(String(seed), sbX + sbCardW - sbBadgeW / 2 - 6, rowY + sbRowH / 2 + 17);
       }
 
-      // 王者ハイライト（6px ヘビーゴールド枠）
+      // 王者ハイライト（6px -> 8.5px に強調）
       if (isWon) {
         ctx.strokeStyle = "#eab308";
-        ctx.lineWidth = 6;
+        ctx.lineWidth = 8.5;
         ctx.strokeRect(sbX, rowY, sbCardW, sbRowH);
       }
     };
@@ -528,7 +527,7 @@ export function PlayoffPredictionModal({ isOpen, onClose, afcSeeds, nfcSeeds }: 
         <div className="flex items-center justify-between border-b border-slate-800 pb-2.5">
           <div className="flex items-center gap-2">
             <Trophy className="h-4 w-4 text-amber-400" />
-            <h2 className="text-sm sm:text-base font-black">プレイオフ勝敗予想 ＆ ブラケット画像シェア</h2>
+            <h2 className="text-sm sm:text-base font-black">プレイオフ勝敗予想</h2>
           </div>
           <button onClick={onClose} className="rounded-lg p-1 text-slate-400 hover:bg-slate-800 hover:text-white">
             <X className="h-5 w-5" />
