@@ -243,6 +243,16 @@ export default function Home() {
     );
   }, [latestResultQuery.data, favorite.code]);
 
+  /** ニュースフィードに渡す対象試合（水曜切り替え後は次回試合を優先し、平時の最新ニュース全件表示を保証） */
+  const activeFeedGame = useMemo(() => {
+    // ユーザーが意図的に過去試合を表示中、または水曜朝前のリプレイ期間中のみ過去試合を対象とする
+    if (forceLastGame || displaySnapshot?.canRestoreLastGame) {
+      return latestCompletedGameForResult ?? displaySnapshot?.gameDayStatus ?? displaySnapshot?.nextGame;
+    }
+    // 水曜切り替え後〜次回キックオフ前は、次回試合（または当日試合）を渡す
+    return displaySnapshot?.gameDayStatus ?? displaySnapshot?.nextGame ?? undefined;
+  }, [forceLastGame, displaySnapshot?.canRestoreLastGame, displaySnapshot?.gameDayStatus, displaySnapshot?.nextGame, latestCompletedGameForResult]);
+
   const divisionGroups = useMemo(
     () =>
       ["East", "North", "South", "West"].map((division) => ({
@@ -542,7 +552,7 @@ export default function Home() {
             <OfficialTeamFeed
               favorite={favorite}
               spoilerMode={spoilerMode}
-              completedGame={latestCompletedGameForResult ?? displaySnapshot?.gameDayStatus ?? displaySnapshot?.nextGame}
+              completedGame={activeFeedGame}
             />
           </div>
           <div ref={statusSectionRef}>
