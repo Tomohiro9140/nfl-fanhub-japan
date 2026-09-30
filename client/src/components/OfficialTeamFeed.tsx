@@ -168,13 +168,25 @@ export function OfficialTeamFeed({ favorite, spoilerMode = false, completedGame 
   });
   const displayError = feed.isError || shouldSimulateUnavailable;
   const items = (shouldSimulateUnavailable ? [] : feed.data?.items ?? []) as FeedItem[];
-  const hideFrom = spoilerMode ? spoilerNewsCutoff(completedGame) : null;
-  const hideAll = spoilerMode && shouldHideAllSpoilerNews(completedGame);
+
+  // 試合中（LIVE）または保護対象の直前完了試合（FINAL）であるか判定
+  const isLiveOrProtectedFinal = Boolean(
+    completedGame && (
+      /live|ingame|in_progress|halftime/i.test(completedGame.gameState ?? "") ||
+      (/final|completed/i.test(completedGame.gameState ?? "") && (!completedGame.kickoffAt || new Date(completedGame.kickoffAt).getTime() <= Date.now())) ||
+      (completedGame.kickoffAt && new Date(completedGame.kickoffAt).getTime() <= Date.now() && !completedGame.gameState)
+    )
+  );
+
+  // 水曜切り替え後〜次回試合開始前（平時）は、ネタバレ防止オンオフに関係なく全てのNewsを表示
+  const effectiveSpoilerMode = isLiveOrProtectedFinal ? spoilerMode : false;
+  const hideFrom = effectiveSpoilerMode ? spoilerNewsCutoff(completedGame) : null;
+  const hideAll = effectiveSpoilerMode && shouldHideAllSpoilerNews(completedGame);
 
   // 開閉状態（isExpanded）に応じて 8件 または 15件 を選出
   const news = useMemo(
-    () => selectLatestNews(items, hideFrom, hideAll, spoilerMode, isExpanded ? 15 : 8),
-    [items, hideFrom, hideAll, spoilerMode, isExpanded]
+    () => selectLatestNews(items, hideFrom, hideAll, effectiveSpoilerMode, isExpanded ? 15 : 8),
+    [items, hideFrom, hideAll, effectiveSpoilerMode, isExpanded]
   );
 
   const [activeArticle, setActiveArticle] = useState<FeedItem | null>(null);
