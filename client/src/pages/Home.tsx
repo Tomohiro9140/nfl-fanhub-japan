@@ -392,6 +392,10 @@ export default function Home() {
             >
               FIELDLINE
             </a>
+            {/* デスクトップ用 LINK ナビゲーション */}
+            <a href="/links" className="nav-link">
+              LINK
+            </a>
           </nav>
           <div className="flex items-center gap-2">
             <button
@@ -417,6 +421,7 @@ export default function Home() {
                 ["ATLAS", "/atlas/"],
                 ["COACHING TREE", "/coaching-tree/"],
                 ["FIELDLINE", "/fieldline/"],
+                ["LINK", "/links"],
               ].map(([label, href]) => (
                 <a
                   onClick={() => setNavOpen(false)}
