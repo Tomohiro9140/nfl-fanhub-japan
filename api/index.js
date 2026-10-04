@@ -4290,34 +4290,47 @@ function calculateExciteIndex(game) {
   );
   const isOvertime = isOvertimeExplicit || isKnownOtGame;
   let marginScore = 0;
-  if (margin <= 3) {
+  if (margin <= 2) {
     marginScore = 30;
-  } else if (margin <= 6) {
+  } else if (margin === 3) {
     marginScore = 27;
+  } else if (margin <= 6) {
+    marginScore = 24;
   } else if (margin === 7) {
-    marginScore = 23;
+    marginScore = 20;
   } else if (margin === 8) {
-    marginScore = 19;
+    marginScore = 16;
   } else if (margin <= 11) {
-    marginScore = 10;
+    marginScore = 8;
   } else if (margin <= 14) {
-    marginScore = 4;
+    marginScore = 3;
   } else {
     marginScore = 0;
+  }
+  let baselineLead = 0;
+  if (isOvertime) {
+    baselineLead = 24;
+  } else if (margin <= 2) {
+    baselineLead = 22;
+  } else if (margin === 3) {
+    baselineLead = 19;
+  } else if (margin <= 6) {
+    baselineLead = 16;
+  } else if (margin === 7) {
+    baselineLead = 13;
+  } else if (margin === 8) {
+    baselineLead = 11;
+  } else {
+    baselineLead = 0;
   }
   let leadScore = 0;
   const lc = game.leadChanges ?? 0;
   const tt = game.timesTied ?? 0;
   if (lc > 0 || tt > 0) {
-    leadScore = Math.min(35, lc * 9 + tt * 4);
+    const calculated = lc * 9 + tt * 4;
+    leadScore = Math.min(35, Math.max(calculated, baselineLead));
   } else {
-    if (isOvertime) {
-      leadScore = 24;
-    } else if (margin <= 3) {
-      leadScore = 20;
-    } else if (margin <= 8) {
-      leadScore = 13;
-    }
+    leadScore = baselineLead;
   }
   let clutchScore = 0;
   if (margin <= 8) {
