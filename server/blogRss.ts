@@ -21,36 +21,27 @@ interface CacheEntry {
 const blogCache: { all?: CacheEntry; byTeam: Record<string, CacheEntry> } = {
   byTeam: {},
 };
-const CACHE_TTL_MS = 15 * 60 * 1000; // 15分
+const CACHE_TTL_MS = 15 * 60 * 1000;
 
-// 有料判定の個別キャッシュ（記事URL -> isPaid）
+// 有料判定の個別キャッシュ
 const paidStatusCache = new Map<string, boolean>();
 
 /**
- * Note記事などの有料・メンバーシップ判定ロジック（Schema.org & タイトル判定）
+ * Note記事などの有料・メンバーシップ判定ロジック
  */
 async function detectIsPaidArticle(title: string, content: string, url: string): Promise<boolean> {
-  // 1. タイトルでの明示的な有料・メンバーシップ表記
   const paidTitleRegex = /【有料】|\[有料\]|（有料）|\(有料\)|\bPAID\b|メンバーシップ|メンバー限定|会員限定|定期購読|プレミアム/i;
-  if (paidTitleRegex.test(title)) {
-    return true;
-  }
+  if (paidTitleRegex.test(title)) return true;
 
-  // 2. 本文・概要に含まれる有料区切りパターン
   const paidContentRegex = /この続きをみるには|購入して続きを読む|記事のご購入|有料エリア|有料記事|マガジンを購入|メンバーシップ/i;
-  if (paidContentRegex.test(content)) {
-    return true;
-  }
+  if (paidContentRegex.test(content)) return true;
 
-  // 3. note.com 記事の場合、キャッシュまたはHTMLの Schema.org ("isAccessibleForFree":false) で確定判定
   if (url.includes("note.com/")) {
-    if (paidStatusCache.has(url)) {
-      return paidStatusCache.get(url)!;
-    }
+    if (paidStatusCache.has(url)) return paidStatusCache.get(url)!;
 
     try {
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 2500); // 2.5秒タイムアウト
+      const timeout = setTimeout(() => controller.abort(), 2500);
       const res = await fetch(url, {
         signal: controller.signal,
         headers: {
@@ -62,22 +53,18 @@ async function detectIsPaidArticle(title: string, content: string, url: string):
 
       if (res.ok) {
         const html = await res.text();
-        // note公式の有料指定: "isAccessibleForFree":false または .note-paywall
         const isPaid = html.includes('"isAccessibleForFree":false') || html.includes('"isAccessibleForFree": false') || html.includes('.note-paywall');
         paidStatusCache.set(url, isPaid);
         return isPaid;
       }
     } catch {
-      // タイムアウト等の場合はfalseをフォールバック
+      // タイムアウト時はfalse
     }
   }
 
   return false;
 }
 
-/**
- * HTMLタグの除去とサマリーの整形
- */
 function stripHtml(html: string): string {
   return html
     .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
@@ -142,22 +129,38 @@ async function parseRssXml(xml: string, source: NFLMediaLinkItem): Promise<Parse
       }
     }
 
-    // 個別フィルタールールチェック
+    // --- 個別フィルタールールチェック ---
     if (source.filterRule) {
-      const { titleKeywords, categoryOrTagKeywords, targetUrlPattern } = source.filterRule;
+      const { titleKeywords, categoryOrTagKeywords, targetUrlPattern, excludeKeywords } = source.filterRule;
+
+      // 1. 除外キーワードチェック（NPB等の記事を即座に破棄）
+      if (excludeKeywords && excludeKeywords.length > 0) {
+        const isExcluded = excludeKeywords.some((kw) =>
+          title.toLowerCase().includes(kw.toLowerCase()) || combinedCategories.toLowerCase().includes(kw.toLowerCase())
+        );
+        if (isExcluded) continue;
+      }
+
+      // 2. タイトルキーワードチェック
       if (titleKeywords && titleKeywords.length > 0) {
         if (!titleKeywords.some((kw) => title.toLowerCase().includes(kw.toLowerCase()))) continue;
       }
+
+      // 3. カテゴリ / タグチェック
       if (categoryOrTagKeywords && categoryOrTagKeywords.length > 0) {
-        if (!categoryOrTagKeywords.some((kw) => combinedCategories.toLowerCase().includes(kw.toLowerCase()) || link.toLowerCase().includes(kw.toLowerCase()))) continue;
+        const matchesCategory = categoryOrTagKeywords.some((kw) =>
+          combinedCategories.toLowerCase().includes(kw.toLowerCase()) || title.toLowerCase().includes(kw.toLowerCase()) || link.toLowerCase().includes(kw.toLowerCase())
+        );
+        if (!matchesCategory) continue;
       }
+
+      // 4. URLパターンチェック
       if (targetUrlPattern && !targetUrlPattern.test(link)) continue;
     }
 
     rawItems.push({ title, link, rawDesc, combinedCategories, publishedAt });
   }
 
-  // 最新10件について有料判定を実行
   for (const item of rawItems.slice(0, 10)) {
     const isPaid = await detectIsPaidArticle(item.title, item.rawDesc, item.link);
     articles.push({
@@ -177,9 +180,6 @@ async function parseRssXml(xml: string, source: NFLMediaLinkItem): Promise<Parse
   return articles;
 }
 
-/**
- * 1つのブログソースから記事一覧を取得
- */
 async function fetchArticlesFromSource(source: NFLMediaLinkItem): Promise<ParsedBlogArticle[]> {
   if (!source.rssUrl) return [];
 
@@ -204,9 +204,6 @@ async function fetchArticlesFromSource(source: NFLMediaLinkItem): Promise<Parsed
   }
 }
 
-/**
- * 全ブログの最新記事一覧を取得（最新順）
- */
 export async function getAllBlogArticles(limit = 50): Promise<ParsedBlogArticle[]> {
   const now = Date.now();
   if (blogCache.all && now - blogCache.all.cachedAt < CACHE_TTL_MS) {
@@ -233,9 +230,6 @@ export async function getAllBlogArticles(limit = 50): Promise<ParsedBlogArticle[
   return allArticles.slice(0, limit);
 }
 
-/**
- * チームページ用記事一覧を取得 (No.1〜15)
- */
 export async function getTeamBlogArticles(teamCode: NFLTeamCode, limit = 5): Promise<ParsedBlogArticle[]> {
   const now = Date.now();
   const cached = blogCache.byTeam[teamCode];
