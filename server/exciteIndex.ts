@@ -23,7 +23,7 @@ export interface ExciteIndexResult {
  * 
  * 採点要素（合計100点満点 / 海外評価・戦術的リアリティ反映版）：
  * 1. 最終点差（最大30点：7点差と8点差を厳密に分離）
- * 2. リードチェンジ & 同点展開（最大35点）
+ * 2. リードチェンジ & 同点展開（最大35点：接戦時の下限保証付き）
  * 3. 終盤のクラッチ・緊張感（最大25点）
  * 4. 総得点・ハイスコアボーナス（最大5点）
  * 5. 延長戦ボーナス（5点）
@@ -56,7 +56,7 @@ export function calculateExciteIndex(game: ExciteGameInput): ExciteIndexResult {
   // 1. 最終点差（最大30点：7点差と8点差を戦術的に分離）
   let marginScore = 0;
   if (margin <= 3) {
-    marginScore = 30; // FG圏内
+    marginScore = 30; // FG圏内決着
   } else if (margin <= 6) {
     marginScore = 27; // TD逆転圏内
   } else if (margin === 7) {
@@ -72,21 +72,28 @@ export function calculateExciteIndex(game: ExciteGameInput): ExciteIndexResult {
   }
 
   // 2. シーソーゲーム展開・カムバック（最大35点）
+  // 接戦度に応じたベースライン（逆転回数が少なくてもワンポゼッションゲームなら緊張感を保証）
+  let baselineLead = 0;
+  if (isOvertime) {
+    baselineLead = 24;
+  } else if (margin <= 3) {
+    baselineLead = 20; // 3点差以内なら最低20点保証
+  } else if (margin <= 6) {
+    baselineLead = 16;
+  } else if (margin <= 8) {
+    baselineLead = 13;
+  }
+
   let leadScore = 0;
   const lc = game.leadChanges ?? 0;
   const tt = game.timesTied ?? 0;
 
   if (lc > 0 || tt > 0) {
-    leadScore = Math.min(35, lc * 9 + tt * 4);
+    const calculated = lc * 9 + tt * 4;
+    // 実測値とベースライン（最低保証値）の大きい方を採用し、不当な減点を防止
+    leadScore = Math.min(35, Math.max(calculated, baselineLead));
   } else {
-    // データ未取得時のフォールバック
-    if (isOvertime) {
-      leadScore = 24;
-    } else if (margin <= 3) {
-      leadScore = 20;
-    } else if (margin <= 8) {
-      leadScore = 13;
-    }
+    leadScore = baselineLead;
   }
 
   // 3. 終盤のクラッチ・緊張感（最大25点）
