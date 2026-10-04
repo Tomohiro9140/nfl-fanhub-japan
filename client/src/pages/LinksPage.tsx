@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from "react";
-import { ArrowUpRight, ExternalLink, Globe, Lock, Mail, RefreshCw, Rss, HeartHandshake } from "lucide-react";
+import { ArrowUpRight, ExternalLink, Globe, Lock, Mail, RefreshCw, Rss, HeartHandshake, Menu, X, Home, Database, Trophy, Zap, ChevronRight } from "lucide-react";
 import { getSortedMediaLinks } from "@/lib/nflMediaLinks";
 import { trpc } from "@/lib/trpc";
 
@@ -18,11 +18,20 @@ function displayDate(isoString: string) {
   }
 }
 
+// サイト内主要ナビゲーション項目
+const NAV_ITEMS = [
+  { label: "HOME", href: "/", icon: Home, desc: "トップ・チーム速報・日程" },
+  { label: "ATLAS", href: "/atlas", icon: Database, desc: "選手名鑑・契約・スタッツ" },
+  { label: "PLAYOFF", href: "/playoff", icon: Trophy, desc: "プレイオフ進出シミュレーター" },
+  { label: "EXCITE INDEX", href: "/excite", icon: Zap, desc: "試合白熱度・見どころ指数" },
+  { label: "LINKS / COMMUNITY", href: "/links", icon: Globe, desc: "コミュニティ・ブログリンク集", current: true },
+];
+
 export default function LinksPage() {
   const sortedLinks = useMemo(() => getSortedMediaLinks(), []);
   const [activeTab, setActiveTab] = useState<"directory" | "feed">("feed");
+  const [isNavOpen, setIsNavOpen] = useState(false);
 
-  // AmesNFL (最上位) とそれ以外の47件に分離
   const amesItem = sortedLinks.find((item) => item.id === 45);
   const otherItems = sortedLinks.filter((item) => item.id !== 45);
 
@@ -38,7 +47,103 @@ export default function LinksPage() {
     <div className="min-h-screen bg-[#f5f2ea] text-[#10213a] selection:bg-[#e85d2a] selection:text-white">
       <div className="field-grid pointer-events-none fixed inset-0 z-0 opacity-[.16]" />
 
-      <main className="relative z-10 mx-auto w-full min-w-0 max-w-5xl px-3 py-6 sm:px-6 sm:py-10">
+      {/* 右上の三本線メニューボタン（フローティングヘッダー） */}
+      <header className="relative z-30 mx-auto flex w-full max-w-5xl items-center justify-between px-3 pt-4 sm:px-6">
+        <a href="/" className="flex items-center gap-2 group">
+          <span className="font-display text-sm sm:text-base font-black tracking-wider text-[#10213a] group-hover:text-[#e85d2a] transition">
+            NFL FAN HUB <span className="text-[#e85d2a]">JAPAN</span>
+          </span>
+        </a>
+
+        {/* 三本線アイコンボタン */}
+        <button
+          type="button"
+          onClick={() => setIsNavOpen(true)}
+          className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-[#ded8cc] bg-white text-[#10213a] shadow-sm transition hover:border-[#10213a] hover:bg-[#fffaf0] active:scale-95"
+          aria-label="メニューを開く"
+        >
+          <Menu className="h-5 w-5" />
+        </button>
+      </header>
+
+      {/* スライドイン ナビゲーションメニュー */}
+      {isNavOpen && (
+        <div className="fixed inset-0 z-50 flex justify-end">
+          {/* 背景オーバーレイ */}
+          <div
+            className="fixed inset-0 bg-black/40 backdrop-blur-sm transition-opacity"
+            onClick={() => setIsNavOpen(false)}
+          />
+
+          {/* ドロワーメニュー本体 */}
+          <div className="relative z-10 flex h-full w-full max-w-xs flex-col border-l border-[#ded8cc] bg-[#fcfaf5] p-5 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-[#ded8cc] pb-3">
+              <span className="font-mono text-xs font-bold tracking-widest text-[#64748b]">
+                NAVIGATION
+              </span>
+              <button
+                type="button"
+                onClick={() => setIsNavOpen(false)}
+                className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-[#ded8cc] bg-white text-[#10213a] hover:bg-[#fffaf0]"
+                aria-label="メニューを閉じる"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <nav className="mt-4 flex-1 space-y-1.5 overflow-y-auto">
+              {NAV_ITEMS.map((item) => {
+                const Icon = item.icon;
+                return (
+                  <a
+                    key={item.href}
+                    href={item.href}
+                    onClick={() => setIsNavOpen(false)}
+                    className={`group flex items-center justify-between rounded-lg border p-2.5 transition ${
+                      item.current
+                        ? "border-[#10213a] bg-[#10213a] text-white shadow-sm"
+                        : "border-transparent bg-transparent text-[#10213a] hover:border-[#ded8cc] hover:bg-white"
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div
+                        className={`grid h-7 w-7 place-items-center rounded-md ${
+                          item.current ? "bg-[#e85d2a] text-white" : "bg-[#ded8cc]/50 text-[#10213a]"
+                        }`}
+                      >
+                        <Icon className="h-3.5 w-3.5" />
+                      </div>
+                      <div>
+                        <p className="font-display text-xs font-bold leading-none">{item.label}</p>
+                        <p
+                          className={`mt-1 font-mono text-[9px] ${
+                            item.current ? "text-slate-300" : "text-[#64748b]"
+                          }`}
+                        >
+                          {item.desc}
+                        </p>
+                      </div>
+                    </div>
+                    <ChevronRight
+                      className={`h-3.5 w-3.5 transition group-hover:translate-x-0.5 ${
+                        item.current ? "text-[#e85d2a]" : "text-[#94a3b8]"
+                      }`}
+                    />
+                  </a>
+                );
+              })}
+            </nav>
+
+            <div className="border-t border-[#ded8cc] pt-3 text-center">
+              <p className="font-mono text-[9px] text-[#94a3b8]">
+                NFL FAN HUB JAPAN © 2026
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <main className="relative z-10 mx-auto w-full min-w-0 max-w-5xl px-3 py-4 sm:px-6 sm:py-6">
         {/* ヘッダーエリア */}
         <div className="mb-5 border-b border-[#ded8cc] pb-4">
           <div className="flex items-center gap-2 font-mono text-[11px] font-bold tracking-[0.2em] text-[#64748b]">
@@ -193,7 +298,7 @@ export default function LinksPage() {
           </section>
         )}
 
-        {/* 3. リンク集・フィードのご案内とお問い合わせ */}
+        {/* 3. リンク集・フィードのご案内とお問い合わせ（修正版文面） */}
         <section className="mt-10 rounded-xl border border-[#ded8cc] bg-[#fffdf8] p-4 sm:p-5 text-xs text-[#526173]">
           <div className="flex items-center gap-2 font-mono text-[11px] font-bold text-[#10213a]">
             <HeartHandshake className="h-4 w-4 text-[#e85d2a]" />
