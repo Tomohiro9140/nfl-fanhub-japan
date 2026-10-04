@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from "react";
-import { ArrowUpRight, ExternalLink, Globe, Lock, RefreshCw, Rss, ShieldAlert } from "lucide-react";
+import { ArrowUpRight, ExternalLink, Globe, Lock, Mail, RefreshCw, Rss, HeartHandshake } from "lucide-react";
 import { getSortedMediaLinks } from "@/lib/nflMediaLinks";
 import { trpc } from "@/lib/trpc";
 
@@ -81,7 +81,7 @@ export default function LinksPage() {
           </div>
         </div>
 
-        {/* 1. 最新記事フィード (チームタグ完全削除) */}
+        {/* 1. 最新記事フィード */}
         {activeTab === "feed" && (
           <section className="space-y-3">
             <div className="flex items-center justify-between">
@@ -146,10 +146,10 @@ export default function LinksPage() {
           </section>
         )}
 
-        {/* 2. メディア一覧 (Ames最上位全幅、余計な隙間なし、2列グリッド、2行折り返し表示) */}
+        {/* 2. メディア一覧 (Ames全幅、2列グリッド、2行折り返し) */}
         {activeTab === "directory" && (
           <section className="space-y-2">
-            {/* ① 最上位: AmesNFL (全幅) */}
+            {/* ① 最上位: AmesNFL */}
             {amesItem && (
               <a
                 href={amesItem.url}
@@ -164,7 +164,7 @@ export default function LinksPage() {
               </a>
             )}
 
-            {/* ② 残り47件 (隙間なし・連続2列グリッド) */}
+            {/* ② 残り47件 (隙間なし・2列グリッド) */}
             <div className="grid grid-cols-2 gap-2">
               {otherItems.map((item) => (
                 <a
@@ -175,14 +175,12 @@ export default function LinksPage() {
                   className="group flex min-h-[46px] items-center justify-between rounded-lg border border-[#ded8cc] bg-white p-2 transition hover:border-[#10213a] hover:bg-[#fffaf0]"
                 >
                   <div className="flex items-center gap-1.5 min-w-0 pr-1 flex-1">
-                    {/* チームタグ (チームブログのみ) */}
                     {item.targetTeam && (
                       <span className="inline-flex items-center rounded border border-[#10213a]/20 bg-[#10213a] px-1 py-0.5 font-mono text-[9px] font-black text-white shrink-0">
                         {item.targetTeam}
                       </span>
                     )}
 
-                    {/* 媒体名: 2行折り返し（line-clamp-2）、3行禁止 */}
                     <span className="font-display text-xs sm:text-[12.5px] font-bold text-[#10213a] group-hover:text-[#e85d2a] leading-tight line-clamp-2 break-words">
                       {item.name}
                     </span>
@@ -195,22 +193,53 @@ export default function LinksPage() {
           </section>
         )}
 
-        {/* 3. 免責事項・削除要請文言ブロック */}
-        <section className="mt-8 rounded-xl border border-[#ded8cc] bg-[#fffdf8] p-3.5 sm:p-4 text-xs text-[#526173]">
+        {/* 3. リンク集・フィードのご案内とお問い合わせ (前向き・リスペクトトーン) */}
+        <section className="mt-10 rounded-xl border border-[#ded8cc] bg-[#fffdf8] p-4 sm:p-5 text-xs text-[#526173]">
           <div className="flex items-center gap-2 font-mono text-[11px] font-bold text-[#10213a]">
-            <ShieldAlert className="h-4 w-4 text-[#e85d2a]" />
-            掲載に関するお知らせ・削除要請について
+            <HeartHandshake className="h-4 w-4 text-[#e85d2a]" />
+            リンク集・フィードの掲載とお問い合わせについて
           </div>
-          <div className="mt-1.5 space-y-1 leading-relaxed text-[10px] sm:text-[11px]">
+
+          <div className="mt-2.5 space-y-2 leading-relaxed text-[11px] sm:text-xs">
             <p>
-              当サイト「NFL FAN HUB JAPAN」でご紹介・RSS取得している各ブログおよび記事コンテンツの著作権・知的財産権は、それぞれの著作者・運営者様に帰属します。
+              当ページは、日本国内でNFL情報を発信されているブロガー・メディアの皆様への敬意を込め、ファンコミュニティの活性化やファン同士の情報アクセス向上を目的として開設・運営しております。
+            </p>
+            <p className="text-[#64748b]">
+              ご紹介している各記事およびコンテンツの著作権・権利は、それぞれの運営者様に帰属します。
             </p>
             <p>
-              当ページは日本国内におけるNFLコミュニティの活性化およびファン同士の情報アクセス向上を目的として、公開フィードおよびWebリンクを整理・掲載しております。
+              新規掲載のご希望やリンク修正はもちろん、掲載やフィード配信の見合わせをご希望の場合も、いつでもお気軽にご連絡ください。確認次第、速やかに対応させていただきます。
             </p>
-            <p className="text-[#a34220]">
-              掲載の取り下げ、RSS配信の停止、リンクの修正・削除をご希望の運営者様は、確認次第速やかに削除等の適切な対応を実施いたしますので、誠にお手数ですがお問い合わせ窓口または公式SNS等よりご連絡いただけますようお願い申し上げます。
-            </p>
+          </div>
+
+          {/* お問い合わせ先リンク（メール & X） */}
+          <div className="mt-4 flex flex-wrap items-center gap-2 pt-2 border-t border-[#ded8cc]/60">
+            <span className="font-mono text-[10px] font-bold tracking-wider text-[#64748b] mr-1">
+              CONTACT:
+            </span>
+
+            {/* Email リンク */}
+            <a
+              href="mailto:nfl.fanhub.japan@gmail.com"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-[#ded8cc] bg-white px-2.5 py-1.5 font-mono text-[11px] font-bold text-[#10213a] shadow-sm transition hover:border-[#10213a] hover:bg-[#fffaf0]"
+            >
+              <Mail className="h-3.5 w-3.5 text-[#e85d2a]" />
+              <span>nfl.fanhub.japan@gmail.com</span>
+            </a>
+
+            {/* X リンク */}
+            <a
+              href="https://x.com/TK19TB12"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-[#ded8cc] bg-white px-2.5 py-1.5 font-mono text-[11px] font-bold text-[#10213a] shadow-sm transition hover:border-[#10213a] hover:bg-[#fffaf0]"
+            >
+              <span className="flex h-3.5 w-3.5 items-center justify-center font-display text-[11px] font-black leading-none">
+                𝕏
+              </span>
+              <span>@TK19TB12</span>
+              <ExternalLink className="h-3 w-3 text-[#94a3b8]" />
+            </a>
           </div>
         </section>
       </main>
