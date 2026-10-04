@@ -630,14 +630,14 @@ export const NFL_MEDIA_LINKS: NFLMediaLinkItem[] = [
   },
   {
     id: 45,
-    name: "Ames",
-    url: "https://note.com/ames_nflresearch",
+    name: "AmesNFL",
+    url: "https://ames-nfl.com/",
     category: "special",
     statusText: "神サイト",
     isPermitted: true, // 最上位固定のため常に最優先
     isPinnedTop: true,
     showInTeamLatest: false,
-    rssUrl: "https://note.com/ames_nflresearch/rss",
+    rssUrl: "https://ames-nfl.com/rss",
     memo: "リンクのみ",
   },
   {
