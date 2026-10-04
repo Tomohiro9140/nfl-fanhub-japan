@@ -24,9 +24,10 @@ interface EmbeddedAppNavProps {
   current?: NavPageId;
 }
 
+// サイト内主要ナビゲーション項目（Fieldlineの注釈を「チーム比較分析」に変更）
 const NAV_ITEMS = [
   { id: "HOME", label: "HOME", href: "/", icon: Home, desc: "トップ・速報" },
-  { id: "FIELDLINE", label: "FIELDLINE", href: "/fieldline", icon: Activity, desc: "戦術・ドライブ分析" },
+  { id: "FIELDLINE", label: "FIELDLINE", href: "/fieldline", icon: Activity, desc: "チーム比較分析" },
   { id: "COACHING TREE", label: "COACHING TREE", href: "/coaching-tree", icon: GitFork, desc: "コーチ相関ツリー" },
   { id: "ATLAS", label: "ATLAS", href: "/atlas", icon: Database, desc: "選手名鑑・契約" },
   { id: "PLAYOFFS", label: "PLAYOFF", href: "/playoffs", icon: Trophy, desc: "進出シミュレーター" },
@@ -36,26 +37,32 @@ const NAV_ITEMS = [
 export function EmbeddedAppNav({ current }: EmbeddedAppNavProps) {
   const [isNavOpen, setIsNavOpen] = useState(false);
 
+  // Fieldline や Simulator / Playoff などの黒帯ヘッダー判定
+  const isDarkHeader =
+    current === "FIELDLINE" ||
+    current === "SIMULATOR" ||
+    current === "PLAYOFFS";
+
   return (
     <>
-      {/* 共通ヘッダーバー */}
-      <header className="relative z-30 mx-auto flex w-full max-w-5xl items-center justify-between px-3 pt-4 sm:px-6">
-        <a href="/" className="group flex items-center gap-2">
-          <span className="font-display text-sm font-black tracking-wider text-[#10213a] transition group-hover:text-[#e85d2a] sm:text-base">
-            NFL FAN HUB <span className="text-[#e85d2a]">JAPAN</span>
-          </span>
-        </a>
-
-        {/* 三本線アイコンボタン */}
+      {/* 
+        各ページの既存ヘッダーの高さ（上下中央）に合わせて右端に配置
+        白帯ヘッダーを排除し、ボタン単体をヘッダー右端に美しくドッキング
+      */}
+      <div className="absolute top-2 right-3 z-40 sm:top-2.5 sm:right-6">
         <button
           type="button"
           onClick={() => setIsNavOpen(true)}
-          className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-[#ded8cc] bg-white text-[#10213a] shadow-sm transition hover:border-[#10213a] hover:bg-[#fffaf0] active:scale-95"
+          className={`inline-flex h-9 w-9 items-center justify-center rounded-lg border transition active:scale-95 ${
+            isDarkHeader
+              ? "border-white/20 bg-white/10 text-white backdrop-blur-sm hover:bg-white/20 shadow-sm"
+              : "border-[#ded8cc] bg-white text-[#10213a] shadow-sm hover:border-[#10213a] hover:bg-[#fffaf0]"
+          }`}
           aria-label="メニューを開く"
         >
-          <Menu className="h-5 w-5" />
+          <Menu className="h-4.5 w-4.5" />
         </button>
-      </header>
+      </div>
 
       {/* スライドイン ナビゲーションメニュー（画面の半分: w-1/2） */}
       {isNavOpen && (
