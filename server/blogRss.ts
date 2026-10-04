@@ -13,7 +13,7 @@ export interface ParsedBlogArticle {
   isPaid: boolean;     // Note等の有料・メンバーシップ限定バッジ用
 }
 
-// 15分間のインメモリキャッシュ
+// 2時間のインメモリキャッシュ (1〜2日おきの更新頻度に最適化)
 interface CacheEntry {
   articles: ParsedBlogArticle[];
   cachedAt: number;
@@ -21,7 +21,7 @@ interface CacheEntry {
 const blogCache: { all?: CacheEntry; byTeam: Record<string, CacheEntry> } = {
   byTeam: {},
 };
-const CACHE_TTL_MS = 15 * 60 * 1000;
+const CACHE_TTL_MS = 2 * 60 * 60 * 1000; // 2時間
 
 // 有料判定の個別キャッシュ
 const paidStatusCache = new Map<string, boolean>();
@@ -81,8 +81,9 @@ function stripHtml(html: string): string {
 
 /**
  * XML (RSS/Atom) パーサー
+ * @param isTeamPage trueの場合のみ teamFilterRule を適用
  */
-async function parseRssXml(xml: string, source: NFLMediaLinkItem): Promise<ParsedBlogArticle[]> {
+async function parseRssXml(xml: string, source: NFLMediaLinkItem, isTeamPage: boolean): Promise<ParsedBlogArticle[]> {
   const articles: ParsedBlogArticle[] = [];
 
   const itemRegex = /<(?:item|entry)[\s>]([\s\S]*?)<\/(?:item|entry)>/gi;
@@ -129,11 +130,10 @@ async function parseRssXml(xml: string, source: NFLMediaLinkItem): Promise<Parse
       }
     }
 
-    // --- 個別フィルタールールチェック ---
-    if (source.filterRule) {
-      const { titleKeywords, categoryOrTagKeywords, targetUrlPattern, excludeKeywords } = source.filterRule;
+    // 1. Linkページ全体で適用するフィルター判定（NPB除外など）
+    if (source.globalFilterRule) {
+      const { titleKeywords, categoryOrTagKeywords, targetUrlPattern, excludeKeywords } = source.globalFilterRule;
 
-      // 1. 除外キーワードチェック（NPB等の記事を即座に破棄）
       if (excludeKeywords && excludeKeywords.length > 0) {
         const isExcluded = excludeKeywords.some((kw) =>
           title.toLowerCase().includes(kw.toLowerCase()) || combinedCategories.toLowerCase().includes(kw.toLowerCase())
@@ -141,12 +141,10 @@ async function parseRssXml(xml: string, source: NFLMediaLinkItem): Promise<Parse
         if (isExcluded) continue;
       }
 
-      // 2. タイトルキーワードチェック
       if (titleKeywords && titleKeywords.length > 0) {
         if (!titleKeywords.some((kw) => title.toLowerCase().includes(kw.toLowerCase()))) continue;
       }
 
-      // 3. カテゴリ / タグチェック
       if (categoryOrTagKeywords && categoryOrTagKeywords.length > 0) {
         const matchesCategory = categoryOrTagKeywords.some((kw) =>
           combinedCategories.toLowerCase().includes(kw.toLowerCase()) || title.toLowerCase().includes(kw.toLowerCase()) || link.toLowerCase().includes(kw.toLowerCase())
@@ -154,14 +152,32 @@ async function parseRssXml(xml: string, source: NFLMediaLinkItem): Promise<Parse
         if (!matchesCategory) continue;
       }
 
-      // 4. URLパターンチェック
+      if (targetUrlPattern && !targetUrlPattern.test(link)) continue;
+    }
+
+    // 2. チームページのLatest Newsでのみ適用するフィルター判定（リトルナイナーの49ers限定など）
+    if (isTeamPage && source.teamFilterRule) {
+      const { titleKeywords, categoryOrTagKeywords, targetUrlPattern } = source.teamFilterRule;
+
+      if (titleKeywords && titleKeywords.length > 0) {
+        if (!titleKeywords.some((kw) => title.toLowerCase().includes(kw.toLowerCase()))) continue;
+      }
+
+      if (categoryOrTagKeywords && categoryOrTagKeywords.length > 0) {
+        const matchesCategory = categoryOrTagKeywords.some((kw) =>
+          combinedCategories.toLowerCase().includes(kw.toLowerCase()) || title.toLowerCase().includes(kw.toLowerCase()) || link.toLowerCase().includes(kw.toLowerCase())
+        );
+        if (!matchesCategory) continue;
+      }
+
       if (targetUrlPattern && !targetUrlPattern.test(link)) continue;
     }
 
     rawItems.push({ title, link, rawDesc, combinedCategories, publishedAt });
   }
 
-  for (const item of rawItems.slice(0, 10)) {
+  // ★ 各ブログ最大5件に制限
+  for (const item of rawItems.slice(0, 5)) {
     const isPaid = await detectIsPaidArticle(item.title, item.rawDesc, item.link);
     articles.push({
       id: `${source.id}-${Buffer.from(item.link).toString("base64").slice(-12)}`,
@@ -180,7 +196,7 @@ async function parseRssXml(xml: string, source: NFLMediaLinkItem): Promise<Parse
   return articles;
 }
 
-async function fetchArticlesFromSource(source: NFLMediaLinkItem): Promise<ParsedBlogArticle[]> {
+async function fetchArticlesFromSource(source: NFLMediaLinkItem, isTeamPage = false): Promise<ParsedBlogArticle[]> {
   if (!source.rssUrl) return [];
 
   try {
@@ -198,20 +214,25 @@ async function fetchArticlesFromSource(source: NFLMediaLinkItem): Promise<Parsed
 
     if (!res.ok) return [];
     const xml = await res.text();
-    return await parseRssXml(xml, source);
+    return await parseRssXml(xml, source, isTeamPage);
   } catch {
     return [];
   }
 }
 
-export async function getAllBlogArticles(limit = 50): Promise<ParsedBlogArticle[]> {
+/**
+ * 全ブログの最新記事一覧を取得（Linkページ用・最大5件/ブログ）
+ */
+export async function getAllBlogArticles(limit = 80): Promise<ParsedBlogArticle[]> {
   const now = Date.now();
   if (blogCache.all && now - blogCache.all.cachedAt < CACHE_TTL_MS) {
     return blogCache.all.articles.slice(0, limit);
   }
 
   const targetSources = NFL_MEDIA_LINKS.filter((s) => Boolean(s.rssUrl));
-  const results = await Promise.allSettled(targetSources.map(fetchArticlesFromSource));
+  const results = await Promise.allSettled(
+    targetSources.map((source) => fetchArticlesFromSource(source, false))
+  );
 
   const allArticles: ParsedBlogArticle[] = [];
   for (const r of results) {
@@ -230,6 +251,9 @@ export async function getAllBlogArticles(limit = 50): Promise<ParsedBlogArticle[
   return allArticles.slice(0, limit);
 }
 
+/**
+ * チームページ用記事一覧を取得 (No.1〜15・自チームフィルター適用)
+ */
 export async function getTeamBlogArticles(teamCode: NFLTeamCode, limit = 5): Promise<ParsedBlogArticle[]> {
   const now = Date.now();
   const cached = blogCache.byTeam[teamCode];
@@ -241,7 +265,10 @@ export async function getTeamBlogArticles(teamCode: NFLTeamCode, limit = 5): Pro
     (s) => s.showInTeamLatest && s.targetTeam === teamCode && Boolean(s.rssUrl)
   );
 
-  const results = await Promise.allSettled(teamSources.map(fetchArticlesFromSource));
+  const results = await Promise.allSettled(
+    teamSources.map((source) => fetchArticlesFromSource(source, true))
+  );
+
   const articles: ParsedBlogArticle[] = [];
   for (const r of results) {
     if (r.status === "fulfilled") {
