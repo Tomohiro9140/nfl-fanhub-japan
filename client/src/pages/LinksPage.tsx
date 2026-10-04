@@ -146,7 +146,7 @@ export default function LinksPage() {
           </section>
         )}
 
-        {/* 2. メディア一覧 (Ames全幅、余計な隙間なし、2列グリッド、2行折り返し) */}
+        {/* 2. メディア一覧 */}
         {activeTab === "directory" && (
           <section className="space-y-2">
             {/* ① 最上位: AmesNFL */}
@@ -164,7 +164,7 @@ export default function LinksPage() {
               </a>
             )}
 
-            {/* ② 残り47件 (隙間なし・2列グリッド) */}
+            {/* ② 残り47件 */}
             <div className="grid grid-cols-2 gap-2">
               {otherItems.map((item) => (
                 <a
@@ -202,17 +202,17 @@ export default function LinksPage() {
 
           <div className="mt-2.5 space-y-2 leading-relaxed text-[11px] sm:text-xs">
             <p>
-              当ページは、日本国内で熱量を持ってNFL情報を発信されているブロガー・メディアの皆様への敬意を込め、ファンコミュニティの活性化やファン同士の情報アクセス向上を目的として開設・運営しております。
+              当ページは、日本国内でNFL情報を発信されている方への敬意を込め、ファンコミュニティの活性化やファン同士の情報アクセス向上を目的として開設・運営しております。
             </p>
             <p className="text-[#64748b]">
               ご紹介している各記事およびコンテンツの著作権・権利は、それぞれの運営者様に帰属します。
             </p>
             <p>
-              「うちのブログも追加してほしい」といった新規掲載のご希望やリンク修正はもちろん、掲載やフィード配信の見合わせをご希望の場合も、いつでもお気軽にご連絡ください。確認次第、速やかに対応させていただきます。
+              新規掲載のご希望やリンク修正はもちろん、掲載やフィード配信の見合わせをご希望の場合も、いつでもお気軽にご連絡ください。確認次第、速やかに対応させていただきます。
             </p>
           </div>
 
-          {/* お問い合わせ先リンク（PCは1行、スマホは揃って綺麗に横並び） */}
+          {/* お問い合わせ先リンク */}
           <div className="mt-4 flex flex-col gap-2 pt-2 border-t border-[#ded8cc]/60 sm:flex-row sm:items-center">
             <span className="font-mono text-[10px] font-bold tracking-wider text-[#64748b] shrink-0">
               CONTACT:
