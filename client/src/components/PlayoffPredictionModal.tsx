@@ -1,5 +1,5 @@
 import React, { useMemo, useRef, useState, useEffect } from "react";
-import { X, Trophy, Share2, RotateCcw } from "lucide-react";
+import { X, Trophy, Download, RotateCcw } from "lucide-react";
 import { NFL_TEAMS } from "@/lib/tiebreaker/nflTeams";
 
 // ESPN CDN 略称マップ
@@ -181,7 +181,7 @@ export function PlayoffPredictionModal({ isOpen, onClose, afcSeeds, nfcSeeds }: 
     setPreviewUrl(null);
   };
 
-  // Canvas 描画（スーパーボウルカード極限サイズアップ ＆ 隙間ゼロ化）
+  // Canvas 描画
   const renderCanvas = () => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -215,7 +215,7 @@ export function PlayoffPredictionModal({ isOpen, onClose, afcSeeds, nfcSeeds }: 
     ctx.fillText("AFC", 250, 360);
     ctx.fillText("NFC", 950, 360);
 
-    // 3. 【スーパーボウル公式ロゴ】中央上部（400x205）
+    // 3. 【スーパーボウル公式ロゴ】中央上部
     const midX = width / 2;
     if (tournamentLogos.current.sb) {
       drawImageContain(ctx, tournamentLogos.current.sb, midX - 200, 10, 400, 205);
@@ -225,7 +225,7 @@ export function PlayoffPredictionModal({ isOpen, onClose, afcSeeds, nfcSeeds }: 
       ctx.fillText("SUPER BOWL LXI", midX, 105);
     }
 
-    // 4. 【カンファレンス公式ロゴ】左右の真ん中下（250x205）
+    // 4. 【カンファレンス公式ロゴ】左右の真ん中下
     if (tournamentLogos.current.afc) {
       drawImageContain(ctx, tournamentLogos.current.afc, 200, 445, 250, 205);
     }
@@ -233,7 +233,7 @@ export function PlayoffPredictionModal({ isOpen, onClose, afcSeeds, nfcSeeds }: 
       drawImageContain(ctx, tournamentLogos.current.nfc, 750, 445, 250, 205);
     }
 
-    // 5. 【通常対戦カード描画】幅180px / 行高62px / ロゴ48px / 文字28px
+    // 5. 【通常対戦カード描画】
     const cardW = 180;
     const rowH = 62;
 
@@ -266,7 +266,7 @@ export function PlayoffPredictionModal({ isOpen, onClose, afcSeeds, nfcSeeds }: 
         ctx.fillStyle = isWinner ? info.primaryColor : "#141c2b";
         ctx.fillRect(x, rowY, cardW, rowH);
 
-        // チームロゴ（48x48）
+        // チームロゴ
         const logoImg = logoCache.current.get(code);
         if (logoImg && logoImg.complete) {
           try {
@@ -277,7 +277,7 @@ export function PlayoffPredictionModal({ isOpen, onClose, afcSeeds, nfcSeeds }: 
           }
         }
 
-        // チームコード（28px 超極太フォント）
+        // チームコード
         ctx.fillStyle = "#ffffff";
         ctx.font = isWinner ? "900 28px sans-serif" : "bold 26px sans-serif";
         ctx.textAlign = "left";
@@ -294,7 +294,7 @@ export function PlayoffPredictionModal({ isOpen, onClose, afcSeeds, nfcSeeds }: 
           ctx.fillText(String(seed), x + cardW - badgeW / 2 - 4, rowY + rowH / 2 + 9);
         }
 
-        // 勝者ハイライト枠（3.5px -> 5.5px に強調）
+        // 勝者ハイライト枠
         if (isWinner) {
           ctx.strokeStyle = "#eab308";
           ctx.lineWidth = 5.5;
@@ -384,13 +384,12 @@ export function PlayoffPredictionModal({ isOpen, onClose, afcSeeds, nfcSeeds }: 
 
     drawCard(nfcCcgX, 227, nfcDivWinners[0], nfcDivWinners[0] ? nfcSeedMap.get(nfcDivWinners[0]) : undefined, nfcDivWinners[1], nfcDivWinners[1] ? nfcSeedMap.get(nfcDivWinners[1]) : undefined, nfcChamp ?? undefined);
 
-    // ============= 【中央最下部：SUPER BOWL LXI】極限サイズアップ ＆ 隙間ゼロ化 =============
+    // ============= 【中央最下部：SUPER BOWL LXI】 =============
     const sbCardW = 285;
     const sbRowH = 96;
     const sbX = (width - sbCardW) / 2;
     const sbY = 455;
 
-    // CCG からスーパーボウルカードへの接続線
     drawLine(afcCcgX + cardW / 2, 227 + rowH * 2, sbX, sbY + sbRowH / 2);
     drawLine(nfcCcgX + cardW / 2, 227 + rowH * 2, sbX + sbCardW, sbY + sbRowH * 1.5);
 
@@ -414,7 +413,6 @@ export function PlayoffPredictionModal({ isOpen, onClose, afcSeeds, nfcSeeds }: 
       ctx.fillStyle = isWon ? info.primaryColor : "#141c2b";
       ctx.fillRect(sbX, rowY, sbCardW, sbRowH);
 
-      // 【特大ロゴ (72x72)】
       const logoImg = logoCache.current.get(code);
       if (logoImg && logoImg.complete) {
         try {
@@ -425,13 +423,11 @@ export function PlayoffPredictionModal({ isOpen, onClose, afcSeeds, nfcSeeds }: 
         }
       }
 
-      // 【特大チームコード (52px 巨大フォント)】
       ctx.fillStyle = "#ffffff";
       ctx.font = isWon ? "900 52px sans-serif" : "bold 48px sans-serif";
       ctx.textAlign = "left";
       ctx.fillText(code, sbX + 92, rowY + sbRowH / 2 + 18);
 
-      // 【特大シードバッジ (幅60px、フォント48px)】
       if (seed) {
         const sbBadgeW = 60;
         ctx.fillStyle = "#ffffff";
@@ -442,7 +438,6 @@ export function PlayoffPredictionModal({ isOpen, onClose, afcSeeds, nfcSeeds }: 
         ctx.fillText(String(seed), sbX + sbCardW - sbBadgeW / 2 - 6, rowY + sbRowH / 2 + 17);
       }
 
-      // 王者ハイライト（6px -> 8.5px に強調）
       if (isWon) {
         ctx.strokeStyle = "#eab308";
         ctx.lineWidth = 8.5;
@@ -469,40 +464,27 @@ export function PlayoffPredictionModal({ isOpen, onClose, afcSeeds, nfcSeeds }: 
     }
   }, [isOpen, afcSeeds, nfcSeeds, afcWcWinners, nfcWcWinners, afcDivWinners, nfcDivWinners, afcChamp, nfcChamp, superBowlChamp]);
 
-  const handleShareOrSave = async () => {
+  // 純粋な端末への直接画像ダウンロード保存（共有シートを完全バイパス）
+  const handleDownloadImage = () => {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
     setIsGenerating(true);
     try {
-      canvas.toBlob(async (blob) => {
+      canvas.toBlob((blob) => {
         if (!blob) {
           setIsGenerating(false);
           return;
         }
 
-        const fileName = `NFL_Playoff_Prediction_2026.png`;
-        const file = new File([blob], fileName, { type: "image/png" });
-
-        if (navigator.canShare && navigator.canShare({ files: [file] })) {
-          try {
-            await navigator.share({
-              title: "NFL プレイオフ勝敗予想",
-              text: `私の2026-27 NFLプレイオフ勝敗予想！スーパーボウル覇者は【${superBowlChamp ? getTeamInfo(superBowlChamp).name : "未定"}】！ #NFL #NFLJapan`,
-              files: [file],
-            });
-            setIsGenerating(false);
-            return;
-          } catch {
-            // キャンセル
-          }
-        }
-
+        const fileName = "NFL_Playoff_Prediction_2026.png";
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
         a.href = url;
         a.download = fileName;
+        document.body.appendChild(a);
         a.click();
+        document.body.removeChild(a);
         URL.revokeObjectURL(url);
         setIsGenerating(false);
       }, "image/png");
@@ -511,9 +493,14 @@ export function PlayoffPredictionModal({ isOpen, onClose, afcSeeds, nfcSeeds }: 
     }
   };
 
+  // 𝕏 でポスト（ご指定のフォーマット）
   const openTwitterIntent = () => {
+    const champName = superBowlChamp ? getTeamInfo(superBowlChamp).name : "未定";
     const text = encodeURIComponent(
-      `私の2026-27 NFLプレイオフ勝敗予想！\nスーパーボウル覇者は【${superBowlChamp ? getTeamInfo(superBowlChamp).name : "未定"}】🏆\n\n#NFL #NFLJapan #NFLFanHub\nhttps://nfl-fanhub.onrender.com/simulator`
+      `2026-27シーズン NFLプレーオフ勝敗予想！\n` +
+      `スーパーボウル覇者は【${champName}】🏆\n\n` +
+      `#NFL #NFLJapan #NFLプレーオフ予想\n` +
+      `https://nfl-fanhub.onrender.com/simulator`
     );
     window.open(`https://twitter.com/intent/tweet?text=${text}`, "_blank");
   };
@@ -799,18 +786,21 @@ export function PlayoffPredictionModal({ isOpen, onClose, afcSeeds, nfcSeeds }: 
         {/* アクションボタン */}
         <div className="mt-3 flex flex-wrap items-center justify-end gap-2 pt-2.5 border-t border-slate-800">
           <button
+            type="button"
             onClick={openTwitterIntent}
-            className="inline-flex items-center gap-1 rounded-xl border border-slate-700 bg-slate-800 px-3 py-1.5 text-xs font-bold text-white hover:bg-slate-700"
+            className="inline-flex items-center gap-1.5 rounded-xl border border-slate-700 bg-slate-800 px-3.5 py-2 text-xs font-bold text-white hover:bg-slate-700 transition active:scale-95"
           >
-            X でポスト
+            <span className="font-display text-sm font-black leading-none">𝕏</span>
+            <span>でポスト</span>
           </button>
           <button
-            onClick={handleShareOrSave}
+            type="button"
+            onClick={handleDownloadImage}
             disabled={isGenerating || !superBowlChamp}
-            className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 px-3.5 py-1.5 text-xs font-black text-slate-950 shadow-md transition hover:from-amber-400 hover:to-orange-400 active:scale-95 disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 px-3.5 py-2 text-xs font-black text-slate-950 shadow-md transition hover:from-amber-400 hover:to-orange-400 active:scale-95 disabled:opacity-50"
           >
-            <Share2 className="h-3.5 w-3.5" />
-            <span>スマホ保存 / Xでシェア（画像添付）</span>
+            <Download className="h-4 w-4" />
+            <span>{isGenerating ? "保存中…" : "画像保存"}</span>
           </button>
         </div>
 
