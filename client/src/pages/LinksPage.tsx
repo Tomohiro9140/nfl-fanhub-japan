@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from "react";
-import { ArrowUpRight, ExternalLink, Globe, Lock, Mail, RefreshCw, Rss, HeartHandshake, Menu, X, Home, Database, Trophy, Zap, ChevronRight } from "lucide-react";
+import { ArrowUpRight, ExternalLink, Globe, Lock, Mail, RefreshCw, Rss, HeartHandshake, Menu, X, Home, Database, Trophy, GitFork, Activity, ChevronRight } from "lucide-react";
 import { getSortedMediaLinks } from "@/lib/nflMediaLinks";
 import { trpc } from "@/lib/trpc";
 
@@ -18,13 +18,14 @@ function displayDate(isoString: string) {
   }
 }
 
-// サイト内主要ナビゲーション項目
+// サイト内主要ナビゲーション項目（Excite Index削除、Fieldline & Coaching Tree追加）
 const NAV_ITEMS = [
-  { label: "HOME", href: "/", icon: Home, desc: "トップ・チーム速報・日程" },
-  { label: "ATLAS", href: "/atlas", icon: Database, desc: "選手名鑑・契約・スタッツ" },
-  { label: "PLAYOFF", href: "/playoff", icon: Trophy, desc: "プレイオフ進出シミュレーター" },
-  { label: "EXCITE INDEX", href: "/excite", icon: Zap, desc: "試合白熱度・見どころ指数" },
-  { label: "LINKS / COMMUNITY", href: "/links", icon: Globe, desc: "コミュニティ・ブログリンク集", current: true },
+  { label: "HOME", href: "/", icon: Home, desc: "トップ・速報" },
+  { label: "FIELDLINE", href: "/fieldline", icon: Activity, desc: "戦術・ドライブ分析" },
+  { label: "COACHING TREE", href: "/coaching-tree", icon: GitFork, desc: "コーチ相関ツリー" },
+  { label: "ATLAS", href: "/atlas", icon: Database, desc: "選手名鑑・契約" },
+  { label: "PLAYOFF", href: "/playoff", icon: Trophy, desc: "進出シミュレーター" },
+  { label: "LINKS", href: "/links", icon: Globe, desc: "ブログ・メディア", current: true },
 ];
 
 export default function LinksPage() {
@@ -47,7 +48,7 @@ export default function LinksPage() {
     <div className="min-h-screen bg-[#f5f2ea] text-[#10213a] selection:bg-[#e85d2a] selection:text-white">
       <div className="field-grid pointer-events-none fixed inset-0 z-0 opacity-[.16]" />
 
-      {/* 右上の三本線メニューボタン（フローティングヘッダー） */}
+      {/* ヘッダーバー */}
       <header className="relative z-30 mx-auto flex w-full max-w-5xl items-center justify-between px-3 pt-4 sm:px-6">
         <a href="/" className="flex items-center gap-2 group">
           <span className="font-display text-sm sm:text-base font-black tracking-wider text-[#10213a] group-hover:text-[#e85d2a] transition">
@@ -66,7 +67,7 @@ export default function LinksPage() {
         </button>
       </header>
 
-      {/* スライドイン ナビゲーションメニュー */}
+      {/* スライドイン ナビゲーションメニュー（画面の半分: w-1/2） */}
       {isNavOpen && (
         <div className="fixed inset-0 z-50 flex justify-end">
           {/* 背景オーバーレイ */}
@@ -75,23 +76,23 @@ export default function LinksPage() {
             onClick={() => setIsNavOpen(false)}
           />
 
-          {/* ドロワーメニュー本体 */}
-          <div className="relative z-10 flex h-full w-full max-w-xs flex-col border-l border-[#ded8cc] bg-[#fcfaf5] p-5 shadow-2xl">
-            <div className="flex items-center justify-between border-b border-[#ded8cc] pb-3">
-              <span className="font-mono text-xs font-bold tracking-widest text-[#64748b]">
-                NAVIGATION
+          {/* ドロワーメニュー本体（画面幅の50%） */}
+          <div className="relative z-10 flex h-full w-1/2 flex-col border-l border-[#ded8cc] bg-[#fcfaf5] p-3 shadow-2xl sm:p-4">
+            <div className="flex items-center justify-between border-b border-[#ded8cc] pb-2.5">
+              <span className="font-mono text-[10px] font-bold tracking-widest text-[#64748b]">
+                MENU
               </span>
               <button
                 type="button"
                 onClick={() => setIsNavOpen(false)}
-                className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-[#ded8cc] bg-white text-[#10213a] hover:bg-[#fffaf0]"
+                className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-[#ded8cc] bg-white text-[#10213a] hover:bg-[#fffaf0]"
                 aria-label="メニューを閉じる"
               >
-                <X className="h-4 w-4" />
+                <X className="h-3.5 w-3.5" />
               </button>
             </div>
 
-            <nav className="mt-4 flex-1 space-y-1.5 overflow-y-auto">
+            <nav className="mt-3 flex-1 space-y-1 overflow-y-auto">
               {NAV_ITEMS.map((item) => {
                 const Icon = item.icon;
                 return (
@@ -99,24 +100,24 @@ export default function LinksPage() {
                     key={item.href}
                     href={item.href}
                     onClick={() => setIsNavOpen(false)}
-                    className={`group flex items-center justify-between rounded-lg border p-2.5 transition ${
+                    className={`group flex items-center justify-between rounded-lg border px-2 py-2 transition ${
                       item.current
                         ? "border-[#10213a] bg-[#10213a] text-white shadow-sm"
                         : "border-transparent bg-transparent text-[#10213a] hover:border-[#ded8cc] hover:bg-white"
                     }`}
                   >
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-2 min-w-0 pr-1">
                       <div
-                        className={`grid h-7 w-7 place-items-center rounded-md ${
+                        className={`grid h-6 w-6 shrink-0 place-items-center rounded-md ${
                           item.current ? "bg-[#e85d2a] text-white" : "bg-[#ded8cc]/50 text-[#10213a]"
                         }`}
                       >
-                        <Icon className="h-3.5 w-3.5" />
+                        <Icon className="h-3 w-3" />
                       </div>
-                      <div>
-                        <p className="font-display text-xs font-bold leading-none">{item.label}</p>
+                      <div className="min-w-0">
+                        <p className="font-display text-[11px] font-bold leading-tight truncate">{item.label}</p>
                         <p
-                          className={`mt-1 font-mono text-[9px] ${
+                          className={`font-mono text-[8.5px] truncate ${
                             item.current ? "text-slate-300" : "text-[#64748b]"
                           }`}
                         >
@@ -125,7 +126,7 @@ export default function LinksPage() {
                       </div>
                     </div>
                     <ChevronRight
-                      className={`h-3.5 w-3.5 transition group-hover:translate-x-0.5 ${
+                      className={`h-3 w-3 shrink-0 transition group-hover:translate-x-0.5 ${
                         item.current ? "text-[#e85d2a]" : "text-[#94a3b8]"
                       }`}
                     />
@@ -134,9 +135,9 @@ export default function LinksPage() {
               })}
             </nav>
 
-            <div className="border-t border-[#ded8cc] pt-3 text-center">
-              <p className="font-mono text-[9px] text-[#94a3b8]">
-                NFL FAN HUB JAPAN © 2026
+            <div className="border-t border-[#ded8cc] pt-2.5 text-center">
+              <p className="font-mono text-[8.5px] text-[#94a3b8]">
+                NFL FAN HUB © 2026
               </p>
             </div>
           </div>
@@ -298,7 +299,7 @@ export default function LinksPage() {
           </section>
         )}
 
-        {/* 3. リンク集・フィードのご案内とお問い合わせ（修正版文面） */}
+        {/* 3. リンク集・フィードのご案内とお問い合わせ */}
         <section className="mt-10 rounded-xl border border-[#ded8cc] bg-[#fffdf8] p-4 sm:p-5 text-xs text-[#526173]">
           <div className="flex items-center gap-2 font-mono text-[11px] font-bold text-[#10213a]">
             <HeartHandshake className="h-4 w-4 text-[#e85d2a]" />
