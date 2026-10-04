@@ -637,7 +637,6 @@ export const NFL_MEDIA_LINKS: NFLMediaLinkItem[] = [
     isPermitted: true, // 最上位固定のため常に最優先
     isPinnedTop: true,
     showInTeamLatest: false,
-    rssUrl: "https://ames-nfl.com/rss",
     memo: "リンクのみ",
   },
   {
