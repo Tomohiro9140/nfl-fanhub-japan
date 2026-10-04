@@ -14,6 +14,7 @@ import { compareFieldlineSelections, FIELDLINE_TEAM_CODES, FIELDLINE_TEAM_NAMES,
 import { getOfficialGameStats } from "./officialGameStats";
 import { playoffRouter } from "./playoffRouter";
 import { exciteIndexRouter } from "./exciteIndexRouter";
+import { getAllBlogArticles, getTeamBlogArticles } from "./blogRss";
 
 const fieldlineVenueSchema = z.enum(["all", "home", "away"]);
 const fieldlineSelectionSchema = z.object({
@@ -184,6 +185,22 @@ export const appRouter = router({
   }),
   playoff: playoffRouter,
   exciteIndex: exciteIndexRouter,
+  // === 日本人ブログ・メディア向け RSS / リンク集 API ===
+  blogFeed: router({
+    // Link ページ用の最新記事フィード一覧 (全媒体)
+    latest: publicProcedure
+      .input(z.object({ limit: z.number().int().min(1).max(100).optional().default(40) }).optional())
+      .query(async ({ input }) => {
+        const limit = input?.limit ?? 40;
+        return await getAllBlogArticles(limit);
+      }),
+    // チーム別 Latest News 連携用 (No.1〜15)
+    byTeam: publicProcedure
+      .input(z.object({ teamCode: z.string().length(2).or(z.string().length(3)) }))
+      .query(async ({ input }) => {
+        return await getTeamBlogArticles(input.teamCode.toUpperCase() as any, 5);
+      }),
+  }),
 });
 
 export type AppRouter = typeof appRouter;
