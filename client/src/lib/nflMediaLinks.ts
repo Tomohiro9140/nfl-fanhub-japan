@@ -8,13 +8,32 @@ export type NFLTeamCode =
   | "LV"  | "LAC" | "LAR" | "MIA" | "MIN" | "NE"  | "NO"  | "NYG"
   | "NYJ" | "PHI" | "PIT" | "SF"  | "SEA" | "TB"  | "TEN" | "WAS";
 
+/** NFL地区順（BUFからスタート: AFC東→北→南→西、NFC東→北→南→西） */
+export const DIVISION_TEAM_ORDER: NFLTeamCode[] = [
+  // AFC East
+  "BUF", "MIA", "NE", "NYJ",
+  // AFC North
+  "BAL", "CIN", "CLE", "PIT",
+  // AFC South
+  "HOU", "IND", "JAX", "TEN",
+  // AFC West
+  "DEN", "KC", "LV", "LAC",
+  // NFC East
+  "DAL", "NYG", "PHI", "WAS",
+  // NFC North
+  "CHI", "DET", "GB", "MIN",
+  // NFC South
+  "ATL", "CAR", "NO", "TB",
+  // NFC West
+  "ARI", "LAR", "SF", "SEA",
+];
+
 export interface BlogFilterRule {
-  /** タイトルにこのいずれかが含まれている必要がある場合 */
   titleKeywords?: string[];
-  /** カテゴリーやタグ、URLに含まれるべき文字列 */
   categoryOrTagKeywords?: string[];
-  /** 特定のURLパターンのもののみ取得する場合 */
   targetUrlPattern?: RegExp;
+  /** NPBや日常記事などを確実に弾くための除外キーワード */
+  excludeKeywords?: string[];
 }
 
 export interface NFLMediaLinkItem {
@@ -25,15 +44,10 @@ export interface NFLMediaLinkItem {
   targetTeam?: NFLTeamCode;
   targetTeamName?: string;
   statusText: string;
-  /** 許諾済みフラグ (許諾済 / 済) */
   isPermitted: boolean;
-  /** 最上位固定フラグ (No.45 Ames) */
   isPinnedTop?: boolean;
-  /** チームページの Latest News に掲載するか (No.1〜15) */
   showInTeamLatest: boolean;
-  /** 記事ピックアップ用個別ルール */
   filterRule?: BlogFilterRule;
-  /** 予想されるRSSフィードURL */
   rssUrl?: string;
   memo?: string;
 }
@@ -315,6 +329,15 @@ export const NFL_MEDIA_LINKS: NFLMediaLinkItem[] = [
     isPermitted: true,
     showInTeamLatest: false,
     rssUrl: "https://rssblog.ameba.jp/lovelycat-chobi/rss20.xml",
+    filterRule: {
+      // テーマ（カテゴリー）またはタイトルに「シーホークス」を含む記事のみ
+      categoryOrTagKeywords: ["シーホークス", "Seahawks"],
+      // NPB等の野球・他スポーツ記事を確実に遮断
+      excludeKeywords: [
+        "NPB", "セ・リーグ", "パ・リーグ", "クライマックスシリーズ",
+        "ジャイアンツ", "タイガース", "プロ野球", "甲子園", "ドラフト会議"
+      ],
+    },
     memo: "テーマにシーホークスがついているもの",
   },
   {
@@ -634,7 +657,7 @@ export const NFL_MEDIA_LINKS: NFLMediaLinkItem[] = [
     url: "https://ames-nfl.com/",
     category: "special",
     statusText: "神サイト",
-    isPermitted: true, // 最上位固定のため常に最優先
+    isPermitted: true,
     isPinnedTop: true,
     showInTeamLatest: false,
     memo: "リンクのみ",
@@ -675,17 +698,46 @@ export const NFL_MEDIA_LINKS: NFLMediaLinkItem[] = [
 ];
 
 /**
- * リンク集ページ向けのソート済みリストを取得
- * 1. No.45 Ames を最上位（Pinned）
- * 2. 許諾済み（isPermitted = true）を昇順
- * 3. 未許諾・連絡待ちをID順
+ * リンク集ページ向けの厳密ソートリスト
+ * 1. AmesNFL
+ * 2. 許諾済チームブログ（地区順にBUFからスタート）
+ * 3. 許諾済総合ブログ
+ * 4. 許諾なしチームブログ（地区順にBUFからスタート）
+ * 5. 許諾なし総合ブログ
  */
 export function getSortedMediaLinks(): NFLMediaLinkItem[] {
   return [...NFL_MEDIA_LINKS].sort((a, b) => {
+    // 1. AmesNFL 最上位
     if (a.isPinnedTop) return -1;
     if (b.isPinnedTop) return 1;
-    if (a.isPermitted && !b.isPermitted) return -1;
-    if (!a.isPermitted && b.isPermitted) return 1;
+
+    // 優先度ランクの決定
+    const getRank = (item: NFLMediaLinkItem) => {
+      if (item.isPermitted && item.targetTeam) return 1; // 許諾済チーム
+      if (item.isPermitted && !item.targetTeam) return 2; // 許諾済総合
+      if (!item.isPermitted && item.targetTeam) return 3; // 許諾なしチーム
+      return 4;                                          // 許諾なし総合
+    };
+
+    const rankA = getRank(a);
+    const rankB = getRank(b);
+
+    if (rankA !== rankB) {
+      return rankA - rankB;
+    }
+
+    // チームブログ同士（Rank 1 または Rank 3）は地区順（BUFから）
+    if ((rankA === 1 || rankA === 3) && a.targetTeam && b.targetTeam) {
+      const idxA = DIVISION_TEAM_ORDER.indexOf(a.targetTeam);
+      const idxB = DIVISION_TEAM_ORDER.indexOf(b.targetTeam);
+      const orderA = idxA !== -1 ? idxA : 999;
+      const orderB = idxB !== -1 ? idxB : 999;
+      if (orderA !== orderB) {
+        return orderA - orderB;
+      }
+    }
+
+    // 同一チーム内、または総合ブログ同士はID順
     return a.id - b.id;
   });
 }
