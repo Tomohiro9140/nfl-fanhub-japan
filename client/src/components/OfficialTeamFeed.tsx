@@ -1,13 +1,14 @@
 import React, { useMemo, useState } from "react";
-import { ArrowUpRight, BadgeCheck, CircleAlert, Newspaper, Radio, RefreshCw, Sparkles, Tv, ChevronDown, ChevronUp, Globe } from "lucide-react";
+import { ArrowUpRight, BadgeCheck, CircleAlert, Newspaper, Radio, RefreshCw, Sparkles, Tv, ChevronDown, ChevronUp, Globe, Rss, Lock } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { dedupeDisplayArticles } from "@/lib/articleDedup";
 import type { FavoriteTeam } from "@/lib/nflTeams";
 import { ArticleSummaryDialog } from "./ArticleSummaryDialog";
 
-type SourceKind = "team_official" | "nfl_official" | "pft" | "cbs" | "local";
+type SourceKind = "team_official" | "nfl_official" | "pft" | "cbs" | "local" | "blog";
+
 type FeedItem = {
-  id: number;
+  id: number | string;
   title: string;
   summary: string | null;
   japaneseSummary?: string | null;
@@ -18,9 +19,13 @@ type FeedItem = {
   category: "news" | "injury" | "transaction";
   publishedAt: Date;
   fetchedAt: Date;
+  isPaid?: boolean;
 };
+
 type CompletedGame = { gameState: string | null; gameDate?: string | null; finishedAt?: Date | null; kickoffAt: Date; kickoffAtEstimated?: boolean };
-const externalSourceKinds = new Set<SourceKind>(["pft", "cbs", "local"]);
+
+// ブログ記事の表示期限（7日間）
+const BLOG_EXPIRATION_MS = 7 * 24 * 60 * 60 * 1000;
 
 function isRosterMoveNews(item: FeedItem) {
   if (item.sourceKind !== "team_official") return false;
@@ -35,6 +40,7 @@ function isBroadcastOrWatchArticle(item: FeedItem) {
 }
 
 function isNonEnglishArticle(item: FeedItem) {
+  if (item.sourceKind === "blog") return false;
   const text = `${item.title} ${item.summary ?? ""} ${item.sourceUrl}`.toLowerCase();
   if (/\/(?:es|espanol|somos-?cowboys)\//i.test(item.sourceUrl)) return true;
   if (/\b(?:claves del juego|contra|semana|lesi[oó]n|en vivo|partido|temporada|entrenamiento|noticias|jugador|equipo|alineaci[oó]n|por la|de la)\b/i.test(text)) return true;
@@ -50,12 +56,13 @@ function sourceLabel(kind: SourceKind) {
   if (kind === "pft") return "PFT";
   if (kind === "cbs") return "CBS";
   if (kind === "local") return "Local";
+  if (kind === "blog") return "BLOG";
   return "OFFICIAL";
 }
 
 function SourceMark({ kind }: { kind: SourceKind }) {
   const label = sourceLabel(kind);
-  const Icon = kind === "pft" ? Radio : kind === "cbs" ? Tv : kind === "local" ? Globe : BadgeCheck;
+  const Icon = kind === "pft" ? Radio : kind === "cbs" ? Tv : kind === "local" ? Globe : kind === "blog" ? Rss : BadgeCheck;
   const tone =
     kind === "pft"
       ? "border-[#bfd0e8] bg-[#eff5fb] text-[#23527d]"
@@ -63,6 +70,8 @@ function SourceMark({ kind }: { kind: SourceKind }) {
       ? "border-[#e7c5bf] bg-[#fff4ef] text-[#a34220]"
       : kind === "local"
       ? "border-[#d8ccf0] bg-[#f4effc] text-[#5b2f8c]"
+      : kind === "blog"
+      ? "border-[#e85d2a]/30 bg-[#fff4ef] text-[#e85d2a]"
       : "border-[#cfe6c4] bg-[#f0f8eb] text-[#426237]";
 
   return (
@@ -87,8 +96,12 @@ export function shouldHideAllSpoilerNews(game?: CompletedGame) {
   return Boolean(game?.kickoffAtEstimated && !game.gameDate && /live|ingame|in_progress|halftime/i.test(game.gameState ?? ""));
 }
 
+/**
+ * 公式ニュースとチームブログ記事を統合して選出
+ */
 export function selectLatestNews(
   items: FeedItem[],
+  blogItems: FeedItem[] = [],
   hideFrom?: Date | null,
   hideAll = false,
   spoilerMode = false,
@@ -105,17 +118,12 @@ export function selectLatestNews(
     return true;
   });
 
-  const sorted = dedupeDisplayArticles(
+  const sortedOfficial = dedupeDisplayArticles(
     filtered.sort((left, right) => new Date(right.publishedAt).getTime() - new Date(left.publishedAt).getTime())
   );
 
-  // 枠設定: 8件 (3/3/1/1) または 15件 (4/4/2/2 + 新着3)
-  const quota = limit === 15
-    ? { official: 4, local: 4, cbs: 2, pft: 2 }
-    : { official: 3, local: 3, cbs: 1, pft: 1 };
-
   const selected: FeedItem[] = [];
-  const selectedIds = new Set<number>();
+  const selectedIds = new Set<number | string>();
 
   const addIfUnique = (item: FeedItem) => {
     if (!selectedIds.has(item.id)) {
@@ -124,29 +132,46 @@ export function selectLatestNews(
     }
   };
 
-  // 1. Team Official 枠
-  const officialItems = sorted.filter((item) => item.sourceKind === "team_official" || item.sourceKind === "nfl_official");
+  // 1. チームブログ枠（公開から7日以内のみ・通常時 最大2件、展開時 最大3件）
+  const blogQuota = limit === 15 ? 3 : 2;
+  const now = Date.now();
+  const validBlogItems = blogItems.filter((item) => {
+    const pubTime = new Date(item.publishedAt).getTime();
+    if (hideFrom && pubTime >= hideFrom.getTime()) return false;
+    // 公開から7日超過の記事は除外
+    if (now - pubTime > BLOG_EXPIRATION_MS) return false;
+    return true;
+  });
+  validBlogItems.slice(0, blogQuota).forEach(addIfUnique);
+
+  // 2. 公式ニュースの枠設定
+  const quota = limit === 15
+    ? { official: 4, local: 4, cbs: 2, pft: 2 }
+    : { official: 3, local: 2, cbs: 1, pft: 1 };
+
+  // 2-1. Team Official 枠
+  const officialItems = sortedOfficial.filter((item) => item.sourceKind === "team_official" || item.sourceKind === "nfl_official");
   officialItems.slice(0, quota.official).forEach(addIfUnique);
 
-  // 2. Local (SB Nation) 枠
-  const localItems = sorted.filter((item) => item.sourceKind === "local");
+  // 2-2. Local (SB Nation) 枠
+  const localItems = sortedOfficial.filter((item) => item.sourceKind === "local");
   localItems.slice(0, quota.local).forEach(addIfUnique);
 
-  // 3. CBS 枠
-  const cbsItems = sorted.filter((item) => item.sourceKind === "cbs");
+  // 2-3. CBS 枠
+  const cbsItems = sortedOfficial.filter((item) => item.sourceKind === "cbs");
   cbsItems.slice(0, quota.cbs).forEach(addIfUnique);
 
-  // 4. PFT 枠
-  const pftItems = sorted.filter((item) => item.sourceKind === "pft");
+  // 2-4. PFT 枠
+  const pftItems = sortedOfficial.filter((item) => item.sourceKind === "pft");
   pftItems.slice(0, quota.pft).forEach(addIfUnique);
 
-  // 5. 残り枠（15件時の残り3枠や、各ソース不足時の穴埋め）を最新順で補充
-  for (const item of sorted) {
+  // 3. 残り枠を最新順で補充
+  for (const item of sortedOfficial) {
     if (selected.length >= limit) break;
     addIfUnique(item);
   }
 
-  // 6. 枠取りされた記事を最終的に公開日時の降順（最新順）でソート
+  // 4. 最終的に全体を公開日時の降順（最新順）でソート
   return selected
     .slice(0, limit)
     .sort((left, right) => new Date(right.publishedAt).getTime() - new Date(left.publishedAt).getTime());
@@ -160,16 +185,50 @@ export function OfficialTeamFeed({ favorite, spoilerMode = false, completedGame 
   const [isExpanded, setIsExpanded] = useState(false);
   const shouldSimulateUnavailable = typeof window !== "undefined" && import.meta.env.DEV && new URLSearchParams(window.location.search).has("feedError");
   const feedInput = useMemo(() => ({ teamCode: shouldSimulateUnavailable ? "XXX" : favorite.code }), [shouldSimulateUnavailable, favorite.code]);
+
   const feed = trpc.officialFeed.byTeam.useQuery(feedInput, { refetchInterval: 15 * 60 * 1000, staleTime: 15 * 60 * 1000, refetchOnWindowFocus: false, refetchOnReconnect: false, retry: 1 });
+
+  const blogFeed = trpc.blogFeed.byTeam.useQuery(
+    { teamCode: favorite.code },
+    { refetchInterval: 15 * 60 * 1000, staleTime: 15 * 60 * 1000, refetchOnWindowFocus: false, retry: 1 }
+  );
+
   const refresh = trpc.officialFeed.refresh.useMutation({
     onSuccess: () => {
       void feed.refetch();
+      void blogFeed.refetch();
     },
   });
+
   const displayError = feed.isError || shouldSimulateUnavailable;
   const items = (shouldSimulateUnavailable ? [] : feed.data?.items ?? []) as FeedItem[];
 
-  // 試合中（LIVE）または保護対象の直前完了試合（FINAL）であるか判定
+  // ブログ記事データを FeedItem 形式に正規化（公開から7日以内の新鮮な記事のみ）
+  const blogItems: FeedItem[] = useMemo(() => {
+    if (!blogFeed.data || blogFeed.data.length === 0) return [];
+    const now = Date.now();
+
+    return blogFeed.data
+      .filter((b) => {
+        const pubTime = new Date(b.publishedAt).getTime();
+        // 7日以上前の古いブログ記事は除外
+        return !Number.isNaN(pubTime) && now - pubTime <= BLOG_EXPIRATION_MS;
+      })
+      .map((b) => ({
+        id: `blog-${b.id}`,
+        title: b.title,
+        summary: b.summary,
+        japaneseSummary: b.summary,
+        sourceUrl: b.link,
+        sourceName: b.sourceName,
+        sourceKind: "blog" as const,
+        category: "news" as const,
+        publishedAt: new Date(b.publishedAt),
+        fetchedAt: new Date(),
+        isPaid: b.isPaid,
+      }));
+  }, [blogFeed.data]);
+
   const isLiveOrProtectedFinal = Boolean(
     completedGame && (
       /live|ingame|in_progress|halftime/i.test(completedGame.gameState ?? "") ||
@@ -178,15 +237,13 @@ export function OfficialTeamFeed({ favorite, spoilerMode = false, completedGame 
     )
   );
 
-  // 水曜切り替え後〜次回試合開始前（平時）は、ネタバレ防止オンオフに関係なく全てのNewsを表示
   const effectiveSpoilerMode = isLiveOrProtectedFinal ? spoilerMode : false;
   const hideFrom = effectiveSpoilerMode ? spoilerNewsCutoff(completedGame) : null;
   const hideAll = effectiveSpoilerMode && shouldHideAllSpoilerNews(completedGame);
 
-  // 開閉状態（isExpanded）に応じて 8件 または 15件 を選出
   const news = useMemo(
-    () => selectLatestNews(items, hideFrom, hideAll, effectiveSpoilerMode, isExpanded ? 15 : 8),
-    [items, hideFrom, hideAll, effectiveSpoilerMode, isExpanded]
+    () => selectLatestNews(items, blogItems, hideFrom, hideAll, effectiveSpoilerMode, isExpanded ? 15 : 8),
+    [items, blogItems, hideFrom, hideAll, effectiveSpoilerMode, isExpanded]
   );
 
   const [activeArticle, setActiveArticle] = useState<FeedItem | null>(null);
@@ -208,14 +265,19 @@ export function OfficialTeamFeed({ favorite, spoilerMode = false, completedGame 
               <p className="font-display text-lg font-bold tracking-wide">LATEST NEWS</p>
             </div>
             <button
-              onClick={() => refresh.mutate(feedInput)}
-              disabled={feed.isFetching || refresh.isPending || shouldSimulateUnavailable}
+              onClick={() => {
+                refresh.mutate(feedInput);
+                void blogFeed.refetch();
+              }}
+              disabled={feed.isFetching || blogFeed.isFetching || refresh.isPending || shouldSimulateUnavailable}
               className="inline-flex items-center gap-1 font-mono text-[9px] font-bold tracking-[.1em] text-[#526173] hover:text-[#e85d2a] disabled:opacity-50"
-              aria-label="チーム公式RSSとNFL公式負傷情報を同期して最新ニュースを更新"
+              aria-label="チーム公式RSS・ブログ記事を同期して最新ニュースを更新"
             >
-              <RefreshCw className={`h-3.5 w-3.5 ${feed.isFetching || refresh.isPending ? "animate-spin" : ""}`} /> {refresh.isPending ? "UPDATING" : "REFRESH"}
+              <RefreshCw className={`h-3.5 w-3.5 ${feed.isFetching || blogFeed.isFetching || refresh.isPending ? "animate-spin" : ""}`} />{" "}
+              {refresh.isPending ? "UPDATING" : "REFRESH"}
             </button>
           </div>
+
           {feed.isLoading && !shouldSimulateUnavailable ? (
             <div className="py-5 text-center font-mono text-[10px] text-[#64748b]">LOADING TEAM NEWS…</div>
           ) : news.length > 0 ? (
@@ -225,7 +287,13 @@ export function OfficialTeamFeed({ favorite, spoilerMode = false, completedGame 
                   <button
                     key={item.id}
                     type="button"
-                    onClick={() => setActiveArticle(item)}
+                    onClick={() => {
+                      if (item.sourceKind === "blog") {
+                        window.open(item.sourceUrl, "_blank", "noopener,noreferrer");
+                      } else {
+                        setActiveArticle(item);
+                      }
+                    }}
                     data-feed-article="latest-news"
                     data-article-url={item.sourceUrl}
                     aria-label={`${item.title}の要約を読む`}
@@ -234,19 +302,42 @@ export function OfficialTeamFeed({ favorite, spoilerMode = false, completedGame 
                     <SourceMark kind={item.sourceKind} />
                     <span className="min-w-0 flex-1">
                       <span className="flex items-center justify-between gap-2">
-                        <span className="font-display text-base font-bold tracking-wide group-hover:text-[#e85d2a] transition-colors">{item.title}</span>
-                        <span className="inline-flex items-center gap-0.5 font-mono text-[9px] font-bold text-[#e85d2a] shrink-0 opacity-80 group-hover:opacity-100">
-                          <Sparkles className="h-3 w-3" /> 要約
+                        <span className="font-display text-base font-bold tracking-wide group-hover:text-[#e85d2a] transition-colors line-clamp-2">
+                          {item.title}
                         </span>
+
+                        {item.sourceKind === "blog" ? (
+                          <span className="inline-flex items-center gap-0.5 font-mono text-[9px] font-bold text-[#e85d2a] shrink-0 opacity-80 group-hover:opacity-100">
+                            <ArrowUpRight className="h-3 w-3" /> 記事へ
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-0.5 font-mono text-[9px] font-bold text-[#e85d2a] shrink-0 opacity-80 group-hover:opacity-100">
+                            <Sparkles className="h-3 w-3" /> 要約
+                          </span>
+                        )}
                       </span>
-                      <span className="mt-1 block font-mono text-[8px] font-bold tracking-[.05em] text-[#94a3b8]">PUBLISHED · {displayDate(item.publishedAt)}</span>
+
+                      <span className="mt-1 flex flex-wrap items-center gap-2 font-mono text-[8px] font-bold tracking-[.05em] text-[#94a3b8]">
+                        {item.sourceKind === "blog" && (
+                          <span className="text-[#e85d2a] font-bold truncate max-w-[150px]">
+                            {item.sourceName}
+                          </span>
+                        )}
+
+                        {item.isPaid && (
+                          <span className="inline-flex items-center gap-0.5 rounded border border-[#e85d2a]/30 bg-[#fff4ef] px-1 py-0.2 font-mono text-[8px] font-bold text-[#e85d2a]">
+                            <Lock className="h-2 w-2" /> 有料
+                          </span>
+                        )}
+
+                        <span>PUBLISHED · {displayDate(item.publishedAt)}</span>
+                      </span>
                     </span>
                   </button>
                 ))}
               </div>
 
-              {/* 記事が8件以上ある場合に表示される開閉アコーディオンボタン */}
-              {items.filter((i) => i.category === "news").length > 8 && (
+              {items.filter((i) => i.category === "news").length + blogItems.length > 8 && (
                 <div className="border-t border-[#eeeae1] pt-2 text-center">
                   <button
                     type="button"

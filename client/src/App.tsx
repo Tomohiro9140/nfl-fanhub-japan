@@ -14,6 +14,7 @@ const CoachingTree = lazy(preloadCoachingTreeRoute);
 const Fieldline = lazy(preloadFieldlineRoute);
 const FieldlineAdmin = lazy(() => import("./pages/FieldlineAdmin"));
 const PlayoffMachine = lazy(() => import("./pages/PlayoffMachine"));
+const LinksPage = lazy(() => import("./pages/LinksPage"));
 
 function RouteLoading() {
   return <main className="grid min-h-screen place-items-center bg-[#f5f2ea] font-mono text-[10px] font-bold tracking-[.18em] text-[#526173]">LOADING...</main>;
@@ -33,6 +34,10 @@ function Router() {
         <Route path="/fieldline/admin/" component={FieldlineAdmin} />
         <Route path="/fieldline" component={Fieldline} />
         <Route path="/fieldline/" component={Fieldline} />
+        <Route path="/links" component={LinksPage} />
+        <Route path="/links/" component={LinksPage} />
+        <Route path="/link" component={LinksPage} />
+        <Route path="/link/" component={LinksPage} />
         <Route path="/simulator" component={PlayoffMachine} />
         <Route path="/simulator/" component={PlayoffMachine} />
         <Route path="/playoffs" component={PlayoffMachine} />
