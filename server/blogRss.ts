@@ -10,7 +10,7 @@ export interface ParsedBlogArticle {
   link: string;
   publishedAt: string; // ISO 8601
   summary: string;
-  isPaid: boolean;     // Note等の有料記事バッジ用
+  isPaid: boolean;     // Note等の有料・メンバーシップ限定バッジ用
 }
 
 // 15分間のインメモリキャッシュ
@@ -23,28 +23,52 @@ const blogCache: { all?: CacheEntry; byTeam: Record<string, CacheEntry> } = {
 };
 const CACHE_TTL_MS = 15 * 60 * 1000; // 15分
 
+// 有料判定の個別キャッシュ（記事URL -> isPaid）
+const paidStatusCache = new Map<string, boolean>();
+
 /**
- * Note記事などの有料判定ロジック
+ * Note記事などの有料・メンバーシップ判定ロジック（Schema.org & タイトル判定）
  */
-function detectIsPaidArticle(title: string, content: string, url: string): boolean {
-  // 1. タイトルでの明示的な有料表記
-  if (/【有料】|\[有料\]|（有料）|\(有料\)|\bPAID\b/i.test(title)) {
+async function detectIsPaidArticle(title: string, content: string, url: string): Promise<boolean> {
+  // 1. タイトルでの明示的な有料・メンバーシップ表記
+  const paidTitleRegex = /【有料】|\[有料\]|（有料）|\(有料\)|\bPAID\b|メンバーシップ|メンバー限定|会員限定|定期購読|プレミアム/i;
+  if (paidTitleRegex.test(title)) {
     return true;
   }
 
-  // 2. Note (note.com) の本文・概要に含まれる有料区切りパターン
-  if (url.includes("note.com")) {
-    const paidPatterns = [
-      /この続きをみるには/i,
-      /購入して続きを読む/i,
-      /記事のご購入/i,
-      /有料エリア/i,
-      /有料記事/i,
-      /マガジンを購入/i,
-      /価格[:：]\s*\d+円/i,
-    ];
-    if (paidPatterns.some((pattern) => pattern.test(content))) {
-      return true;
+  // 2. 本文・概要に含まれる有料区切りパターン
+  const paidContentRegex = /この続きをみるには|購入して続きを読む|記事のご購入|有料エリア|有料記事|マガジンを購入|メンバーシップ/i;
+  if (paidContentRegex.test(content)) {
+    return true;
+  }
+
+  // 3. note.com 記事の場合、キャッシュまたはHTMLの Schema.org ("isAccessibleForFree":false) で確定判定
+  if (url.includes("note.com/")) {
+    if (paidStatusCache.has(url)) {
+      return paidStatusCache.get(url)!;
+    }
+
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 2500); // 2.5秒タイムアウト
+      const res = await fetch(url, {
+        signal: controller.signal,
+        headers: {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko)",
+          "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
+        }
+      });
+      clearTimeout(timeout);
+
+      if (res.ok) {
+        const html = await res.text();
+        // note公式の有料指定: "isAccessibleForFree":false または .note-paywall
+        const isPaid = html.includes('"isAccessibleForFree":false') || html.includes('"isAccessibleForFree": false') || html.includes('.note-paywall');
+        paidStatusCache.set(url, isPaid);
+        return isPaid;
+      }
+    } catch {
+      // タイムアウト等の場合はfalseをフォールバック
     }
   }
 
@@ -69,24 +93,23 @@ function stripHtml(html: string): string {
 }
 
 /**
- * 軽量・ゼロ依存 XML (RSS/Atom) パーサー
+ * XML (RSS/Atom) パーサー
  */
-function parseRssXml(xml: string, source: NFLMediaLinkItem): ParsedBlogArticle[] {
+async function parseRssXml(xml: string, source: NFLMediaLinkItem): Promise<ParsedBlogArticle[]> {
   const articles: ParsedBlogArticle[] = [];
 
-  // RSS 2.0 (<item>) または Atom (<entry>) を抽出
   const itemRegex = /<(?:item|entry)[\s>]([\s\S]*?)<\/(?:item|entry)>/gi;
   let match: RegExpExecArray | null;
+
+  const rawItems: Array<{ title: string; link: string; rawDesc: string; combinedCategories: string; publishedAt: string }> = [];
 
   while ((match = itemRegex.exec(xml)) !== null) {
     const itemContent = match[1];
 
-    // タイトル
     const titleMatch = itemContent.match(/<title[^>]*>(?:<!\[CDATA\[([\s\S]*?)\]\]>|([\s\S]*?))<\/title>/i);
     const title = (titleMatch ? (titleMatch[1] ?? titleMatch[2]) : "").trim();
     if (!title) continue;
 
-    // リンク (RSS 2.0 の <link> または Atom の <link href="..." />)
     let link = "";
     const linkMatch = itemContent.match(/<link[^>]*>(?:<!\[CDATA\[([\s\S]*?)\]\]>|([\s\S]*?))<\/link>/i);
     if (linkMatch) {
@@ -98,12 +121,9 @@ function parseRssXml(xml: string, source: NFLMediaLinkItem): ParsedBlogArticle[]
     }
     if (!link) continue;
 
-    // 本文・概要 (<description> または <content> または <summary>)
     const descMatch = itemContent.match(/<(?:description|summary|content)[^>]*>(?:<!\[CDATA\[([\s\S]*?)\]\]>|([\s\S]*?))<\/(?:description|summary|content)>/i);
     const rawDesc = descMatch ? (descMatch[1] ?? descMatch[2] ?? "") : "";
-    const summary = stripHtml(rawDesc).slice(0, 140);
 
-    // カテゴリー / タグ (<category>タグ)
     const categoryMatches: string[] = [];
     const catRegex = /<category[^>]*>(?:<!\[CDATA\[([\s\S]*?)\]\]>|([\s\S]*?))<\/category>/gi;
     let catM: RegExpExecArray | null;
@@ -113,7 +133,6 @@ function parseRssXml(xml: string, source: NFLMediaLinkItem): ParsedBlogArticle[]
     }
     const combinedCategories = categoryMatches.join(" ");
 
-    // 日時 (<pubDate> または <published> または <updated>)
     const dateMatch = itemContent.match(/<(?:pubDate|published|updated|dc:date)[^>]*>([\s\S]*?)<\/(?:pubDate|published|updated|dc:date)>/i);
     let publishedAt = new Date().toISOString();
     if (dateMatch) {
@@ -123,43 +142,34 @@ function parseRssXml(xml: string, source: NFLMediaLinkItem): ParsedBlogArticle[]
       }
     }
 
-    // --- 個別フィルタリングルールの適用 ---
+    // 個別フィルタールールチェック
     if (source.filterRule) {
       const { titleKeywords, categoryOrTagKeywords, targetUrlPattern } = source.filterRule;
-
-      // 1. タイトルキーワードチェック (No.10 リトルナイナー, No.15 アメフトーーク 等)
       if (titleKeywords && titleKeywords.length > 0) {
-        const matchesTitle = titleKeywords.some((kw) => title.toLowerCase().includes(kw.toLowerCase()));
-        if (!matchesTitle) continue;
+        if (!titleKeywords.some((kw) => title.toLowerCase().includes(kw.toLowerCase()))) continue;
       }
-
-      // 2. カテゴリ・タグキーワードチェック (No.14 JETS狂 等)
       if (categoryOrTagKeywords && categoryOrTagKeywords.length > 0) {
-        const matchesCategory = categoryOrTagKeywords.some((kw) =>
-          combinedCategories.toLowerCase().includes(kw.toLowerCase()) || link.toLowerCase().includes(kw.toLowerCase())
-        );
-        if (!matchesCategory) continue;
+        if (!categoryOrTagKeywords.some((kw) => combinedCategories.toLowerCase().includes(kw.toLowerCase()) || link.toLowerCase().includes(kw.toLowerCase()))) continue;
       }
-
-      // 3. URLパターンチェック (No.11, 12, 13, 38, 41 等)
-      if (targetUrlPattern && !targetUrlPattern.test(link)) {
-        continue;
-      }
+      if (targetUrlPattern && !targetUrlPattern.test(link)) continue;
     }
 
-    // 有料記事判定
-    const isPaid = detectIsPaidArticle(title, rawDesc, link);
+    rawItems.push({ title, link, rawDesc, combinedCategories, publishedAt });
+  }
 
+  // 最新10件について有料判定を実行
+  for (const item of rawItems.slice(0, 10)) {
+    const isPaid = await detectIsPaidArticle(item.title, item.rawDesc, item.link);
     articles.push({
-      id: `${source.id}-${Buffer.from(link).toString("base64").slice(-12)}`,
+      id: `${source.id}-${Buffer.from(item.link).toString("base64").slice(-12)}`,
       sourceId: source.id,
       sourceName: source.name,
       sourceUrl: source.url,
       targetTeam: source.targetTeam,
-      title,
-      link,
-      publishedAt,
-      summary,
+      title: item.title,
+      link: item.link,
+      publishedAt: item.publishedAt,
+      summary: stripHtml(item.rawDesc).slice(0, 140),
       isPaid,
     });
   }
@@ -175,7 +185,7 @@ async function fetchArticlesFromSource(source: NFLMediaLinkItem): Promise<Parsed
 
   try {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 6000); // 6秒タイムアウト
+    const timeout = setTimeout(() => controller.abort(), 6000);
 
     const res = await fetch(source.rssUrl, {
       signal: controller.signal,
@@ -188,23 +198,21 @@ async function fetchArticlesFromSource(source: NFLMediaLinkItem): Promise<Parsed
 
     if (!res.ok) return [];
     const xml = await res.text();
-    return parseRssXml(xml, source);
-  } catch (err) {
-    // タイムアウトや通信エラーはスキップして安全に空配列を返す
+    return await parseRssXml(xml, source);
+  } catch {
     return [];
   }
 }
 
 /**
- * 【Link ページ用】全ブログの最新記事一覧を取得（最新順）
+ * 全ブログの最新記事一覧を取得（最新順）
  */
-export async function getAllBlogArticles(limit = 40): Promise<ParsedBlogArticle[]> {
+export async function getAllBlogArticles(limit = 50): Promise<ParsedBlogArticle[]> {
   const now = Date.now();
   if (blogCache.all && now - blogCache.all.cachedAt < CACHE_TTL_MS) {
     return blogCache.all.articles.slice(0, limit);
   }
 
-  // RSS URLが存在するすべてのサイトから並行取得
   const targetSources = NFL_MEDIA_LINKS.filter((s) => Boolean(s.rssUrl));
   const results = await Promise.allSettled(targetSources.map(fetchArticlesFromSource));
 
@@ -215,7 +223,6 @@ export async function getAllBlogArticles(limit = 40): Promise<ParsedBlogArticle[
     }
   }
 
-  // 公開日時の降順（最新順）にソート
   allArticles.sort((a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime());
 
   blogCache.all = {
@@ -227,7 +234,7 @@ export async function getAllBlogArticles(limit = 40): Promise<ParsedBlogArticle[
 }
 
 /**
- * 【チームページ Latest News 用】指定チームのブログ記事を取得 (No.1〜15)
+ * チームページ用記事一覧を取得 (No.1〜15)
  */
 export async function getTeamBlogArticles(teamCode: NFLTeamCode, limit = 5): Promise<ParsedBlogArticle[]> {
   const now = Date.now();
@@ -236,7 +243,6 @@ export async function getTeamBlogArticles(teamCode: NFLTeamCode, limit = 5): Pro
     return cached.articles.slice(0, limit);
   }
 
-  // No.1〜15 の中で対象チームが一致するサイトを抽出
   const teamSources = NFL_MEDIA_LINKS.filter(
     (s) => s.showInTeamLatest && s.targetTeam === teamCode && Boolean(s.rssUrl)
   );
