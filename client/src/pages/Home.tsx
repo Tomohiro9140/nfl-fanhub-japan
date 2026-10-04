@@ -3,7 +3,23 @@
  * Stable team metadata stays local; game, roster, injury and news data arrive from official caches.
  */
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { CircleAlert, Eye, EyeOff, Flag, Flame, Menu, ShieldCheck, X } from "lucide-react";
+import {
+  CircleAlert,
+  Eye,
+  EyeOff,
+  Flag,
+  Flame,
+  Menu,
+  ShieldCheck,
+  X,
+  Home as HomeIcon,
+  Database,
+  Trophy,
+  GitFork,
+  Activity,
+  Globe,
+  ChevronRight,
+} from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { getTeamByCode, nflTeams, type FavoriteTeam, type TeamBrand } from "@/lib/nflTeams";
 import { OfficialTeamFeed } from "@/components/OfficialTeamFeed";
@@ -243,13 +259,11 @@ export default function Home() {
     );
   }, [latestResultQuery.data, favorite.code]);
 
-  /** ニュースフィードに渡す対象試合（水曜切り替え後は次回試合を優先し、平時の最新ニュース全件表示を保証） */
+  /** ニュースフィードに渡す対象試合 */
   const activeFeedGame = useMemo(() => {
-    // ユーザーが意図的に過去試合を表示中、または水曜朝前のリプレイ期間中のみ過去試合を対象とする
     if (forceLastGame || displaySnapshot?.canRestoreLastGame) {
       return latestCompletedGameForResult ?? displaySnapshot?.gameDayStatus ?? displaySnapshot?.nextGame;
     }
-    // 水曜切り替え後〜次回キックオフ前は、次回試合（または当日試合）を渡す
     return displaySnapshot?.gameDayStatus ?? displaySnapshot?.nextGame ?? undefined;
   }, [forceLastGame, displaySnapshot?.canRestoreLastGame, displaySnapshot?.gameDayStatus, displaySnapshot?.nextGame, latestCompletedGameForResult]);
 
@@ -340,7 +354,6 @@ export default function Home() {
     setForceLastGame(false);
   };
 
-  /** RETURN TO LAST GAME 押下時は localStorage を完全に破棄して確実に固定 */
   const restoreLastGame = () => {
     if (typeof window !== "undefined") {
       window.localStorage.removeItem(`${watchedTicketStorageKey}:${favorite.code}`);
@@ -350,9 +363,24 @@ export default function Home() {
     setForceLastGame(true);
   };
 
+  // メインナビゲーション項目定義
+  const navItems = useMemo(
+    () => [
+      { id: "HOME", label: "HOME", href: "#home", icon: HomeIcon, desc: "トップ・速報", current: true },
+      { id: "FIELDLINE", label: "FIELDLINE", href: "/fieldline/", icon: Activity, desc: "戦術・ドライブ分析", preload: warmFieldlineRoute },
+      { id: "COACHING TREE", label: "COACHING TREE", href: "/coaching-tree/", icon: GitFork, desc: "コーチ相関ツリー", preload: warmCoachingTreeRoute },
+      { id: "ATLAS", label: "ATLAS", href: "/atlas/", icon: Database, desc: "選手名鑑・契約", preload: warmAtlasRoute },
+      { id: "PLAYOFFS", label: "PLAYOFF", href: "/playoffs/", icon: Trophy, desc: "進出シミュレーター" },
+      { id: "LINKS", label: "LINKS", href: "/links", icon: Globe, desc: "ブログ・メディア" },
+    ],
+    []
+  );
+
   return (
     <div className="min-h-screen overflow-x-clip bg-[#f5f2ea] text-[#10213a] selection:bg-[#e85d2a] selection:text-white">
       <div className="field-grid pointer-events-none fixed inset-0 z-0 opacity-[.16]" />
+
+      {/* ヘッダー */}
       <header className="sticky top-0 z-30 border-b border-[#ded8cc]/80 bg-[#f5f2ea]/92 backdrop-blur-lg">
         <div className="mx-auto flex h-[68px] w-full min-w-0 max-w-6xl items-center justify-between px-4 sm:px-6">
           <a href="#home" className="flex items-center gap-2.5" aria-label="NFL Fan Hub Japan ホーム">
@@ -361,18 +389,20 @@ export default function Home() {
               FAN<span className="text-[#e85d2a]">/</span>HUB
             </span>
           </a>
+
+          {/* デスクトップナビゲーション */}
           <nav className="hidden items-center gap-1 md:flex" aria-label="主要ナビゲーション">
-            <a href="#home" className="nav-link">
+            <a href="#home" className="nav-link font-bold text-[#e85d2a]">
               HOME
             </a>
             <a
-              href="/atlas/"
-              onPointerEnter={warmAtlasRoute}
-              onPointerDown={warmAtlasRoute}
-              onFocus={warmAtlasRoute}
+              href="/fieldline/"
+              onPointerEnter={warmFieldlineRoute}
+              onPointerDown={warmFieldlineRoute}
+              onFocus={warmFieldlineRoute}
               className="nav-link"
             >
-              ATLAS
+              FIELDLINE
             </a>
             <a
               href="/coaching-tree/"
@@ -384,19 +414,22 @@ export default function Home() {
               COACHING TREE
             </a>
             <a
-              href="/fieldline/"
-              onPointerEnter={warmFieldlineRoute}
-              onPointerDown={warmFieldlineRoute}
-              onFocus={warmFieldlineRoute}
+              href="/atlas/"
+              onPointerEnter={warmAtlasRoute}
+              onPointerDown={warmAtlasRoute}
+              onFocus={warmAtlasRoute}
               className="nav-link"
             >
-              FIELDLINE
+              ATLAS
             </a>
-            {/* デスクトップ用 LINK ナビゲーション */}
+            <a href="/playoffs/" className="nav-link">
+              PLAYOFF
+            </a>
             <a href="/links" className="nav-link">
-              LINK
+              LINKS
             </a>
           </nav>
+
           <div className="flex items-center gap-2">
             <button
               onClick={() => setTeamDialogOpen(true)}
@@ -404,66 +437,100 @@ export default function Home() {
             >
               <Flag className="h-3.5 w-3.5 text-[#e85d2a]" /> TEAM / {favorite.code}
             </button>
+
+            {/* 三本線メニューボタン（共通メイン仕様） */}
             <button
-              onClick={() => setNavOpen((value) => !value)}
-              className="grid h-9 w-9 place-items-center rounded-full border border-[#d7d1c4] bg-white md:hidden"
+              onClick={() => setNavOpen(true)}
+              className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-[#d7d1c4] bg-white text-[#10213a] shadow-sm transition hover:border-[#10213a] hover:bg-[#fffaf0] active:scale-95"
               aria-label="メニューを開く"
             >
-              {navOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
+              <Menu className="h-4 w-4" />
             </button>
           </div>
         </div>
-        {navOpen && (
-          <nav className="border-t border-[#ded8cc] bg-[#fffdf8] p-3 md:hidden">
-            <div className="grid grid-cols-2 gap-2">
-              {[
-                ["HOME", "#home"],
-                ["ATLAS", "/atlas/"],
-                ["COACHING TREE", "/coaching-tree/"],
-                ["FIELDLINE", "/fieldline/"],
-                ["LINK", "/links"],
-              ].map(([label, href]) => (
-                <a
-                  onClick={() => setNavOpen(false)}
-                  onPointerEnter={
-                    label === "ATLAS"
-                      ? warmAtlasRoute
-                      : label === "COACHING TREE"
-                      ? warmCoachingTreeRoute
-                      : label === "FIELDLINE"
-                      ? warmFieldlineRoute
-                      : undefined
-                  }
-                  onPointerDown={
-                    label === "ATLAS"
-                      ? warmAtlasRoute
-                      : label === "COACHING TREE"
-                      ? warmCoachingTreeRoute
-                      : label === "FIELDLINE"
-                      ? warmFieldlineRoute
-                      : undefined
-                  }
-                  onFocus={
-                    label === "ATLAS"
-                      ? warmAtlasRoute
-                      : label === "COACHING TREE"
-                      ? warmCoachingTreeRoute
-                      : label === "FIELDLINE"
-                      ? warmFieldlineRoute
-                      : undefined
-                  }
-                  className="rounded-lg bg-[#f5f2ea] px-3 py-2.5 font-mono text-xs font-bold tracking-wider"
-                  href={href}
-                  key={label}
-                >
-                  {label}
-                </a>
-              ))}
-            </div>
-          </nav>
-        )}
       </header>
 
+      {/* スライドイン ナビゲーションメニュー（画面の半分: w-1/2） */}
+      {navOpen && (
+        <div className="fixed inset-0 z-50 flex justify-end">
+          {/* 背景オーバーレイ */}
+          <div
+            className="fixed inset-0 bg-black/40 backdrop-blur-sm transition-opacity"
+            onClick={() => setNavOpen(false)}
+          />
+
+          {/* ドロワーメニュー本体（画面幅の50%） */}
+          <div className="relative z-10 flex h-full w-1/2 flex-col border-l border-[#ded8cc] bg-[#fcfaf5] p-3 shadow-2xl sm:p-4">
+            <div className="flex items-center justify-between border-b border-[#ded8cc] pb-2.5">
+              <span className="font-mono text-[10px] font-bold tracking-widest text-[#64748b]">
+                MENU
+              </span>
+              <button
+                type="button"
+                onClick={() => setNavOpen(false)}
+                className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-[#ded8cc] bg-white text-[#10213a] hover:bg-[#fffaf0]"
+                aria-label="メニューを閉じる"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+
+            <nav className="mt-3 flex-1 space-y-1 overflow-y-auto">
+              {navItems.map((item) => {
+                const Icon = item.icon;
+                return (
+                  <a
+                    key={item.href}
+                    href={item.href}
+                    onClick={() => setNavOpen(false)}
+                    onPointerEnter={item.preload}
+                    onPointerDown={item.preload}
+                    onFocus={item.preload}
+                    className={`group flex items-center justify-between rounded-lg border px-2 py-2 transition ${
+                      item.current
+                        ? "border-[#10213a] bg-[#10213a] text-white shadow-sm"
+                        : "border-transparent bg-transparent text-[#10213a] hover:border-[#ded8cc] hover:bg-white"
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 min-w-0 pr-1 flex-1">
+                      <div
+                        className={`grid h-6 w-6 shrink-0 place-items-center rounded-md ${
+                          item.current ? "bg-[#e85d2a] text-white" : "bg-[#ded8cc]/50 text-[#10213a]"
+                        }`}
+                      >
+                        <Icon className="h-3 w-3" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="font-display text-[11px] font-bold leading-tight truncate">{item.label}</p>
+                        <p
+                          className={`font-mono text-[8.5px] truncate ${
+                            item.current ? "text-slate-300" : "text-[#64748b]"
+                          }`}
+                        >
+                          {item.desc}
+                        </p>
+                      </div>
+                    </div>
+                    <ChevronRight
+                      className={`h-3 w-3 shrink-0 transition group-hover:translate-x-0.5 ${
+                        item.current ? "text-[#e85d2a]" : "text-[#94a3b8]"
+                      }`}
+                    />
+                  </a>
+                );
+              })}
+            </nav>
+
+            <div className="border-t border-[#ded8cc] pt-2.5 text-center">
+              <p className="font-mono text-[8.5px] text-[#94a3b8]">
+                NFL FAN HUB © 2026
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 推しチーム選択モーダル */}
       <Dialog open={teamDialogOpen} onOpenChange={setTeamDialogOpen}>
         <DialogContent className="border-[#d7d1c4] bg-[#f5f2ea] p-5 sm:max-w-md" showCloseButton>
           <DialogHeader className="text-left">
