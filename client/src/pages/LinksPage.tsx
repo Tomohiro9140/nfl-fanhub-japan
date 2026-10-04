@@ -38,17 +38,13 @@ export default function LinksPage() {
     <div className="min-h-screen bg-[#f5f2ea] text-[#10213a] selection:bg-[#e85d2a] selection:text-white">
       <div className="field-grid pointer-events-none fixed inset-0 z-0 opacity-[.16]" />
 
-      {/* 共通ナビゲーションヘッダー（三本線・幅50%ドロワー） */}
+      {/* 共通ナビゲーション（右上の三本線ボタン ＋ 幅50%ドロワー） */}
       <EmbeddedAppNav current="LINKS" />
 
       <main className="relative z-10 mx-auto w-full min-w-0 max-w-5xl px-3 py-4 sm:px-6 sm:py-6">
-        {/* ヘッダーエリア */}
+        {/* ヘッダーエリア（薄いグレーの番号・英語を削除） */}
         <div className="mb-5 border-b border-[#ded8cc] pb-4">
-          <div className="flex items-center gap-2 font-mono text-[11px] font-bold tracking-[0.2em] text-[#64748b]">
-            <span className="text-[#10213a]">05</span>
-            <span>JAPAN NFL COMMUNITY & MEDIA</span>
-          </div>
-          <h1 className="mt-1 font-display text-2xl font-black tracking-tight text-[#10213a] sm:text-4xl">
+          <h1 className="font-display text-2xl font-black tracking-tight text-[#10213a] sm:text-4xl">
             LINKS <span className="text-[#e85d2a]">/</span> COMMUNITY
           </h1>
           <p className="mt-1 text-xs leading-relaxed text-[#526173] sm:text-sm">
