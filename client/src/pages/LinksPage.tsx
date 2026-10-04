@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from "react";
-import { ArrowUpRight, Crown, ExternalLink, Globe, Lock, Newspaper, RefreshCw, Rss, ShieldAlert, Sparkles } from "lucide-react";
-import { getSortedMediaLinks, type NFLMediaLinkItem } from "@/lib/nflMediaLinks";
+import { ArrowUpRight, ExternalLink, Globe, Lock, RefreshCw, Rss, ShieldAlert } from "lucide-react";
+import { getSortedMediaLinks } from "@/lib/nflMediaLinks";
 import { trpc } from "@/lib/trpc";
 
 function displayDate(isoString: string) {
@@ -23,10 +23,13 @@ export default function LinksPage() {
   const [activeTab, setActiveTab] = useState<"directory" | "feed">("feed");
 
   // 全ブログの最新記事フィード取得 (tRPC)
-  const feedQuery = trpc.blogFeed.latest.useQuery({ limit: 50 }, {
-    refetchInterval: 15 * 60 * 1000,
-    staleTime: 10 * 60 * 1000,
-  });
+  const feedQuery = trpc.blogFeed.latest.useQuery(
+    { limit: 50 },
+    {
+      refetchInterval: 15 * 60 * 1000,
+      staleTime: 10 * 60 * 1000,
+    }
+  );
 
   return (
     <div className="min-h-screen bg-[#f5f2ea] text-[#10213a] selection:bg-[#e85d2a] selection:text-white">
@@ -75,7 +78,7 @@ export default function LinksPage() {
           </div>
         </div>
 
-        {/* 1. 最新記事フィード (RSSリーダー) */}
+        {/* 1. 最新記事フィード (タイトル・ブログ名・更新日時・有料バッジのみ) */}
         {activeTab === "feed" && (
           <section className="space-y-4">
             <div className="flex items-center justify-between">
@@ -105,18 +108,19 @@ export default function LinksPage() {
                     href={item.link}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="group flex flex-col gap-1 p-3.5 transition hover:bg-[#fffaf0] sm:p-4"
+                    className="group flex flex-col gap-1.5 p-3.5 transition hover:bg-[#fffaf0] sm:p-4"
                   >
+                    {/* メタ情報行: 対象チーム / ブログ名 / 有料バッジ / 更新日時 */}
                     <div className="flex flex-wrap items-center gap-2">
-                      {/* 対象チーム略称バッジ */}
+                      {/* 対象チーム略称バッジ (存在する場合) */}
                       {item.targetTeam && (
                         <span className="inline-flex items-center rounded border border-[#10213a]/20 bg-[#10213a] px-1.5 py-0.5 font-mono text-[9px] font-black text-white">
                           {item.targetTeam}
                         </span>
                       )}
 
-                      {/* 媒体名 */}
-                      <span className="font-mono text-[10px] font-bold text-[#64748b]">
+                      {/* ブログ名 */}
+                      <span className="font-mono text-[11px] font-bold text-[#64748b]">
                         {item.sourceName}
                       </span>
 
@@ -127,24 +131,19 @@ export default function LinksPage() {
                         </span>
                       )}
 
-                      {/* 日時 */}
-                      <span className="ml-auto font-mono text-[9px] text-[#94a3b8]">
+                      {/* 更新日時 */}
+                      <span className="ml-auto font-mono text-[10px] text-[#94a3b8]">
                         {displayDate(item.publishedAt)}
                       </span>
                     </div>
 
-                    <div className="mt-1 flex items-start justify-between gap-3">
-                      <p className="font-display text-base font-bold text-[#10213a] transition-colors group-hover:text-[#e85d2a]">
+                    {/* タイトル行 (本文抜粋は非表示) */}
+                    <div className="flex items-start justify-between gap-3">
+                      <p className="font-display text-sm sm:text-base font-bold text-[#10213a] transition-colors group-hover:text-[#e85d2a] leading-snug">
                         {item.title}
                       </p>
-                      <ArrowUpRight className="h-4 w-4 shrink-0 text-[#94a3b8] transition group-hover:text-[#e85d2a]" />
+                      <ArrowUpRight className="h-4 w-4 shrink-0 text-[#94a3b8] transition group-hover:text-[#e85d2a] mt-0.5" />
                     </div>
-
-                    {item.summary && (
-                      <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-[#64748b]">
-                        {item.summary}
-                      </p>
-                    )}
                   </a>
                 ))}
               </div>
@@ -177,13 +176,6 @@ export default function LinksPage() {
                   >
                     <div className="min-w-0 flex-1 pr-2">
                       <div className="flex items-center gap-2">
-                        {/* No.45 Ames 専用ピン留めバッジ */}
-                        {isAmes && (
-                          <span className="inline-flex items-center gap-1 rounded bg-amber-500 px-1.5 py-0.5 font-mono text-[9px] font-black text-slate-950">
-                            <Crown className="h-3 w-3 fill-current" /> PINNED
-                          </span>
-                        )}
-
                         {/* 対象チーム略称バッジ (存在する場合のみ) */}
                         {item.targetTeam && (
                           <span className="inline-flex items-center rounded border border-[#10213a]/20 bg-[#10213a] px-1.5 py-0.5 font-mono text-[9px] font-black text-white">
