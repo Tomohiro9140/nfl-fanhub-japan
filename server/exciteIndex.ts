@@ -21,9 +21,9 @@ export interface ExciteIndexResult {
 /**
  * 試合の熱狂度指数（Excite Index: 0〜100点）と★評価を算出する
  * 
- * 採点要素（合計100点満点 / 海外評価・戦術的リアリティ反映版）：
- * 1. 最終点差（最大30点：7点差と8点差を厳密に分離）
- * 2. リードチェンジ & 同点展開（最大35点：接戦時の下限保証付き）
+ * 採点要素（合計100点満点 / NFL戦術・ポゼッション構造反映版）：
+ * 1. 最終点差（最大30点：2点差以内 / 3点差 / 6点差 / 7点差 / 8点差を厳密分離）
+ * 2. リードチェンジ & 同点展開（最大35点：点差構造に応じたベースライン保証付き）
  * 3. 終盤のクラッチ・緊張感（最大25点）
  * 4. 総得点・ハイスコアボーナス（最大5点）
  * 5. 延長戦ボーナス（5点）
@@ -53,35 +53,43 @@ export function calculateExciteIndex(game: ExciteGameInput): ExciteIndexResult {
 
   const isOvertime = isOvertimeExplicit || isKnownOtGame;
 
-  // 1. 最終点差（最大30点：7点差と8点差を戦術的に分離）
+  // 1. 最終点差（最大30点：アメフトのスコアリング単位に基づく7段階評価）
   let marginScore = 0;
-  if (margin <= 3) {
-    marginScore = 30; // FG圏内決着
+  if (margin <= 2) {
+    marginScore = 30; // FG一発逆転サヨナラ圏内（1〜2点差）
+  } else if (margin === 3) {
+    marginScore = 27; // FG同点 / TD逆転圏内（3点差）
   } else if (margin <= 6) {
-    marginScore = 27; // TD逆転圏内
+    marginScore = 24; // TD逆転必須圏内（4〜6点差）
   } else if (margin === 7) {
-    marginScore = 23; // TD + XP同点圏内
+    marginScore = 20; // TD + XP同点圏内（7点差）
   } else if (margin === 8) {
-    marginScore = 19; // 2ptコンバージョン必須圏内
+    marginScore = 16; // TD + 2pt同点必須圏内（8点差）
   } else if (margin <= 11) {
-    marginScore = 10;
+    marginScore = 8;  // 2ポゼッション圏内（9〜11点差）
   } else if (margin <= 14) {
-    marginScore = 4;
+    marginScore = 3;  // 2TD圏内（12〜14点差）
   } else {
-    marginScore = 0;
+    marginScore = 0;  // 15点差以上
   }
 
   // 2. シーソーゲーム展開・カムバック（最大35点）
-  // 接戦度に応じたベースライン（逆転回数が少なくてもワンポゼッションゲームなら緊張感を保証）
+  // 点差の緊迫感に応じたベースライン（逆転回数が少なくても終盤の熱戦度を保証）
   let baselineLead = 0;
   if (isOvertime) {
     baselineLead = 24;
-  } else if (margin <= 3) {
-    baselineLead = 20; // 3点差以内なら最低20点保証
+  } else if (margin <= 2) {
+    baselineLead = 22; // FG逆転圏内
+  } else if (margin === 3) {
+    baselineLead = 19; // 3点差
   } else if (margin <= 6) {
-    baselineLead = 16;
-  } else if (margin <= 8) {
-    baselineLead = 13;
+    baselineLead = 16; // 4〜6点差
+  } else if (margin === 7) {
+    baselineLead = 13; // 7点差
+  } else if (margin === 8) {
+    baselineLead = 11; // 8点差
+  } else {
+    baselineLead = 0;  // 9点差以上
   }
 
   let leadScore = 0;
@@ -90,7 +98,7 @@ export function calculateExciteIndex(game: ExciteGameInput): ExciteIndexResult {
 
   if (lc > 0 || tt > 0) {
     const calculated = lc * 9 + tt * 4;
-    // 実測値とベースライン（最低保証値）の大きい方を採用し、不当な減点を防止
+    // 実測値とベースラインの大きい方を採用（データ取得による不当減点を防止）
     leadScore = Math.min(35, Math.max(calculated, baselineLead));
   } else {
     leadScore = baselineLead;
