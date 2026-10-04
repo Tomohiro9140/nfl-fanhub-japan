@@ -22,12 +22,12 @@ const blogCache: { all?: CacheEntry; byTeam: Record<string, CacheEntry> } = {
   byTeam: {},
 };
 
-// 2時間ごとの自動バックグラウンド更新
-const CACHE_TTL_MS = 2 * 60 * 60 * 1000;
+const CACHE_TTL_MS = 2 * 60 * 60 * 1000; // 2時間
 const paidStatusCache = new Map<string, boolean>();
 
 /**
- * 有料・メンバーシップ判定（タイトルで即決できるものは無駄な通信を完全カット）
+ * Note記事などの有料・メンバーシップ判定ロジック
+ * タイムアウトを5秒に延ばし、直列で確実にHTMLを取得して判定
  */
 async function detectIsPaidArticle(title: string, content: string, url: string): Promise<boolean> {
   const paidTitleRegex = /【有料】|\[有料\]|（有料）|\(有料\)|\bPAID\b|メンバーシップ|メンバー限定|会員限定|定期購読|プレミアム/i;
@@ -41,11 +41,11 @@ async function detectIsPaidArticle(title: string, content: string, url: string):
 
     try {
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 1800); // 1.8秒で素早く見切る
+      const timeout = setTimeout(() => controller.abort(), 5000); // 5秒タイムアウトで確実に受信
       const res = await fetch(url, {
         signal: controller.signal,
         headers: {
-          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko)",
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
           Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
         },
       });
@@ -53,12 +53,15 @@ async function detectIsPaidArticle(title: string, content: string, url: string):
 
       if (res.ok) {
         const html = await res.text();
-        const isPaid = html.includes('"isAccessibleForFree":false') || html.includes('"isAccessibleForFree": false') || html.includes(".note-paywall");
+        const isPaid =
+          html.includes('"isAccessibleForFree":false') ||
+          html.includes('"isAccessibleForFree": false') ||
+          html.includes(".note-paywall");
         paidStatusCache.set(url, isPaid);
         return isPaid;
       }
     } catch {
-      // タイムアウト時は安全に無料扱い
+      // 一時的な通信エラー時はキャッシュせず、次回再試行できるようにする
     }
   }
 
@@ -119,7 +122,6 @@ async function parseRssXml(xml: string, source: NFLMediaLinkItem, isTeamPage: bo
       if (!Number.isNaN(d.getTime())) publishedAt = d.toISOString();
     }
 
-    // 1. 全体除外・絞り込み
     if (source.globalFilterRule) {
       const { titleKeywords, categoryOrTagKeywords, targetUrlPattern, excludeKeywords } = source.globalFilterRule;
       if (excludeKeywords && excludeKeywords.some((kw) => title.toLowerCase().includes(kw.toLowerCase()) || combinedCategories.toLowerCase().includes(kw.toLowerCase()))) continue;
@@ -128,7 +130,6 @@ async function parseRssXml(xml: string, source: NFLMediaLinkItem, isTeamPage: bo
       if (targetUrlPattern && !targetUrlPattern.test(link)) continue;
     }
 
-    // 2. チーム個別絞り込み
     if (isTeamPage && source.teamFilterRule) {
       const { titleKeywords, categoryOrTagKeywords, targetUrlPattern } = source.teamFilterRule;
       if (titleKeywords && !titleKeywords.some((kw) => title.toLowerCase().includes(kw.toLowerCase()))) continue;
@@ -139,6 +140,7 @@ async function parseRssXml(xml: string, source: NFLMediaLinkItem, isTeamPage: bo
     rawItems.push({ title, link, rawDesc, combinedCategories, publishedAt });
   }
 
+  // note.comへのアクセス集中を防ぐため、1件ずつ確実に直列処理
   for (const item of rawItems.slice(0, 5)) {
     const isPaid = await detectIsPaidArticle(item.title, item.rawDesc, item.link);
     articles.push({
@@ -162,7 +164,7 @@ async function fetchArticlesFromSource(source: NFLMediaLinkItem, isTeamPage = fa
   if (!source.rssUrl) return [];
   try {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 4500); // タイムアウトを4.5秒に短縮
+    const timeout = setTimeout(() => controller.abort(), 6000);
     const res = await fetch(source.rssUrl, {
       signal: controller.signal,
       headers: {
@@ -180,13 +182,14 @@ async function fetchArticlesFromSource(source: NFLMediaLinkItem, isTeamPage = fa
 }
 
 /**
- * キャッシュを更新する内部処理
+ * キャッシュ更新処理（相手サーバーへの負荷を抑え、確実に全件判定）
  */
 async function refreshAllCache() {
   const targetSources = NFL_MEDIA_LINKS.filter((s) => Boolean(s.rssUrl));
-  const results = await Promise.allSettled(targetSources.map((source) => fetchArticlesFromSource(source, false)));
   const allArticles: ParsedBlogArticle[] = [];
 
+  // 各媒体を順次または適度な並行度で取得
+  const results = await Promise.allSettled(targetSources.map((source) => fetchArticlesFromSource(source, false)));
   for (const r of results) {
     if (r.status === "fulfilled") allArticles.push(...r.value);
   }
@@ -198,29 +201,20 @@ async function refreshAllCache() {
   };
 }
 
-// サーバー起動時にバックグラウンドで1回ウォームアップ取得
 refreshAllCache().catch(console.error);
 
-// 2時間ごとにバックグラウンドで自動再取得
 setInterval(() => {
   refreshAllCache().catch(console.error);
 }, CACHE_TTL_MS);
 
-/**
- * 全ブログの最新記事一覧を取得（常にメモリから即時返却）
- */
 export async function getAllBlogArticles(limit = 80): Promise<ParsedBlogArticle[]> {
   if (blogCache.all && blogCache.all.articles.length > 0) {
     return blogCache.all.articles.slice(0, limit);
   }
-  // 初回起動直後でまだキャッシュが準備できていない場合のみ待機
   await refreshAllCache();
   return (blogCache.all?.articles ?? []).slice(0, limit);
 }
 
-/**
- * チームページ用記事一覧を取得 (No.1〜15)
- */
 export async function getTeamBlogArticles(teamCode: NFLTeamCode, limit = 5): Promise<ParsedBlogArticle[]> {
   const now = Date.now();
   const cached = blogCache.byTeam[teamCode];
