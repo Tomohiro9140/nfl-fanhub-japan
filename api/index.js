@@ -4465,6 +4465,826 @@ var exciteIndexRouter = router({
   })
 });
 
+// client/src/lib/nflMediaLinks.ts
+var NFL_MEDIA_LINKS = [
+  {
+    id: 1,
+    name: "\u305F\u30FC\u304F\u3093",
+    url: "https://note.com/taakun07",
+    category: "team_blog",
+    targetTeam: "GB",
+    targetTeamName: "Green Bay Packers",
+    statusText: "\u8A31\u8AFE\u6E08",
+    isPermitted: true,
+    showInTeamLatest: true,
+    rssUrl: "https://note.com/taakun07/rss",
+    memo: "\u5168\u3066OK"
+  },
+  {
+    id: 2,
+    name: "\u306B\u308F\u304B\u30C0\u30E9\u30B9\u30AB\u30A6\u30DC\u30FC\u30A4\u30BA\u30D5\u30A1\u30F3\u30FB\u30C4\u30DF\u30AD",
+    url: "https://note.com/huge_puma7884",
+    category: "team_blog",
+    targetTeam: "DAL",
+    targetTeamName: "Dallas Cowboys",
+    statusText: "\u8A31\u8AFE\u6E08",
+    isPermitted: true,
+    showInTeamLatest: true,
+    rssUrl: "https://note.com/huge_puma7884/rss",
+    memo: "\u5168\u3066OK"
+  },
+  {
+    id: 3,
+    name: "\u3073\u308B\u305A\u3060\u3044\u306A\u3059\u3066\u3043",
+    url: "https://note.com/billsdynasty",
+    category: "team_blog",
+    targetTeam: "BUF",
+    targetTeamName: "Buffalo Bills",
+    statusText: "\u8A31\u8AFE\u6E08",
+    isPermitted: true,
+    showInTeamLatest: true,
+    rssUrl: "https://note.com/billsdynasty/rss",
+    memo: "\u5168\u3066OK"
+  },
+  {
+    id: 4,
+    name: "\u3075\u3045\u3060\u3063\u3068\u3002 \uFF08NFL / \u30BB\u30A4\u30F3\u30C4\uFF09",
+    url: "https://ameblo.jp/yoda-da-yon",
+    category: "team_blog",
+    targetTeam: "NO",
+    targetTeamName: "New Orleans Saints",
+    statusText: "\u8A31\u8AFE\u6E08",
+    isPermitted: true,
+    showInTeamLatest: true,
+    rssUrl: "https://rssblog.ameba.jp/yoda-da-yon/rss20.xml",
+    memo: "\u5168\u3066OK"
+  },
+  {
+    id: 5,
+    name: "\u9DB4\u5634\u6E29\u52A9",
+    url: "https://note.com/gentle_dahlia649",
+    category: "team_blog",
+    targetTeam: "DET",
+    targetTeamName: "Detroit Lions",
+    statusText: "\u8A31\u8AFE\u6E08",
+    isPermitted: true,
+    showInTeamLatest: true,
+    rssUrl: "https://note.com/gentle_dahlia649/rss",
+    memo: "\u5168\u3066OK"
+  },
+  {
+    id: 6,
+    name: "\u30CE\u30FC\u30CF\u30C9\u30EB\u66F8\u304D\u306A\u3050\u308B - Patriots Fan Blog -",
+    url: "https://foxboro.blog.fc2.com/",
+    category: "team_blog",
+    targetTeam: "NE",
+    targetTeamName: "New England Patriots",
+    statusText: "\u8A31\u8AFE\u6E08",
+    isPermitted: true,
+    showInTeamLatest: true,
+    rssUrl: "https://foxboro.blog.fc2.com/?xml",
+    memo: "\u5168\u3066OK"
+  },
+  {
+    id: 7,
+    name: "Jaguars Note",
+    url: "https://www.jaguars-note.com/",
+    category: "team_blog",
+    targetTeam: "JAX",
+    targetTeamName: "Jacksonville Jaguars",
+    statusText: "\u8A31\u8AFE\u6E08",
+    isPermitted: true,
+    showInTeamLatest: true,
+    rssUrl: "https://www.jaguars-note.com/feed/",
+    memo: "\u5168\u3066OK"
+  },
+  {
+    id: 8,
+    name: "\u6751\u7530",
+    url: "https://note.com/murata_north",
+    category: "team_blog",
+    targetTeam: "NYG",
+    targetTeamName: "New York Giants",
+    statusText: "\u8A31\u8AFE\u6E08",
+    isPermitted: true,
+    showInTeamLatest: true,
+    rssUrl: "https://note.com/murata_north/rss",
+    memo: "\u5168\u3066OK"
+  },
+  {
+    id: 9,
+    name: "GO! HAWKS!",
+    url: "https://seahawks12s.blog.jp/",
+    category: "team_blog",
+    targetTeam: "SEA",
+    targetTeamName: "Seattle Seahawks",
+    statusText: "\u8A31\u8AFE\u6E08",
+    isPermitted: true,
+    showInTeamLatest: true,
+    rssUrl: "https://seahawks12s.blog.jp/index.rdf",
+    memo: "\u5168\u3066OK"
+  },
+  {
+    id: 10,
+    name: "\u30EA\u30C8\u30EB\u30CA\u30A4\u30CA\u30FC",
+    url: "https://note.com/atsu_49ers",
+    category: "team_blog",
+    targetTeam: "SF",
+    targetTeamName: "San Francisco 49ers",
+    statusText: "\u8A31\u8AFE\u6E08",
+    isPermitted: true,
+    showInTeamLatest: true,
+    // Linkページでは全件表示、チームページのLatest Newsでのみ【49ers】で絞り込み
+    teamFilterRule: {
+      titleKeywords: ["49ers", "\u30D5\u30A9\u30FC\u30C6\u30A3\u30CA\u30A4\u30CA\u30FC\u30BA", "\u30CA\u30A4\u30CA\u30FC\u30BA"]
+    },
+    rssUrl: "https://note.com/atsu_49ers/rss",
+    memo: "\u301049ers\u3011\u306B\u3088\u308B\u30BF\u30A4\u30C8\u30EB\u3067\u306E\u30BF\u30B0\u4ED5\u8A33\u5FC5\u8981"
+  },
+  {
+    id: 11,
+    name: "Yukirhythm-\u30E6\u30FC\u30AD\u30EA\u30BA\u30E0-",
+    url: "https://ameblo.jp/yukirhythm5/",
+    category: "team_blog",
+    targetTeam: "PHI",
+    targetTeamName: "Philadelphia Eagles",
+    statusText: "\u8A31\u8AFE\u6E08",
+    isPermitted: true,
+    showInTeamLatest: true,
+    globalFilterRule: {
+      categoryOrTagKeywords: ["\u30A4\u30FC\u30B0\u30EB\u30B9", "Eagles", "theme-10093848591"]
+    },
+    rssUrl: "https://rssblog.ameba.jp/yukirhythm5/rss20.xml",
+    memo: "\u30AB\u30C6\u30B4\u30EA\u30FC\uFF08https://ameblo.jp/yukirhythm5/theme-10093848591.html\uFF09\u306E\u307F"
+  },
+  {
+    id: 12,
+    name: "\u8336\u72AC NFL\u30D6\u30ED\u30B0",
+    url: "https://nflchao.com/",
+    category: "general_and_team",
+    targetTeam: "CLE",
+    targetTeamName: "Cleveland Browns",
+    statusText: "\u8A31\u8AFE\u6E08",
+    isPermitted: true,
+    showInTeamLatest: true,
+    // チームページでのみブラウンズ記事に限定
+    teamFilterRule: {
+      categoryOrTagKeywords: ["\u30D6\u30E9\u30A6\u30F3\u30BA", "Browns", "cat_36746"],
+      targetUrlPattern: /cat_36746/
+    },
+    rssUrl: "https://nflchao.com/feed/",
+    memo: "\u30D6\u30E9\u30A6\u30F3\u30BA\u30BF\u30B0\u306E\u307F\u30C1\u30FC\u30E0\u30DA\u30FC\u30B8\u3078"
+  },
+  {
+    id: 13,
+    name: "K\u732B\u306EDEN\u30D5\u30A1\u30F3\u65E5\u8A18",
+    url: "https://www.kcatfootball.net/",
+    category: "team_blog",
+    targetTeam: "DEN",
+    targetTeamName: "Denver Broncos",
+    statusText: "\u8A31\u8AFE\u6E08",
+    isPermitted: true,
+    showInTeamLatest: true,
+    // チームページでのみブロンコス記事に限定
+    teamFilterRule: {
+      categoryOrTagKeywords: ["\u30C7\u30F3\u30D0\u30FC\u30D6\u30ED\u30F3\u30B3\u30B9", "\u30D6\u30ED\u30F3\u30B3\u30B9", "Broncos", "cat_401706"],
+      targetUrlPattern: /cat_401706/
+    },
+    rssUrl: "https://www.kcatfootball.net/index.rdf",
+    memo: "\u30C7\u30F3\u30D0\u30FC\u30D6\u30ED\u30F3\u30B3\u30B9\u30BF\u30B0\u306E\u307F\u30C1\u30FC\u30E0\u30DA\u30FC\u30B8\u3078"
+  },
+  {
+    id: 14,
+    name: "JETS\u72C2\u306E\u5BB4",
+    url: "https://jets94.com/",
+    category: "team_blog",
+    targetTeam: "NYJ",
+    targetTeamName: "New York Jets",
+    statusText: "\u8A31\u8AFE\u6E08",
+    isPermitted: true,
+    showInTeamLatest: true,
+    // チームページでのみジェッツ記事に限定
+    teamFilterRule: {
+      categoryOrTagKeywords: ["\u30B8\u30A7\u30C3\u30C4", "Jets"]
+    },
+    rssUrl: "https://jets94.com/feed/",
+    memo: "\u30B8\u30A7\u30C3\u30C4\u30BF\u30B0\u306E\u307F\u30C1\u30FC\u30E0\u30DA\u30FC\u30B8\u3078"
+  },
+  {
+    id: 15,
+    name: "\u30A2\u30E1\u30D5\u30C8\u30FC\u30FC\u30AF",
+    url: "https://note.com/amefootalk",
+    category: "general_and_team",
+    targetTeam: "DEN",
+    targetTeamName: "Denver Broncos",
+    statusText: "\u8A31\u8AFE\u6E08",
+    isPermitted: true,
+    showInTeamLatest: true,
+    // チームページでのみブロンコス記事に限定
+    teamFilterRule: {
+      titleKeywords: ["\u30D6\u30ED\u30F3\u30B3\u30B9", "Broncos"]
+    },
+    rssUrl: "https://note.com/amefootalk/rss",
+    memo: "\u30BF\u30A4\u30C8\u30EB\u306B\u30D6\u30ED\u30F3\u30B3\u30B9\u304C\u3042\u308B\u3082\u306E\u306F\u30C1\u30FC\u30E0\u30DA\u30FC\u30B8\u3078"
+  },
+  {
+    id: 16,
+    name: "sleepy\uFF08\u30A2\u30E1\u30D5\u30C8\u30CB\u30A6\u30E0\uFF09",
+    url: "https://note.com/sleepy_nfl_fan",
+    category: "general",
+    statusText: "\u8A31\u8AFE\u6E08",
+    isPermitted: true,
+    showInTeamLatest: false,
+    rssUrl: "https://note.com/sleepy_nfl_fan/rss"
+  },
+  {
+    id: 17,
+    name: "Crazy Dol-Fan Diary",
+    url: "https://ameblo.jp/shulasarmytokyo/",
+    category: "team_blog",
+    targetTeam: "MIA",
+    targetTeamName: "Miami Dolphins",
+    statusText: "\u6E08",
+    isPermitted: true,
+    showInTeamLatest: false,
+    rssUrl: "https://rssblog.ameba.jp/shulasarmytokyo/rss20.xml",
+    memo: "\u5168\u3066OK"
+  },
+  {
+    id: 18,
+    name: "P-BLUE",
+    url: "https://note.com/pantherblue",
+    category: "team_blog",
+    targetTeam: "CAR",
+    targetTeamName: "Carolina Panthers",
+    statusText: "\u6E08",
+    isPermitted: true,
+    showInTeamLatest: false,
+    rssUrl: "https://note.com/pantherblue/rss",
+    memo: "\u5168\u3066OK"
+  },
+  {
+    id: 19,
+    name: "Do Your Job - NFL Patriots Fan Blog -",
+    url: "https://pats185.livedoor.blog/",
+    category: "team_blog",
+    targetTeam: "NE",
+    targetTeamName: "New England Patriots",
+    statusText: "\u6E08",
+    isPermitted: true,
+    showInTeamLatest: false,
+    rssUrl: "https://pats185.livedoor.blog/index.rdf",
+    memo: "\u5168\u3066OK"
+  },
+  {
+    id: 20,
+    name: "\u3061\u3087\u3073\u592A\u306E\u304A\u6C17\u697D\u65E5\u8A18",
+    url: "https://ameblo.jp/lovelycat-chobi/",
+    category: "team_blog",
+    targetTeam: "SEA",
+    targetTeamName: "Seattle Seahawks",
+    statusText: "\u6E08",
+    isPermitted: true,
+    showInTeamLatest: false,
+    rssUrl: "https://rssblog.ameba.jp/lovelycat-chobi/rss20.xml",
+    globalFilterRule: {
+      categoryOrTagKeywords: ["\u30B7\u30FC\u30DB\u30FC\u30AF\u30B9", "Seahawks"],
+      excludeKeywords: [
+        "NPB",
+        "\u30BB\u30FB\u30EA\u30FC\u30B0",
+        "\u30D1\u30FB\u30EA\u30FC\u30B0",
+        "\u30AF\u30E9\u30A4\u30DE\u30C3\u30AF\u30B9\u30B7\u30EA\u30FC\u30BA",
+        "\u30B8\u30E3\u30A4\u30A2\u30F3\u30C4",
+        "\u30BF\u30A4\u30AC\u30FC\u30B9",
+        "\u30D7\u30ED\u91CE\u7403",
+        "\u7532\u5B50\u5712",
+        "\u30C9\u30E9\u30D5\u30C8\u4F1A\u8B70"
+      ]
+    },
+    memo: "\u30C6\u30FC\u30DE\u306B\u30B7\u30FC\u30DB\u30FC\u30AF\u30B9\u304C\u3064\u3044\u3066\u3044\u308B\u3082\u306E"
+  },
+  {
+    id: 21,
+    name: "\u304F\u3046\u305F",
+    url: "https://note.com/kuuta_browns",
+    category: "team_blog",
+    targetTeam: "CLE",
+    targetTeamName: "Cleveland Browns",
+    statusText: "\u30EA\u30D7\u30E9\u30A4\u6E08",
+    isPermitted: false,
+    showInTeamLatest: false,
+    rssUrl: "https://note.com/kuuta_browns/rss",
+    memo: "\u5168\u3066OK"
+  },
+  {
+    id: 22,
+    name: "NFL_SAMURAI",
+    url: "https://note.com/juicy_coot952",
+    category: "general",
+    statusText: "\u30EA\u30D7\u30E9\u30A4\u6E08",
+    isPermitted: false,
+    showInTeamLatest: false,
+    rssUrl: "https://note.com/juicy_coot952/rss",
+    memo: "\u30EA\u30F3\u30AF\u306E\u307F"
+  },
+  {
+    id: 23,
+    name: "WhoDeyJapan",
+    url: "https://note.com/whodeyjapan",
+    category: "team_blog",
+    targetTeam: "CIN",
+    targetTeamName: "Cincinnati Bengals",
+    statusText: "\u9023\u7D61\u624B\u6BB5\u306A\u3057",
+    isPermitted: false,
+    showInTeamLatest: false,
+    rssUrl: "https://note.com/whodeyjapan/rss",
+    memo: "\u5168\u3066OK"
+  },
+  {
+    id: 24,
+    name: "bufbills\u306E\u3082\u3084\u3082\u3084\u30D3\u30EB\u30BA",
+    url: "https://bufbills.exblog.jp/",
+    category: "team_blog",
+    targetTeam: "BUF",
+    targetTeamName: "Buffalo Bills",
+    statusText: "\u9023\u7D61\u624B\u6BB5\u306A\u3057",
+    isPermitted: false,
+    showInTeamLatest: false,
+    rssUrl: "https://bufbills.exblog.jp/index.xml",
+    memo: "\u5168\u3066OK"
+  },
+  {
+    id: 25,
+    name: "isisi",
+    url: "https://note.com/isisi",
+    category: "team_blog",
+    targetTeam: "PHI",
+    targetTeamName: "Philadelphia Eagles",
+    statusText: "\u9023\u7D61\u624B\u6BB5\u306A\u3057",
+    isPermitted: false,
+    showInTeamLatest: false,
+    rssUrl: "https://note.com/isisi/rss",
+    memo: "\u5168\u3066OK"
+  },
+  {
+    id: 26,
+    name: "\u30C7\u30A3\u30D5\u30A7\u30F3\u30C9\u30FB\u30B6\u30FB\u30CE\u30FC\u30B9",
+    url: "http://blog.livedoor.jp/kobasoo",
+    category: "team_blog",
+    targetTeam: "MIN",
+    targetTeamName: "Minnesota Vikings",
+    statusText: "\u9023\u7D61\u624B\u6BB5\u306A\u3057",
+    isPermitted: false,
+    showInTeamLatest: false,
+    rssUrl: "http://blog.livedoor.jp/kobasoo/index.rdf",
+    memo: "\u5168\u3066OK"
+  },
+  {
+    id: 27,
+    name: "BEAR DOWN! Chicago Bears",
+    url: "https://chicagobears.blog.jp/",
+    category: "team_blog",
+    targetTeam: "CHI",
+    targetTeamName: "Chicago Bears",
+    statusText: "\u9023\u7D61\u624B\u6BB5\u306A\u3057",
+    isPermitted: false,
+    showInTeamLatest: false,
+    rssUrl: "https://chicagobears.blog.jp/index.rdf",
+    memo: "\u5168\u3066OK"
+  },
+  {
+    id: 28,
+    name: "broncomaniac\u306E\u30D6\u30ED\u30B0\u7248",
+    url: "https://broncomaniac.blog.fc2.com/",
+    category: "team_blog",
+    targetTeam: "DEN",
+    targetTeamName: "Denver Broncos",
+    statusText: "\u9023\u7D61\u624B\u6BB5\u306A\u3057",
+    isPermitted: false,
+    showInTeamLatest: false,
+    rssUrl: "https://broncomaniac.blog.fc2.com/?xml",
+    memo: "\u5168\u3066OK"
+  },
+  {
+    id: 29,
+    name: "Burgundy & Gold",
+    url: "https://washingtonredskins.seesaa.net/",
+    category: "team_blog",
+    targetTeam: "WAS",
+    targetTeamName: "Washington Commanders",
+    statusText: "\u9023\u7D61\u624B\u6BB5\u306A\u3057",
+    isPermitted: false,
+    showInTeamLatest: false,
+    rssUrl: "https://washingtonredskins.seesaa.net/index.rdf",
+    memo: "\u5168\u3066OK"
+  },
+  {
+    id: 30,
+    name: "NYG\u3092\u5FDC\u63F4\u3057\u3066\u308B\u304B\u3082\u3057\u308C\u306A\u3044\u30D6\u30ED\u30B0",
+    url: "https://nygmad.blog.jp/",
+    category: "team_blog",
+    targetTeam: "NYG",
+    targetTeamName: "New York Giants",
+    statusText: "\u9023\u7D61\u624B\u6BB5\u306A\u3057",
+    isPermitted: false,
+    showInTeamLatest: false,
+    rssUrl: "https://nygmad.blog.jp/index.rdf",
+    memo: "\u5168\u3066OK"
+  },
+  {
+    id: 31,
+    name: "RAIDERS\u3092\u611B\u3059\u308B\u6F22\u306E\u30D6\u30ED\u30B0",
+    url: "https://raidernationtokyo.blog.jp/",
+    category: "team_blog",
+    targetTeam: "LV",
+    targetTeamName: "Las Vegas Raiders",
+    statusText: "\u9023\u7D61\u624B\u6BB5\u306A\u3057",
+    isPermitted: false,
+    showInTeamLatest: false,
+    rssUrl: "https://raidernationtokyo.blog.jp/index.rdf",
+    memo: "\u5168\u3066OK"
+  },
+  {
+    id: 32,
+    name: "TEXANS SWARM",
+    url: "https://texans-swarm.hatenablog.jp/",
+    category: "team_blog",
+    targetTeam: "HOU",
+    targetTeamName: "Houston Texans",
+    statusText: "\u9023\u7D61\u624B\u6BB5\u306A\u3057",
+    isPermitted: false,
+    showInTeamLatest: false,
+    rssUrl: "https://texans-swarm.hatenablog.jp/rss",
+    memo: "\u5168\u3066OK"
+  },
+  {
+    id: 33,
+    name: "TITANS SACK MANIA",
+    url: "https://titanssackmania.blog.fc2.com/",
+    category: "team_blog",
+    targetTeam: "TEN",
+    targetTeamName: "Tennessee Titans",
+    statusText: "\u9023\u7D61\u624B\u6BB5\u306A\u3057",
+    isPermitted: false,
+    showInTeamLatest: false,
+    rssUrl: "https://titanssackmania.blog.fc2.com/?xml",
+    memo: "\u5168\u3066OK"
+  },
+  {
+    id: 34,
+    name: "\u30A2\u30EA\u30BE\u30CA\u30DE\u30CB\u30A2\u306E\u77E5\u3063\u305F\u304B\u767A\u8A00\u96C6III",
+    url: "https://arizona-mania.hatenablog.com/",
+    category: "team_blog",
+    targetTeam: "ARI",
+    targetTeamName: "Arizona Cardinals",
+    statusText: "\u9023\u7D61\u624B\u6BB5\u306A\u3057",
+    isPermitted: false,
+    showInTeamLatest: false,
+    rssUrl: "https://arizona-mania.hatenablog.com/rss",
+    memo: "\u5168\u3066OK"
+  },
+  {
+    id: 35,
+    name: "\u30B3\u30EB\u30C4\u306E\u56FD\u304B\u3089",
+    url: "http://blog.livedoor.jp/coltsjp",
+    category: "team_blog",
+    targetTeam: "IND",
+    targetTeamName: "Indianapolis Colts",
+    statusText: "\u9023\u7D61\u624B\u6BB5\u306A\u3057",
+    isPermitted: false,
+    showInTeamLatest: false,
+    rssUrl: "http://blog.livedoor.jp/coltsjp/index.rdf",
+    memo: "\u5168\u3066OK"
+  },
+  {
+    id: 36,
+    name: "\u8D85\u500B\u4EBA\u7684NFL\u5099\u5FD8\u9332",
+    url: "http://blog.livedoor.jp/yasgt-nfl",
+    category: "team_blog",
+    targetTeam: "PIT",
+    targetTeamName: "Pittsburgh Steelers",
+    statusText: "\u9023\u7D61\u624B\u6BB5\u306A\u3057",
+    isPermitted: false,
+    showInTeamLatest: false,
+    rssUrl: "http://blog.livedoor.jp/yasgt-nfl/index.rdf",
+    memo: "\u5168\u3066OK"
+  },
+  {
+    id: 37,
+    name: "\u9DF2\u306E\u5DE3",
+    url: "https://eagles-nest.hatenablog.com/",
+    category: "team_blog",
+    targetTeam: "PHI",
+    targetTeamName: "Philadelphia Eagles",
+    statusText: "\u9023\u7D61\u624B\u6BB5\u306A\u3057",
+    isPermitted: false,
+    showInTeamLatest: false,
+    rssUrl: "https://eagles-nest.hatenablog.com/rss",
+    memo: "\u5168\u3066OK"
+  },
+  {
+    id: 38,
+    name: "\u307F\u3068\u3053\u304C",
+    url: "https://note.com/terakoya32",
+    category: "team_blog",
+    targetTeam: "SEA",
+    targetTeamName: "Seattle Seahawks",
+    statusText: "\u9023\u7D61\u624B\u6BB5\u306A\u3057",
+    isPermitted: false,
+    showInTeamLatest: false,
+    rssUrl: "https://note.com/terakoya32/rss",
+    memo: "\u30A2\u30E1\u30D5\u30C8\u8A18\u4E8B\u307E\u3068\u3081\uFF08https://note.com/terakoya32/m/mf8c430a3d168\uFF09\u306E\u3082\u306E\u306E\u307F"
+  },
+  {
+    id: 39,
+    name: "NFL\u5168\u8A66\u5408\u89B3\u6226\u8A18",
+    url: "https://woodheadmoss.com",
+    category: "general",
+    statusText: "\u9023\u7D61\u624B\u6BB5\u306A\u3057",
+    isPermitted: false,
+    showInTeamLatest: false,
+    // はてなブログProのRSSを設定
+    rssUrl: "https://www.woodheadmoss.com/rss",
+    memo: "\u30EA\u30F3\u30AF\u306E\u307F"
+  },
+  {
+    id: 40,
+    name: "beanbag",
+    url: "https://note.com/faircatch",
+    category: "general",
+    statusText: "\u9023\u7D61\u624B\u6BB5\u306A\u3057",
+    isPermitted: false,
+    showInTeamLatest: false,
+    rssUrl: "https://note.com/faircatch/rss",
+    memo: "\u30EA\u30F3\u30AF\u306E\u307F"
+  },
+  {
+    id: 41,
+    name: "\u3057\u3085\u3046\u307E\u304412\u30D6\u30ED\u30B0",
+    url: "https://shumai12sea.hatenablog.com/",
+    category: "team_blog",
+    targetTeam: "SEA",
+    targetTeamName: "Seattle Seahawks",
+    statusText: "\u9023\u7D61\u624B\u6BB5\u306A\u3057",
+    isPermitted: false,
+    showInTeamLatest: false,
+    rssUrl: "https://shumai12sea.hatenablog.com/rss",
+    memo: "\u30AB\u30C6\u30B4\u30EA\u30FC\uFF08https://shumai12sea.hatenablog.com/archive/category/Seahawks\uFF09\u306E\u307F\u30C1\u30FC\u30E0\u30DA\u30FC\u30B8\u3078"
+  },
+  {
+    id: 42,
+    name: "\u30A2\u30ED\u30FC\u30D8\u30C3\u30C9\u306A\u65E5\u3005\uFF0F\u30C1\u30FC\u30D5\u30B9\u30D6\u30ED\u30B0",
+    url: "http://arrowheadlike.blog.fc2.com/",
+    category: "team_blog",
+    targetTeam: "KC",
+    targetTeamName: "Kansas City Chiefs",
+    statusText: "\u9023\u7D61\u624B\u6BB5\u306A\u3057",
+    isPermitted: false,
+    showInTeamLatest: false,
+    rssUrl: "http://arrowheadlike.blog.fc2.com/?xml",
+    memo: "\u5168\u3066OK"
+  },
+  {
+    id: 43,
+    name: "\u30B8\u30E3\u30AC\u30FC\u30BA\u4E2D\u6BD2",
+    url: "https://gooooya.livedoor.blog/",
+    category: "team_blog",
+    targetTeam: "JAX",
+    targetTeamName: "Jacksonville Jaguars",
+    statusText: "\u9023\u7D61\u624B\u6BB5\u306A\u3057",
+    isPermitted: false,
+    showInTeamLatest: false,
+    rssUrl: "https://gooooya.livedoor.blog/index.rdf",
+    memo: "\u5168\u3066OK"
+  },
+  {
+    id: 44,
+    name: "\u30C0\u30E9\u30B9\u30AB\u30A6\u30DC\u30FC\u30A4\u30BA\u30D5\u30A1\u30F3",
+    url: "https://note.com/cowboysjapan",
+    category: "team_blog",
+    targetTeam: "DAL",
+    targetTeamName: "Dallas Cowboys",
+    statusText: "\u9023\u7D61\u624B\u6BB5\u306A\u3057",
+    isPermitted: false,
+    showInTeamLatest: false,
+    rssUrl: "https://note.com/cowboysjapan/rss",
+    memo: "\u4ED5\u8A33\u5FC5\u8981"
+  },
+  {
+    id: 45,
+    name: "AmesNFL",
+    url: "https://ames-nfl.com/",
+    category: "special",
+    statusText: "\u795E\u30B5\u30A4\u30C8",
+    isPermitted: true,
+    isPinnedTop: true,
+    showInTeamLatest: false,
+    // Amesの公式Note研究記事RSSを設定
+    rssUrl: "https://note.com/ames_nflresearch/rss",
+    memo: "\u30EA\u30F3\u30AF\u306E\u307F"
+  },
+  {
+    id: 46,
+    name: "DB \u30A2\u30A4\u30E9\u30F3\u30C9\u2212NFL ARI \u30D5\u30E9\u30C3\u30B0\u2212",
+    url: "https://nfl-cardinals.com/",
+    category: "general",
+    statusText: "\u5C4A\u3044\u3066\u3044\u306A\u3044\uFF1F",
+    isPermitted: false,
+    showInTeamLatest: false,
+    rssUrl: "https://nfl-cardinals.com/feed/",
+    memo: "\u30EA\u30F3\u30AF\u306E\u307F"
+  },
+  {
+    id: 47,
+    name: "FTTB's Playbook \uFF5C Bang Bang!",
+    url: "https://note.com/fttb49ers",
+    category: "general",
+    statusText: "\u672A\u8A2D\u5B9A",
+    isPermitted: false,
+    showInTeamLatest: false,
+    rssUrl: "https://note.com/fttb49ers/rss",
+    memo: "\u30EA\u30F3\u30AF\u306E\u307F"
+  },
+  {
+    id: 48,
+    name: "hiro",
+    url: "https://note.com/kind_quokka9252",
+    category: "general",
+    statusText: "\u672A\u8A2D\u5B9A",
+    isPermitted: false,
+    showInTeamLatest: false,
+    rssUrl: "https://note.com/kind_quokka9252/rss",
+    memo: "\u30EA\u30F3\u30AF\u306E\u307F"
+  }
+];
+
+// server/blogRss.ts
+var blogCache = {
+  byTeam: {}
+};
+var CACHE_TTL_MS = 2 * 60 * 60 * 1e3;
+var paidStatusCache = /* @__PURE__ */ new Map();
+async function detectIsPaidArticle(title, content, url) {
+  const paidTitleRegex = /【有料】|\[有料\]|（有料）|\(有料\)|\bPAID\b|メンバーシップ|メンバー限定|会員限定|定期購読|プレミアム/i;
+  if (paidTitleRegex.test(title)) return true;
+  const paidContentRegex = /この続きをみるには|購入して続きを読む|記事のご購入|有料エリア|有料記事|マガジンを購入|メンバーシップ/i;
+  if (paidContentRegex.test(content)) return true;
+  if (url.includes("note.com/")) {
+    if (paidStatusCache.has(url)) return paidStatusCache.get(url);
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 5e3);
+      const res = await fetch(url, {
+        signal: controller.signal,
+        headers: {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+          Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
+        }
+      });
+      clearTimeout(timeout);
+      if (res.ok) {
+        const html = await res.text();
+        const isPaid = html.includes('"isAccessibleForFree":false') || html.includes('"isAccessibleForFree": false') || html.includes(".note-paywall");
+        paidStatusCache.set(url, isPaid);
+        return isPaid;
+      }
+    } catch {
+    }
+  }
+  return false;
+}
+function stripHtml(html) {
+  return html.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "").replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "").replace(/<[^>]+>/g, " ").replace(/&nbsp;/g, " ").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/\s+/g, " ").trim();
+}
+async function parseRssXml(xml, source, isTeamPage) {
+  const articles = [];
+  const itemRegex = /<(?:item|entry)[\s>]([\s\S]*?)<\/(?:item|entry)>/gi;
+  let match;
+  const rawItems = [];
+  while ((match = itemRegex.exec(xml)) !== null) {
+    const itemContent = match[1];
+    const titleMatch = itemContent.match(/<title[^>]*>(?:<!\[CDATA\[([\s\S]*?)\]\]>|([\s\S]*?))<\/title>/i);
+    const title = (titleMatch ? titleMatch[1] ?? titleMatch[2] : "").trim();
+    if (!title) continue;
+    let link = "";
+    const linkMatch = itemContent.match(/<link[^>]*>(?:<!\[CDATA\[([\s\S]*?)\]\]>|([\s\S]*?))<\/link>/i);
+    if (linkMatch) link = (linkMatch[1] ?? linkMatch[2] ?? "").trim();
+    if (!link) {
+      const hrefMatch = itemContent.match(/<link[^>]+href=["']([^"']+)["']/i);
+      if (hrefMatch) link = hrefMatch[1].trim();
+    }
+    if (!link) continue;
+    const descMatch = itemContent.match(/<(?:description|summary|content)[^>]*>(?:<!\[CDATA\[([\s\S]*?)\]\]>|([\s\S]*?))<\/(?:description|summary|content)>/i);
+    const rawDesc = descMatch ? descMatch[1] ?? descMatch[2] ?? "" : "";
+    const categoryMatches = [];
+    const catRegex = /<category[^>]*>(?:<!\[CDATA\[([\s\S]*?)\]\]>|([\s\S]*?))<\/category>/gi;
+    let catM;
+    while ((catM = catRegex.exec(itemContent)) !== null) {
+      const catVal = (catM[1] ?? catM[2] ?? "").trim();
+      if (catVal) categoryMatches.push(catVal);
+    }
+    const combinedCategories = categoryMatches.join(" ");
+    const dateMatch = itemContent.match(/<(?:pubDate|published|updated|dc:date)[^>]*>([\s\S]*?)<\/(?:pubDate|published|updated|dc:date)>/i);
+    let publishedAt = (/* @__PURE__ */ new Date()).toISOString();
+    if (dateMatch) {
+      const d = new Date(dateMatch[1].trim());
+      if (!Number.isNaN(d.getTime())) publishedAt = d.toISOString();
+    }
+    if (source.globalFilterRule) {
+      const { titleKeywords, categoryOrTagKeywords, targetUrlPattern, excludeKeywords } = source.globalFilterRule;
+      if (excludeKeywords && excludeKeywords.some((kw) => title.toLowerCase().includes(kw.toLowerCase()) || combinedCategories.toLowerCase().includes(kw.toLowerCase()))) continue;
+      if (titleKeywords && !titleKeywords.some((kw) => title.toLowerCase().includes(kw.toLowerCase()))) continue;
+      if (categoryOrTagKeywords && !categoryOrTagKeywords.some((kw) => combinedCategories.toLowerCase().includes(kw.toLowerCase()) || title.toLowerCase().includes(kw.toLowerCase()) || link.toLowerCase().includes(kw.toLowerCase()))) continue;
+      if (targetUrlPattern && !targetUrlPattern.test(link)) continue;
+    }
+    if (isTeamPage && source.teamFilterRule) {
+      const { titleKeywords, categoryOrTagKeywords, targetUrlPattern } = source.teamFilterRule;
+      if (titleKeywords && !titleKeywords.some((kw) => title.toLowerCase().includes(kw.toLowerCase()))) continue;
+      if (categoryOrTagKeywords && !categoryOrTagKeywords.some((kw) => combinedCategories.toLowerCase().includes(kw.toLowerCase()) || title.toLowerCase().includes(kw.toLowerCase()) || link.toLowerCase().includes(kw.toLowerCase()))) continue;
+      if (targetUrlPattern && !targetUrlPattern.test(link)) continue;
+    }
+    rawItems.push({ title, link, rawDesc, combinedCategories, publishedAt });
+  }
+  for (const item of rawItems.slice(0, 5)) {
+    const isPaid = await detectIsPaidArticle(item.title, item.rawDesc, item.link);
+    articles.push({
+      id: `${source.id}-${Buffer.from(item.link).toString("base64").slice(-12)}`,
+      sourceId: source.id,
+      sourceName: source.name,
+      sourceUrl: source.url,
+      targetTeam: source.targetTeam,
+      title: item.title,
+      link: item.link,
+      publishedAt: item.publishedAt,
+      summary: stripHtml(item.rawDesc).slice(0, 140),
+      isPaid
+    });
+  }
+  return articles;
+}
+async function fetchArticlesFromSource(source, isTeamPage = false) {
+  if (!source.rssUrl) return [];
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 6e3);
+    const res = await fetch(source.rssUrl, {
+      signal: controller.signal,
+      headers: {
+        "User-Agent": "Mozilla/5.0 (compatible; NFLFanHubBot/1.0; +https://nfl-fanhub.onrender.com)",
+        Accept: "application/rss+xml, application/rdf+xml, application/atom+xml, application/xml, text/xml"
+      }
+    });
+    clearTimeout(timeout);
+    if (!res.ok) return [];
+    const xml = await res.text();
+    return await parseRssXml(xml, source, isTeamPage);
+  } catch {
+    return [];
+  }
+}
+async function refreshAllCache() {
+  const targetSources = NFL_MEDIA_LINKS.filter((s) => Boolean(s.rssUrl));
+  const allArticles = [];
+  const results = await Promise.allSettled(targetSources.map((source) => fetchArticlesFromSource(source, false)));
+  for (const r of results) {
+    if (r.status === "fulfilled") allArticles.push(...r.value);
+  }
+  allArticles.sort((a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime());
+  blogCache.all = {
+    articles: allArticles,
+    cachedAt: Date.now()
+  };
+}
+refreshAllCache().catch(console.error);
+setInterval(() => {
+  refreshAllCache().catch(console.error);
+}, CACHE_TTL_MS);
+async function getAllBlogArticles(limit = 80) {
+  if (blogCache.all && blogCache.all.articles.length > 0) {
+    return blogCache.all.articles.slice(0, limit);
+  }
+  await refreshAllCache();
+  return (blogCache.all?.articles ?? []).slice(0, limit);
+}
+async function getTeamBlogArticles(teamCode, limit = 5) {
+  const now = Date.now();
+  const cached2 = blogCache.byTeam[teamCode];
+  if (cached2 && now - cached2.cachedAt < CACHE_TTL_MS) {
+    return cached2.articles.slice(0, limit);
+  }
+  const teamSources = NFL_MEDIA_LINKS.filter(
+    (s) => s.showInTeamLatest && s.targetTeam === teamCode && Boolean(s.rssUrl)
+  );
+  const results = await Promise.allSettled(teamSources.map((source) => fetchArticlesFromSource(source, true)));
+  const articles = [];
+  for (const r of results) {
+    if (r.status === "fulfilled") articles.push(...r.value);
+  }
+  articles.sort((a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime());
+  blogCache.byTeam[teamCode] = { articles, cachedAt: now };
+  return articles.slice(0, limit);
+}
+
 // server/routers.ts
 var fieldlineVenueSchema = z4.enum(["all", "home", "away"]);
 var fieldlineSelectionSchema = z4.object({
@@ -4607,7 +5427,19 @@ var appRouter = router({
     importSeason: fieldlineAdminProcedure.input(z4.object({ season: z4.number().int().min(2025).max(2100) })).mutation(({ input, ctx }) => importFieldlineSeasonFromNflverse(input.season, ctx.user.openId))
   }),
   playoff: playoffRouter,
-  exciteIndex: exciteIndexRouter
+  exciteIndex: exciteIndexRouter,
+  // === 日本人ブログ・メディア向け RSS / リンク集 API ===
+  blogFeed: router({
+    // Link ページ用の最新記事フィード一覧 (全媒体)
+    latest: publicProcedure.input(z4.object({ limit: z4.number().int().min(1).max(100).optional().default(40) }).optional()).query(async ({ input }) => {
+      const limit = input?.limit ?? 40;
+      return await getAllBlogArticles(limit);
+    }),
+    // チーム別 Latest News 連携用 (No.1〜15)
+    byTeam: publicProcedure.input(z4.object({ teamCode: z4.string().length(2).or(z4.string().length(3)) })).query(async ({ input }) => {
+      return await getTeamBlogArticles(input.teamCode.toUpperCase(), 5);
+    })
+  })
 });
 
 // server/_core/context.ts
