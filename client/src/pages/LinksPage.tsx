@@ -146,7 +146,7 @@ export default function LinksPage() {
           </section>
         )}
 
-        {/* 2. メディア一覧 (Ames全幅、2列グリッド、2行折り返し) */}
+        {/* 2. メディア一覧 (Ames全幅、余計な隙間なし、2列グリッド、2行折り返し) */}
         {activeTab === "directory" && (
           <section className="space-y-2">
             {/* ① 最上位: AmesNFL */}
@@ -193,7 +193,7 @@ export default function LinksPage() {
           </section>
         )}
 
-        {/* 3. リンク集・フィードのご案内とお問い合わせ (前向き・リスペクトトーン) */}
+        {/* 3. リンク集・フィードのご案内とお問い合わせ */}
         <section className="mt-10 rounded-xl border border-[#ded8cc] bg-[#fffdf8] p-4 sm:p-5 text-xs text-[#526173]">
           <div className="flex items-center gap-2 font-mono text-[11px] font-bold text-[#10213a]">
             <HeartHandshake className="h-4 w-4 text-[#e85d2a]" />
@@ -202,44 +202,44 @@ export default function LinksPage() {
 
           <div className="mt-2.5 space-y-2 leading-relaxed text-[11px] sm:text-xs">
             <p>
-              当ページは、日本国内でNFL情報を発信されているブロガー・メディアの皆様への敬意を込め、ファンコミュニティの活性化やファン同士の情報アクセス向上を目的として開設・運営しております。
+              当ページは、日本国内で熱量を持ってNFL情報を発信されているブロガー・メディアの皆様への敬意を込め、ファンコミュニティの活性化やファン同士の情報アクセス向上を目的として開設・運営しております。
             </p>
             <p className="text-[#64748b]">
               ご紹介している各記事およびコンテンツの著作権・権利は、それぞれの運営者様に帰属します。
             </p>
             <p>
-              新規掲載のご希望やリンク修正はもちろん、掲載やフィード配信の見合わせをご希望の場合も、いつでもお気軽にご連絡ください。確認次第、速やかに対応させていただきます。
+              「うちのブログも追加してほしい」といった新規掲載のご希望やリンク修正はもちろん、掲載やフィード配信の見合わせをご希望の場合も、いつでもお気軽にご連絡ください。確認次第、速やかに対応させていただきます。
             </p>
           </div>
 
-          {/* お問い合わせ先リンク（メール & X） */}
-          <div className="mt-4 flex flex-wrap items-center gap-2 pt-2 border-t border-[#ded8cc]/60">
-            <span className="font-mono text-[10px] font-bold tracking-wider text-[#64748b] mr-1">
+          {/* お問い合わせ先リンク（PCは1行、スマホは揃って綺麗に横並び） */}
+          <div className="mt-4 flex flex-col gap-2 pt-2 border-t border-[#ded8cc]/60 sm:flex-row sm:items-center">
+            <span className="font-mono text-[10px] font-bold tracking-wider text-[#64748b] shrink-0">
               CONTACT:
             </span>
 
-            {/* Email リンク */}
-            <a
-              href="mailto:nfl.fanhub.japan@gmail.com"
-              className="inline-flex items-center gap-1.5 rounded-lg border border-[#ded8cc] bg-white px-2.5 py-1.5 font-mono text-[11px] font-bold text-[#10213a] shadow-sm transition hover:border-[#10213a] hover:bg-[#fffaf0]"
-            >
-              <Mail className="h-3.5 w-3.5 text-[#e85d2a]" />
-              <span>nfl.fanhub.japan@gmail.com</span>
-            </a>
+            <div className="flex items-center gap-2">
+              <a
+                href="mailto:nfl.fanhub.japan@gmail.com"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-[#ded8cc] bg-white px-3 py-1.5 font-mono text-[11px] font-bold text-[#10213a] shadow-sm transition hover:border-[#10213a] hover:bg-[#fffaf0]"
+              >
+                <Mail className="h-3.5 w-3.5 text-[#e85d2a]" />
+                <span>メール</span>
+              </a>
 
-            {/* X リンク */}
-            <a
-              href="https://x.com/TK19TB12"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 rounded-lg border border-[#ded8cc] bg-white px-2.5 py-1.5 font-mono text-[11px] font-bold text-[#10213a] shadow-sm transition hover:border-[#10213a] hover:bg-[#fffaf0]"
-            >
-              <span className="flex h-3.5 w-3.5 items-center justify-center font-display text-[11px] font-black leading-none">
-                𝕏
-              </span>
-              <span>@TK19TB12</span>
-              <ExternalLink className="h-3 w-3 text-[#94a3b8]" />
-            </a>
+              <a
+                href="https://x.com/TK19TB12"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-[#ded8cc] bg-white px-3 py-1.5 font-mono text-[11px] font-bold text-[#10213a] shadow-sm transition hover:border-[#10213a] hover:bg-[#fffaf0]"
+              >
+                <span className="flex h-3.5 w-3.5 items-center justify-center font-display text-[11px] font-black leading-none">
+                  𝕏
+                </span>
+                <span>@TK19TB12</span>
+                <ExternalLink className="h-3 w-3 text-[#94a3b8]" />
+              </a>
+            </div>
           </div>
         </section>
       </main>
