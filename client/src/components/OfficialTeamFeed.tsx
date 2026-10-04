@@ -19,10 +19,13 @@ type FeedItem = {
   category: "news" | "injury" | "transaction";
   publishedAt: Date;
   fetchedAt: Date;
-  isPaid?: boolean; // Note等の有料・メンバーシップ限定バッジ用
+  isPaid?: boolean;
 };
 
 type CompletedGame = { gameState: string | null; gameDate?: string | null; finishedAt?: Date | null; kickoffAt: Date; kickoffAtEstimated?: boolean };
+
+// ブログ記事の表示期限（7日間）
+const BLOG_EXPIRATION_MS = 7 * 24 * 60 * 60 * 1000;
 
 function isRosterMoveNews(item: FeedItem) {
   if (item.sourceKind !== "team_official") return false;
@@ -37,7 +40,7 @@ function isBroadcastOrWatchArticle(item: FeedItem) {
 }
 
 function isNonEnglishArticle(item: FeedItem) {
-  if (item.sourceKind === "blog") return false; // 日本語ブログは除外しない
+  if (item.sourceKind === "blog") return false;
   const text = `${item.title} ${item.summary ?? ""} ${item.sourceUrl}`.toLowerCase();
   if (/\/(?:es|espanol|somos-?cowboys)\//i.test(item.sourceUrl)) return true;
   if (/\b(?:claves del juego|contra|semana|lesi[oó]n|en vivo|partido|temporada|entrenamiento|noticias|jugador|equipo|alineaci[oó]n|por la|de la)\b/i.test(text)) return true;
@@ -129,16 +132,19 @@ export function selectLatestNews(
     }
   };
 
-  // 1. チームブログ枠（通常時 最大2件、展開時 最大3件）
+  // 1. チームブログ枠（公開から7日以内のみ・通常時 最大2件、展開時 最大3件）
   const blogQuota = limit === 15 ? 3 : 2;
+  const now = Date.now();
   const validBlogItems = blogItems.filter((item) => {
-    if (hideFrom && new Date(item.publishedAt).getTime() >= hideFrom.getTime()) return false;
+    const pubTime = new Date(item.publishedAt).getTime();
+    if (hideFrom && pubTime >= hideFrom.getTime()) return false;
+    // 公開から7日超過の記事は除外
+    if (now - pubTime > BLOG_EXPIRATION_MS) return false;
     return true;
   });
   validBlogItems.slice(0, blogQuota).forEach(addIfUnique);
 
-  // 2. 公式ニュースの枠設定（残り枠に充当）
-  const remainingSlots = limit - selected.length;
+  // 2. 公式ニュースの枠設定
   const quota = limit === 15
     ? { official: 4, local: 4, cbs: 2, pft: 2 }
     : { official: 3, local: 2, cbs: 1, pft: 1 };
@@ -180,16 +186,13 @@ export function OfficialTeamFeed({ favorite, spoilerMode = false, completedGame 
   const shouldSimulateUnavailable = typeof window !== "undefined" && import.meta.env.DEV && new URLSearchParams(window.location.search).has("feedError");
   const feedInput = useMemo(() => ({ teamCode: shouldSimulateUnavailable ? "XXX" : favorite.code }), [shouldSimulateUnavailable, favorite.code]);
 
-  // 1. 公式フィードの取得
   const feed = trpc.officialFeed.byTeam.useQuery(feedInput, { refetchInterval: 15 * 60 * 1000, staleTime: 15 * 60 * 1000, refetchOnWindowFocus: false, refetchOnReconnect: false, retry: 1 });
 
-  // 2. チームブログフィードの取得 (No.1〜15)
   const blogFeed = trpc.blogFeed.byTeam.useQuery(
     { teamCode: favorite.code },
     { refetchInterval: 15 * 60 * 1000, staleTime: 15 * 60 * 1000, refetchOnWindowFocus: false, retry: 1 }
   );
 
-  // 更新ボタン
   const refresh = trpc.officialFeed.refresh.useMutation({
     onSuccess: () => {
       void feed.refetch();
@@ -200,25 +203,32 @@ export function OfficialTeamFeed({ favorite, spoilerMode = false, completedGame 
   const displayError = feed.isError || shouldSimulateUnavailable;
   const items = (shouldSimulateUnavailable ? [] : feed.data?.items ?? []) as FeedItem[];
 
-  // ブログ記事データを FeedItem 形式に正規化
+  // ブログ記事データを FeedItem 形式に正規化（公開から7日以内の新鮮な記事のみ）
   const blogItems: FeedItem[] = useMemo(() => {
     if (!blogFeed.data || blogFeed.data.length === 0) return [];
-    return blogFeed.data.map((b) => ({
-      id: `blog-${b.id}`,
-      title: b.title,
-      summary: b.summary,
-      japaneseSummary: b.summary,
-      sourceUrl: b.link,
-      sourceName: b.sourceName,
-      sourceKind: "blog" as const,
-      category: "news" as const,
-      publishedAt: new Date(b.publishedAt),
-      fetchedAt: new Date(),
-      isPaid: b.isPaid,
-    }));
+    const now = Date.now();
+
+    return blogFeed.data
+      .filter((b) => {
+        const pubTime = new Date(b.publishedAt).getTime();
+        // 7日以上前の古いブログ記事は除外
+        return !Number.isNaN(pubTime) && now - pubTime <= BLOG_EXPIRATION_MS;
+      })
+      .map((b) => ({
+        id: `blog-${b.id}`,
+        title: b.title,
+        summary: b.summary,
+        japaneseSummary: b.summary,
+        sourceUrl: b.link,
+        sourceName: b.sourceName,
+        sourceKind: "blog" as const,
+        category: "news" as const,
+        publishedAt: new Date(b.publishedAt),
+        fetchedAt: new Date(),
+        isPaid: b.isPaid,
+      }));
   }, [blogFeed.data]);
 
-  // 試合中または直後完了試合の判定
   const isLiveOrProtectedFinal = Boolean(
     completedGame && (
       /live|ingame|in_progress|halftime/i.test(completedGame.gameState ?? "") ||
@@ -231,7 +241,6 @@ export function OfficialTeamFeed({ favorite, spoilerMode = false, completedGame 
   const hideFrom = effectiveSpoilerMode ? spoilerNewsCutoff(completedGame) : null;
   const hideAll = effectiveSpoilerMode && shouldHideAllSpoilerNews(completedGame);
 
-  // 開閉状態に応じて 8件 または 15件 を選出
   const news = useMemo(
     () => selectLatestNews(items, blogItems, hideFrom, hideAll, effectiveSpoilerMode, isExpanded ? 15 : 8),
     [items, blogItems, hideFrom, hideAll, effectiveSpoilerMode, isExpanded]
@@ -280,10 +289,8 @@ export function OfficialTeamFeed({ favorite, spoilerMode = false, completedGame 
                     type="button"
                     onClick={() => {
                       if (item.sourceKind === "blog") {
-                        // ブログ記事は別タブで元記事へ遷移
                         window.open(item.sourceUrl, "_blank", "noopener,noreferrer");
                       } else {
-                        // 公式ニュースはAI要約ダイアログを開く
                         setActiveArticle(item);
                       }
                     }}
@@ -299,7 +306,6 @@ export function OfficialTeamFeed({ favorite, spoilerMode = false, completedGame 
                           {item.title}
                         </span>
 
-                        {/* アクションバッジ: 公式は「要約」、ブログは「記事へ」 */}
                         {item.sourceKind === "blog" ? (
                           <span className="inline-flex items-center gap-0.5 font-mono text-[9px] font-bold text-[#e85d2a] shrink-0 opacity-80 group-hover:opacity-100">
                             <ArrowUpRight className="h-3 w-3" /> 記事へ
@@ -311,16 +317,13 @@ export function OfficialTeamFeed({ favorite, spoilerMode = false, completedGame 
                         )}
                       </span>
 
-                      {/* メタ情報行 */}
                       <span className="mt-1 flex flex-wrap items-center gap-2 font-mono text-[8px] font-bold tracking-[.05em] text-[#94a3b8]">
-                        {/* ブログ名 */}
                         {item.sourceKind === "blog" && (
                           <span className="text-[#e85d2a] font-bold truncate max-w-[150px]">
                             {item.sourceName}
                           </span>
                         )}
 
-                        {/* 有料バッジ */}
                         {item.isPaid && (
                           <span className="inline-flex items-center gap-0.5 rounded border border-[#e85d2a]/30 bg-[#fff4ef] px-1 py-0.2 font-mono text-[8px] font-bold text-[#e85d2a]">
                             <Lock className="h-2 w-2" /> 有料
@@ -334,7 +337,6 @@ export function OfficialTeamFeed({ favorite, spoilerMode = false, completedGame 
                 ))}
               </div>
 
-              {/* 記事開閉アコーディオンボタン */}
               {items.filter((i) => i.category === "news").length + blogItems.length > 8 && (
                 <div className="border-t border-[#eeeae1] pt-2 text-center">
                   <button
