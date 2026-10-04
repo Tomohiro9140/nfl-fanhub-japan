@@ -47,7 +47,10 @@ export interface NFLMediaLinkItem {
   isPermitted: boolean;
   isPinnedTop?: boolean;
   showInTeamLatest: boolean;
-  filterRule?: BlogFilterRule;
+  /** Linkページを含む全体で適用するフィルター（NPB排除など） */
+  globalFilterRule?: BlogFilterRule;
+  /** 各チームページの Latest News でのみ適用するフィルター（自チーム記事の抽出） */
+  teamFilterRule?: BlogFilterRule;
   rssUrl?: string;
   memo?: string;
 }
@@ -180,7 +183,8 @@ export const NFL_MEDIA_LINKS: NFLMediaLinkItem[] = [
     statusText: "許諾済",
     isPermitted: true,
     showInTeamLatest: true,
-    filterRule: {
+    // Linkページでは全件表示、チームページのLatest Newsでのみ【49ers】で絞り込み
+    teamFilterRule: {
       titleKeywords: ["49ers", "フォーティナイナーズ", "ナイナーズ"],
     },
     rssUrl: "https://note.com/atsu_49ers/rss",
@@ -196,9 +200,8 @@ export const NFL_MEDIA_LINKS: NFLMediaLinkItem[] = [
     statusText: "許諾済",
     isPermitted: true,
     showInTeamLatest: true,
-    filterRule: {
+    globalFilterRule: {
       categoryOrTagKeywords: ["イーグルス", "Eagles", "theme-10093848591"],
-      targetUrlPattern: /theme-10093848591/,
     },
     rssUrl: "https://rssblog.ameba.jp/yukirhythm5/rss20.xml",
     memo: "カテゴリー（https://ameblo.jp/yukirhythm5/theme-10093848591.html）のみ",
@@ -213,7 +216,8 @@ export const NFL_MEDIA_LINKS: NFLMediaLinkItem[] = [
     statusText: "許諾済",
     isPermitted: true,
     showInTeamLatest: true,
-    filterRule: {
+    // チームページでのみブラウンズ記事に限定
+    teamFilterRule: {
       categoryOrTagKeywords: ["ブラウンズ", "Browns", "cat_36746"],
       targetUrlPattern: /cat_36746/,
     },
@@ -230,7 +234,8 @@ export const NFL_MEDIA_LINKS: NFLMediaLinkItem[] = [
     statusText: "許諾済",
     isPermitted: true,
     showInTeamLatest: true,
-    filterRule: {
+    // チームページでのみブロンコス記事に限定
+    teamFilterRule: {
       categoryOrTagKeywords: ["デンバーブロンコス", "ブロンコス", "Broncos", "cat_401706"],
       targetUrlPattern: /cat_401706/,
     },
@@ -247,7 +252,8 @@ export const NFL_MEDIA_LINKS: NFLMediaLinkItem[] = [
     statusText: "許諾済",
     isPermitted: true,
     showInTeamLatest: true,
-    filterRule: {
+    // チームページでのみジェッツ記事に限定
+    teamFilterRule: {
       categoryOrTagKeywords: ["ジェッツ", "Jets"],
     },
     rssUrl: "https://jets94.com/feed/",
@@ -263,7 +269,8 @@ export const NFL_MEDIA_LINKS: NFLMediaLinkItem[] = [
     statusText: "許諾済",
     isPermitted: true,
     showInTeamLatest: true,
-    filterRule: {
+    // チームページでのみブロンコス記事に限定
+    teamFilterRule: {
       titleKeywords: ["ブロンコス", "Broncos"],
     },
     rssUrl: "https://note.com/amefootalk/rss",
@@ -329,10 +336,8 @@ export const NFL_MEDIA_LINKS: NFLMediaLinkItem[] = [
     isPermitted: true,
     showInTeamLatest: false,
     rssUrl: "https://rssblog.ameba.jp/lovelycat-chobi/rss20.xml",
-    filterRule: {
-      // テーマ（カテゴリー）またはタイトルに「シーホークス」を含む記事のみ
+    globalFilterRule: {
       categoryOrTagKeywords: ["シーホークス", "Seahawks"],
-      // NPB等の野球・他スポーツ記事を確実に遮断
       excludeKeywords: [
         "NPB", "セ・リーグ", "パ・リーグ", "クライマックスシリーズ",
         "ジャイアンツ", "タイガース", "プロ野球", "甲子園", "ドラフト会議"
@@ -569,9 +574,6 @@ export const NFL_MEDIA_LINKS: NFLMediaLinkItem[] = [
     statusText: "連絡手段なし",
     isPermitted: false,
     showInTeamLatest: false,
-    filterRule: {
-      targetUrlPattern: /m\/mf8c430a3d168/,
-    },
     rssUrl: "https://note.com/terakoya32/rss",
     memo: "アメフト記事まとめ（https://note.com/terakoya32/m/mf8c430a3d168）のもののみ",
   },
@@ -583,6 +585,8 @@ export const NFL_MEDIA_LINKS: NFLMediaLinkItem[] = [
     statusText: "連絡手段なし",
     isPermitted: false,
     showInTeamLatest: false,
+    // はてなブログProのRSSを設定
+    rssUrl: "https://www.woodheadmoss.com/rss",
     memo: "リンクのみ",
   },
   {
@@ -606,9 +610,6 @@ export const NFL_MEDIA_LINKS: NFLMediaLinkItem[] = [
     statusText: "連絡手段なし",
     isPermitted: false,
     showInTeamLatest: false,
-    filterRule: {
-      targetUrlPattern: /archive\/category\/Seahawks/,
-    },
     rssUrl: "https://shumai12sea.hatenablog.com/rss",
     memo: "カテゴリー（https://shumai12sea.hatenablog.com/archive/category/Seahawks）のみチームページへ",
   },
@@ -660,6 +661,8 @@ export const NFL_MEDIA_LINKS: NFLMediaLinkItem[] = [
     isPermitted: true,
     isPinnedTop: true,
     showInTeamLatest: false,
+    // Amesの公式Note研究記事RSSを設定
+    rssUrl: "https://note.com/ames_nflresearch/rss",
     memo: "リンクのみ",
   },
   {
@@ -707,11 +710,9 @@ export const NFL_MEDIA_LINKS: NFLMediaLinkItem[] = [
  */
 export function getSortedMediaLinks(): NFLMediaLinkItem[] {
   return [...NFL_MEDIA_LINKS].sort((a, b) => {
-    // 1. AmesNFL 最上位
     if (a.isPinnedTop) return -1;
     if (b.isPinnedTop) return 1;
 
-    // 優先度ランクの決定
     const getRank = (item: NFLMediaLinkItem) => {
       if (item.isPermitted && item.targetTeam) return 1; // 許諾済チーム
       if (item.isPermitted && !item.targetTeam) return 2; // 許諾済総合
@@ -726,7 +727,6 @@ export function getSortedMediaLinks(): NFLMediaLinkItem[] {
       return rankA - rankB;
     }
 
-    // チームブログ同士（Rank 1 または Rank 3）は地区順（BUFから）
     if ((rankA === 1 || rankA === 3) && a.targetTeam && b.targetTeam) {
       const idxA = DIVISION_TEAM_ORDER.indexOf(a.targetTeam);
       const idxB = DIVISION_TEAM_ORDER.indexOf(b.targetTeam);
@@ -737,7 +737,6 @@ export function getSortedMediaLinks(): NFLMediaLinkItem[] {
       }
     }
 
-    // 同一チーム内、または総合ブログ同士はID順
     return a.id - b.id;
   });
 }
