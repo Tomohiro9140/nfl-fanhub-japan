@@ -2,8 +2,9 @@ name: NFL Data Auto Update
 
 on:
   schedule:
-    - cron: '0 */3 * * *' # 3時間ごと（JST 0:00, 3:00, 6:00, 9:00, 12:00, 15:00, 18:00, 21:00）
-    - cron: '0 21 * * 2'  # 毎週水曜 06:00 JST (火曜 21:00 UTC) FIELDLINE週次更新用
+    # 0分を避け「17分」に設定（GitHubの全世界00分渋滞・キュー破棄を完全回避）
+    - cron: '17 */3 * * *' # 3時間ごと（JST 0:17, 3:17, 6:17, 9:17, 12:17, 15:17, 18:17, 21:17）
+    - cron: '17 21 * * 2'  # 毎週水曜 06:17 JST (火曜 21:17 UTC) FIELDLINE週次更新用
   workflow_dispatch:
 
 permissions:
