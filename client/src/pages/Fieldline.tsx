@@ -503,7 +503,6 @@ function GuideModal({ onClose }: { onClose: () => void }) {
   );
 }
 
-// ★ スマホでもスクロールなしで1画面に収まる「横並び（2列）省スペース版」ランキングモーダル
 function RankingModal({
   metric,
   allSummaries,
@@ -558,7 +557,6 @@ function RankingModal({
         className="relative w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-3.5 sm:p-5 shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* ヘッダー（超コンパクト化） */}
         <div className="flex items-center justify-between border-b border-slate-100 pb-2">
           <div className="flex items-center gap-2">
             <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-800">LEAGUE RANK</span>
@@ -573,7 +571,6 @@ function RankingModal({
           </button>
         </div>
 
-        {/* 現在の比較チーム状況カード（1行スリム化） */}
         <div className="mt-2 grid grid-cols-2 gap-1.5 rounded-xl bg-slate-50 p-1.5 border border-slate-200/70">
           <div className="flex items-center justify-between rounded-lg bg-white px-2 py-1 border border-slate-100 shadow-sm">
             <div className="flex items-center gap-1.5 min-w-0">
@@ -597,7 +594,6 @@ function RankingModal({
           </div>
         </div>
 
-        {/* TOP & WORST 左右2列グリッド（スマホでも最初から横並び固定） */}
         <div className="mt-2.5 grid grid-cols-2 gap-2">
           {/* TOP 5 */}
           <div className="rounded-xl border border-emerald-200/70 bg-emerald-50/20 p-2">
@@ -1006,14 +1002,8 @@ export default function Fieldline() {
           </div>
         )}
 
-        <section className="mt-8">
-          <div className="mb-3 flex justify-end">
-            {comparison.data?.left.available && comparison.data?.right.available && (
-              <p className="text-xs text-slate-400">
-                {comparison.data.left.summary.games} games <span className="mx-1">/</span> {comparison.data.right.summary.games}
-              </p>
-            )}
-          </div>
+        {/* 余白を縮め、不要な「4 games / 4」を削除して上に詰めた結果セクション */}
+        <section className="mt-4 sm:mt-5">
           {noWeeks ? (
             <Card className="border-dashed border-slate-300 bg-slate-50/75">
               <CardContent className="py-12 text-center">
@@ -1041,7 +1031,7 @@ export default function Fieldline() {
       {/* 使い方ガイドモーダル */}
       {isGuideOpen && <GuideModal onClose={() => setIsGuideOpen(false)} />}
 
-      {/* Top 5 / Worst 5 モーダル（スマホ横並び・スクロールなし最適化版） */}
+      {/* Top 5 / Worst 5 モーダル（スマホ横並び最適化版） */}
       {selectedMetric && comparison.data?.left.available && (
         <RankingModal
           metric={selectedMetric}
