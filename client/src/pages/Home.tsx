@@ -363,14 +363,14 @@ export default function Home() {
     setForceLastGame(true);
   };
 
-  // メインナビゲーション項目定義
+  // メインナビゲーション項目定義（SIMULATOR / シード順＆ドラフト予想 に更新）
   const navItems = useMemo(
     () => [
       { id: "HOME", label: "HOME", href: "#home", icon: HomeIcon, desc: "トップ・速報", current: true },
       { id: "FIELDLINE", label: "FIELDLINE", href: "/fieldline/", icon: Activity, desc: "戦術・ドライブ分析", preload: warmFieldlineRoute },
       { id: "COACHING TREE", label: "COACHING TREE", href: "/coaching-tree/", icon: GitFork, desc: "コーチ相関ツリー", preload: warmCoachingTreeRoute },
       { id: "ATLAS", label: "ATLAS", href: "/atlas/", icon: Database, desc: "選手名鑑・契約", preload: warmAtlasRoute },
-      { id: "PLAYOFFS", label: "PLAYOFF", href: "/playoffs/", icon: Trophy, desc: "進出シミュレーター" },
+      { id: "SIMULATOR", label: "SEASON SIMULATOR", href: "/playoffs/", icon: Trophy, desc: "シード順＆ドラフト予想" },
       { id: "LINKS", label: "LINKS", href: "/links", icon: Globe, desc: "ブログ・メディア" },
     ],
     []
@@ -423,7 +423,7 @@ export default function Home() {
               ATLAS
             </a>
             <a href="/playoffs/" className="nav-link">
-              PLAYOFF
+              SEASON SIMULATOR
             </a>
             <a href="/links" className="nav-link">
               LINKS
@@ -438,7 +438,7 @@ export default function Home() {
               <Flag className="h-3.5 w-3.5 text-[#e85d2a]" /> TEAM / {favorite.code}
             </button>
 
-            {/* 三本線メニューボタン（共通メイン仕様） */}
+            {/* 三本線メニューボタン */}
             <button
               onClick={() => setNavOpen(true)}
               className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-[#d7d1c4] bg-white text-[#10213a] shadow-sm transition hover:border-[#10213a] hover:bg-[#fffaf0] active:scale-95"
