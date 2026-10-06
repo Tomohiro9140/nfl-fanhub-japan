@@ -1,6 +1,5 @@
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Label } from "@/components/ui/label";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { EmbeddedAppNav } from "@/components/EmbeddedAppNav";
 import { PlayoffPredictionModal } from "@/components/PlayoffPredictionModal";
@@ -71,17 +70,41 @@ interface DraftPickItem {
   tiebreakReason: string;
 }
 
+const FOCUS_TEAM_STORAGE_KEY = "nfl:playoff-machine:focus-team";
+
+function getStoredFocusTeam(fallback = "NE"): string {
+  if (typeof window === "undefined") return fallback;
+  try {
+    const saved = window.localStorage.getItem(FOCUS_TEAM_STORAGE_KEY);
+    return saved && saved in NFL_TEAMS ? saved : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
 export default function PlayoffMachine() {
-  const [focusTeam, setFocusTeam] = useState<string>("NE");
+  const [focusTeam, setFocusTeam] = useState<string>(() => getStoredFocusTeam("NE"));
   const [selectedWeek, setSelectedWeek] = useState<number>(1);
-  const [activeConf, setActiveConf] = useState<Conference>("AFC");
+  const [activeConf, setActiveConf] = useState<Conference>(() => {
+    const initial = getStoredFocusTeam("NE");
+    return (NFL_TEAMS[initial]?.conference as Conference) ?? "AFC";
+  });
   const [mainViewMode, setMainViewMode] = useState<"playoffs" | "draft">("playoffs");
   const [activeTab, setActiveTab] = useState<"simulator" | "rooting">("simulator");
   const [explanationModalSeed, setExplanationModalSeed] = useState<PlayoffSeed | null>(null);
+  const [explanationModalDraft, setExplanationModalDraft] = useState<DraftPickItem | null>(null);
   const [showLowGuides, setShowLowGuides] = useState<boolean>(false);
 
   const [isPredictionOpen, setIsPredictionOpen] = useState(false);
   const [presetDropdownOpen, setPresetDropdownOpen] = useState(false);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(FOCUS_TEAM_STORAGE_KEY, focusTeam);
+    } catch {
+      /* storage is optional */
+    }
+  }, [focusTeam]);
 
   const alphabeticalTeams = useMemo(() => {
     return Object.values(NFL_TEAMS).sort((a, b) => a.name.localeCompare(b.name));
@@ -243,7 +266,6 @@ export default function PlayoffMachine() {
     return records;
   }, [games]);
 
-  // プリセット適用（常に全試合一括上書き）
   const applyPreset = (preset: "better_record" | "home_wins" | "run_the_table" | "underdogs") => {
     setPresetDropdownOpen(false);
 
@@ -445,7 +467,7 @@ export default function PlayoffMachine() {
       <div className="border-b border-slate-200 bg-white shadow-xs">
         <div className="container mx-auto flex flex-col gap-2.5 px-3 py-2.5 sm:px-6 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-2.5 flex-wrap w-full sm:w-auto">
-            {/* 応援チーム選択 */}
+            {/* 応援チーム選択（localStorage連動） */}
             <div className="w-full sm:w-52">
               <Select
                 value={focusTeam}
@@ -471,7 +493,7 @@ export default function PlayoffMachine() {
               </Select>
             </div>
 
-            {/* 一括プリセット（スマホでも画面外に突き抜けない配置） */}
+            {/* 一括プリセット */}
             <div className="relative">
               <Button
                 type="button"
@@ -654,43 +676,28 @@ export default function PlayoffMachine() {
                     )}
                   </div>
                 ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left text-xs">
-                      <thead className="border-b border-slate-100 bg-slate-50 font-mono text-[9px] uppercase text-slate-500">
-                        <tr>
-                          <th className="px-2 py-2 text-center w-8">#</th>
-                          <th className="px-2 py-2">TEAM</th>
-                          <th className="px-2 py-2 text-center">W-L</th>
-                          <th className="px-2 py-2 text-center">PCT</th>
-                          <th className="px-2 py-2 text-center text-cyan-700">SOS</th>
-                          <th className="px-2 py-2">REASON</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100">
-                        {draftOrder.map((item) => (
-                          <tr key={item.team} className="hover:bg-slate-50">
-                            <td className="px-2 py-1 text-center font-mono font-bold text-[10px]">{item.pickNumber}</td>
-                            <td className="px-2 py-1">
-                              <div className="flex items-center gap-1.5 min-w-0">
-                                <MemoTeamMark code={item.team} size="sm" />
-                                <span className="font-bold truncate text-xs">{item.teamName}</span>
-                              </div>
-                            </td>
-                            <td className="px-2 py-1 text-center font-mono text-[11px] font-semibold">{item.record}</td>
-                            <td className="px-2 py-1 text-center font-mono text-[11px] text-slate-500">.{Math.round(item.winPct * 1000).toString().padStart(3, "0")}</td>
-                            <td className="px-2 py-1 text-center font-mono text-[11px] font-bold text-cyan-700">.{Math.round(item.sos * 1000).toString().padStart(3, "0")}</td>
-                            <td className="px-2 py-1 text-[9px] text-slate-500">{item.tiebreakReason}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                  /* ドラフト順位一覧（シード順と同じリスト行形式） */
+                  <div>
+                    <div className="border-b border-slate-100 bg-slate-50/70 px-3 py-1.5 text-[10px] font-bold tracking-wider text-slate-500">
+                      2027 NFL DRAFT ORDER (#1〜#18)
+                    </div>
+                    <div className="divide-y divide-slate-100">
+                      {draftOrder.map((item) => (
+                        <DraftRow
+                          key={item.team}
+                          item={item}
+                          isFocus={item.team === focusTeam}
+                          onExplainClick={() => setExplanationModalDraft(item)}
+                        />
+                      ))}
+                    </div>
                   </div>
                 )}
               </CardContent>
             </Card>
           </div>
 
-          {/* 右カラム: 週選択 ＆ 対戦カード（スマホ横2列・縦幅半減） */}
+          {/* 右カラム: 週選択 ＆ 対戦カード */}
           <div className="space-y-3 lg:col-span-5 min-w-0">
             <div className="rounded-xl border border-slate-200 bg-white p-2 shadow-xs">
               <div className="flex items-center justify-between pb-1.5 border-b border-slate-100">
@@ -746,7 +753,7 @@ export default function PlayoffMachine() {
               </div>
             </div>
 
-            {/* 対戦カード（スマホ横2列・縦幅半減） */}
+            {/* 対戦カード */}
             {activeTab === "simulator" && (
               <div className="grid grid-cols-2 gap-1.5 sm:gap-2">
                 {weekGames.map((game) => (
@@ -863,6 +870,7 @@ export default function PlayoffMachine() {
         nfcSeeds={nfcPlayoffSeeds}
       />
 
+      {/* シード順位タイブレーカー解説モーダル */}
       {explanationModalSeed && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs"
@@ -910,6 +918,59 @@ export default function PlayoffMachine() {
 
             <div className="mt-4 flex justify-end">
               <Button type="button" variant="outline" size="sm" onClick={() => setExplanationModalSeed(null)}>
+                閉じる
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ドラフト順位決定理由解説モーダル */}
+      {explanationModalDraft && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs"
+          onClick={() => setExplanationModalDraft(null)}
+        >
+          <div
+            className="max-h-[85vh] w-full max-w-sm overflow-y-auto rounded-2xl bg-white p-5 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2.5">
+                <MemoTeamMark code={explanationModalDraft.team} size="lg" />
+                <div>
+                  <h3 className="text-sm sm:text-base font-bold text-slate-900">
+                    ドラフト #{explanationModalDraft.pickNumber} {explanationModalDraft.teamName}
+                  </h3>
+                  <p className="text-[11px] text-slate-500">指名順位決定理由</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                className="rounded-lg p-1 text-slate-400 hover:bg-slate-100"
+                onClick={() => setExplanationModalDraft(null)}
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="mt-3.5 space-y-2">
+              <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3 text-xs space-y-1">
+                <div className="flex items-center gap-1.5">
+                  <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
+                  <span className="font-bold text-slate-800">タイブレーク適用</span>
+                </div>
+                <p className="text-slate-700 leading-relaxed text-[11px] font-mono mt-1">
+                  {explanationModalDraft.tiebreakReason}
+                </p>
+              </div>
+              <p className="text-[10px] text-slate-400 leading-relaxed">
+                ※同勝率の場合、レギュラーシーズンの対戦相手勝率（SOS: Strength of Schedule）が低いチームに上位指名権が与えられます。
+              </p>
+            </div>
+
+            <div className="mt-4 flex justify-end">
+              <Button type="button" variant="outline" size="sm" onClick={() => setExplanationModalDraft(null)}>
                 閉じる
               </Button>
             </div>
@@ -1011,9 +1072,83 @@ function SeedRow({
       </div>
 
       <div className="flex items-center gap-2 shrink-0">
-        <span className="text-xs font-bold tabular-nums text-slate-700">
+        <span className="text-xs font-bold tabular-nums text-slate-700 font-mono">
           {seed.record.wins}-{seed.record.losses}
           {seed.record.ties > 0 && `-${seed.record.ties}`}
+        </span>
+
+        {hasTiebreaker ? (
+          <button
+            type="button"
+            onClick={onExplainClick}
+            className="flex items-center gap-0.5 rounded border border-slate-200 bg-white px-1.5 py-0.5 text-[9px] font-semibold text-slate-600 hover:border-[#e85d2a] hover:text-[#e85d2a]"
+          >
+            <span>解説</span>
+            <HelpCircle className="h-2.5 w-2.5 text-[#e85d2a]" />
+          </button>
+        ) : (
+          <div className="w-8" />
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ★ シード順位表と同じ規格で統一したドラフト順位行コンポーネント
+function DraftRow({
+  item,
+  isFocus,
+  onExplainClick,
+}: {
+  item: DraftPickItem;
+  isFocus: boolean;
+  onExplainClick: () => void;
+}) {
+  const hasTiebreaker = Boolean(
+    item.tiebreakReason &&
+    item.tiebreakReason !== "単独勝率" &&
+    item.tiebreakReason !== "全体勝率最下位"
+  );
+
+  return (
+    <div
+      className={`flex items-center justify-between px-3 py-2 transition-colors ${
+        isFocus ? "bg-amber-50/80 ring-1 ring-amber-300 ring-inset" : "hover:bg-slate-50"
+      }`}
+    >
+      {/* 左側: 指名順バッジ ＋ ロゴ ＋ チーム名 ＋ 地区 */}
+      <div className="flex items-center gap-2 min-w-0 flex-1 mr-2">
+        <span
+          className={`flex h-5 w-5 shrink-0 items-center justify-center rounded text-[11px] font-bold ${
+            item.pickNumber === 1
+              ? "bg-gradient-to-br from-amber-400 to-orange-500 text-slate-950 shadow-xs"
+              : item.pickNumber <= 5
+              ? "bg-[#101827] text-white"
+              : "bg-slate-700 text-white"
+          }`}
+        >
+          {item.pickNumber}
+        </span>
+        <MemoTeamMark code={item.team} size="sm" />
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-1 min-w-0">
+            <span className="text-xs font-bold truncate text-slate-800">
+              {item.teamName}
+            </span>
+          </div>
+          <span className="text-[9px] text-slate-400 block truncate">{item.division}</span>
+        </div>
+      </div>
+
+      {/* 右側: 勝敗 ＋ SOS ＋ 解説ボタン */}
+      <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+        <span className="text-xs font-bold tabular-nums text-slate-700 font-mono">
+          {item.record}
+        </span>
+
+        <span className="text-[11px] font-bold tabular-nums text-sky-700 font-mono">
+          <span className="text-[9px] text-slate-400 font-sans font-normal mr-0.5 hidden sm:inline">SOS</span>
+          .{Math.round(item.sos * 1000).toString().padStart(3, "0")}
         </span>
 
         {hasTiebreaker ? (
