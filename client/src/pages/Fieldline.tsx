@@ -133,7 +133,7 @@ const comparisonQueryOptions = { staleTime: 2 * 60_000, gcTime: 10 * 60_000, ref
 
 function TeamMark({ code, size = "md" }: { code: string; size?: "sm" | "md" | "lg" }) {
   const brand = fieldlineTeamBrand[code];
-  const dimension = size === "lg" ? "h-14 w-14" : size === "md" ? "h-10 w-10" : "h-6 w-6";
+  const dimension = size === "lg" ? "h-14 w-14" : size === "md" ? "h-10 w-10" : "h-5 w-5";
   return brand ? (
     <img src={brand.logo} alt={`${code} logo`} className={`${dimension} shrink-0 object-contain drop-shadow-sm`} style={{ mixBlendMode: "multiply" }} />
   ) : (
@@ -233,7 +233,7 @@ function SelectPanel({
 
   const brand = fieldlineTeamBrand[value.team];
   const selectableList = availableWeeks.filter((item) => item.hasStats || item.isBye);
-  const venueText = venueLabel(venueLabel ? value.venue : "all");
+  const venueText = venueLabel(value.venue);
 
   return (
     <section
@@ -433,8 +433,14 @@ function GuideModal({ onClose }: { onClose: () => void }) {
   }, [onClose]);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="relative w-full max-w-lg rounded-3xl border border-slate-200 bg-white p-5 sm:p-7 shadow-2xl">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200"
+      onClick={onClose}
+    >
+      <div
+        className="relative w-full max-w-lg rounded-3xl border border-slate-200 bg-white p-5 sm:p-7 shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="flex items-center justify-between border-b border-slate-100 pb-3">
           <div className="flex items-center gap-2">
             <span className="grid h-7 w-7 place-items-center rounded-lg bg-[#e85d2a]/10 text-[#e85d2a]">
@@ -497,7 +503,7 @@ function GuideModal({ onClose }: { onClose: () => void }) {
   );
 }
 
-// ★ 修正版：下位5チーム目・上位5チーム目の順位を基準にしたランキングモーダル
+// ★ スマホでもスクロールなしで1画面に収まる「横並び（2列）省スペース版」ランキングモーダル
 function RankingModal({
   metric,
   allSummaries,
@@ -525,14 +531,12 @@ function RankingModal({
       .sort((a, b) => (a.ranks[metric.key] ?? 999) - (b.ranks[metric.key] ?? 999));
   }, [allSummaries, metric.key]);
 
-  // ★ TOP 5（5番目のチームがいる順位タイまでを正確に抽出）
   const topRanked = useMemo(() => {
     if (validSummaries.length <= 5) return validSummaries;
     const cutoffRank = validSummaries[4]?.ranks[metric.key] ?? 5;
     return validSummaries.filter((item) => (item.ranks[metric.key] ?? 999) <= cutoffRank);
   }, [validSummaries, metric.key]);
 
-  // ★ WORST 5（下位から5番目のチームがいる順位タイまでを正確に抽出）
   const worstRanked = useMemo(() => {
     if (validSummaries.length <= 5) return [];
     const cutoffIndex = Math.max(0, validSummaries.length - 5);
@@ -546,79 +550,83 @@ function RankingModal({
   const rightValue = rightSummary?.metrics?.[metric.key];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="relative w-full max-w-xl max-h-[90vh] overflow-y-auto rounded-3xl border border-slate-200 bg-white p-5 sm:p-6 shadow-2xl">
-        <div className="flex items-start justify-between border-b border-slate-100 pb-3">
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="rounded-md bg-amber-100 px-2 py-0.5 text-[11px] font-bold text-amber-800">LEAGUE RANKINGS</span>
-              <span className="text-[11px] font-medium text-slate-400">（左パネル選択条件）</span>
-            </div>
-            <h2 className="mt-1 text-lg font-bold text-slate-900">{metric.label}</h2>
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-150"
+      onClick={onClose}
+    >
+      <div
+        className="relative w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-3.5 sm:p-5 shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* ヘッダー（超コンパクト化） */}
+        <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+          <div className="flex items-center gap-2">
+            <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-800">LEAGUE RANK</span>
+            <h2 className="text-sm sm:text-base font-bold text-slate-900">{metric.label}</h2>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="rounded-full p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition"
+            className="rounded-full p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition"
           >
-            <X className="h-5 w-5" />
+            <X className="h-4 w-4" />
           </button>
         </div>
 
-        {/* 現在の比較チーム状況カード */}
-        <div className="mt-3 grid grid-cols-2 gap-2 rounded-2xl bg-slate-50 p-2.5 border border-slate-200/80">
-          <div className="flex items-center justify-between rounded-xl bg-white px-3 py-2 border border-slate-100 shadow-sm">
+        {/* 現在の比較チーム状況カード（1行スリム化） */}
+        <div className="mt-2 grid grid-cols-2 gap-1.5 rounded-xl bg-slate-50 p-1.5 border border-slate-200/70">
+          <div className="flex items-center justify-between rounded-lg bg-white px-2 py-1 border border-slate-100 shadow-sm">
             <div className="flex items-center gap-1.5 min-w-0">
               <MemoTeamMark code={leftSummary.team} size="sm" />
               <span className="truncate text-xs font-semibold text-slate-800">{leftSummary.team}</span>
             </div>
-            <div className="text-right">
-              <span className="text-xs font-bold text-[#e85d2a]">#{leftRank ?? "—"}</span>
-              <p className="text-[11px] font-medium tabular-nums text-slate-500">{formatMetric(leftValue, metric.format)}</p>
+            <div className="text-right whitespace-nowrap pl-1">
+              <span className="text-[11px] font-bold text-[#e85d2a]">#{leftRank ?? "—"}</span>
+              <span className="ml-1 text-[11px] font-medium tabular-nums text-slate-600">{formatMetric(leftValue, metric.format)}</span>
             </div>
           </div>
-          <div className="flex items-center justify-between rounded-xl bg-white px-3 py-2 border border-slate-100 shadow-sm">
+          <div className="flex items-center justify-between rounded-lg bg-white px-2 py-1 border border-slate-100 shadow-sm">
             <div className="flex items-center gap-1.5 min-w-0">
               <MemoTeamMark code={rightSummary.team} size="sm" />
               <span className="truncate text-xs font-semibold text-slate-800">{rightSummary.team}</span>
             </div>
-            <div className="text-right">
-              <span className="text-xs font-bold text-[#e85d2a]">#{rightRank ?? "—"}</span>
-              <p className="text-[11px] font-medium tabular-nums text-slate-500">{formatMetric(rightValue, metric.format)}</p>
+            <div className="text-right whitespace-nowrap pl-1">
+              <span className="text-[11px] font-bold text-[#e85d2a]">#{rightRank ?? "—"}</span>
+              <span className="ml-1 text-[11px] font-medium tabular-nums text-slate-600">{formatMetric(rightValue, metric.format)}</span>
             </div>
           </div>
         </div>
 
-        {/* Top 5 & Worst 5 グリッド */}
-        <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
+        {/* TOP & WORST 左右2列グリッド（スマホでも最初から横並び固定） */}
+        <div className="mt-2.5 grid grid-cols-2 gap-2">
           {/* TOP 5 */}
-          <div className="rounded-2xl border border-emerald-200/70 bg-emerald-50/20 p-3">
-            <div className="mb-2 flex items-center justify-between px-1">
-              <span className="text-[11px] font-bold tracking-wider text-emerald-800 uppercase">
-                TOP 5 (上位{topRanked.length > 5 ? ` · ${topRanked.length}チーム` : ""})
+          <div className="rounded-xl border border-emerald-200/70 bg-emerald-50/20 p-2">
+            <div className="mb-1.5 flex items-center justify-between px-0.5">
+              <span className="text-[10px] font-bold tracking-wider text-emerald-800 uppercase">
+                TOP 5{topRanked.length > 5 ? ` (${topRanked.length})` : ""}
               </span>
-              <span className="text-[10px] font-semibold text-emerald-600">BEST</span>
+              <span className="text-[9px] font-semibold text-emerald-600">BEST</span>
             </div>
-            <div className="space-y-1.5 max-h-60 overflow-y-auto pr-1">
+            <div className="space-y-1 max-h-[48vh] overflow-y-auto pr-0.5">
               {topRanked.map((item) => {
                 const isSelectedTeam = item.team === leftSummary.team || item.team === rightSummary.team;
                 return (
                   <div
                     key={item.team}
-                    className={`flex items-center justify-between rounded-xl px-2.5 py-1.5 border text-xs transition ${
+                    className={`flex items-center justify-between rounded-lg px-1.5 py-1 border text-[11px] transition ${
                       isSelectedTeam
                         ? "border-[#e85d2a] bg-[#fff5f0] shadow-sm font-semibold"
                         : "border-slate-100 bg-white"
                     }`}
                   >
-                    <div className="flex items-center gap-2 min-w-0">
-                      <span className="inline-block min-w-7 rounded bg-emerald-100 px-1 py-0.5 text-center text-[11px] font-bold tabular-nums text-emerald-800">
+                    <div className="flex items-center gap-1 min-w-0">
+                      <span className="inline-block min-w-5 rounded bg-emerald-100 px-0.5 py-0.2 text-center text-[10px] font-bold tabular-nums text-emerald-800">
                         #{item.ranks[metric.key]}
                       </span>
                       <MemoTeamMark code={item.team} size="sm" />
-                      <span className="truncate text-slate-800">{item.team}</span>
+                      <span className="truncate text-slate-800 text-[11px]">{item.team}</span>
                     </div>
-                    <span className="font-semibold tabular-nums text-slate-900">
+                    <span className="font-semibold tabular-nums text-slate-900 whitespace-nowrap pl-1 text-[11px]">
                       {formatMetric(item.metrics[metric.key], metric.format)}
                     </span>
                   </div>
@@ -628,33 +636,33 @@ function RankingModal({
           </div>
 
           {/* WORST 5 */}
-          <div className="rounded-2xl border border-rose-200/70 bg-rose-50/20 p-3">
-            <div className="mb-2 flex items-center justify-between px-1">
-              <span className="text-[11px] font-bold tracking-wider text-rose-800 uppercase">
-                WORST 5 (下位{worstRanked.length > 5 ? ` · ${worstRanked.length}チーム` : ""})
+          <div className="rounded-xl border border-rose-200/70 bg-rose-50/20 p-2">
+            <div className="mb-1.5 flex items-center justify-between px-0.5">
+              <span className="text-[10px] font-bold tracking-wider text-rose-800 uppercase">
+                WORST 5{worstRanked.length > 5 ? ` (${worstRanked.length})` : ""}
               </span>
-              <span className="text-[10px] font-semibold text-rose-600">BOTTOM</span>
+              <span className="text-[9px] font-semibold text-rose-600">BOTTOM</span>
             </div>
-            <div className="space-y-1.5 max-h-60 overflow-y-auto pr-1">
+            <div className="space-y-1 max-h-[48vh] overflow-y-auto pr-0.5">
               {worstRanked.map((item) => {
                 const isSelectedTeam = item.team === leftSummary.team || item.team === rightSummary.team;
                 return (
                   <div
                     key={item.team}
-                    className={`flex items-center justify-between rounded-xl px-2.5 py-1.5 border text-xs transition ${
+                    className={`flex items-center justify-between rounded-lg px-1.5 py-1 border text-[11px] transition ${
                       isSelectedTeam
                         ? "border-[#e85d2a] bg-[#fff5f0] shadow-sm font-semibold"
                         : "border-slate-100 bg-white"
                     }`}
                   >
-                    <div className="flex items-center gap-2 min-w-0">
-                      <span className="inline-block min-w-7 rounded bg-rose-100 px-1 py-0.5 text-center text-[11px] font-bold tabular-nums text-rose-800">
+                    <div className="flex items-center gap-1 min-w-0">
+                      <span className="inline-block min-w-5 rounded bg-rose-100 px-0.5 py-0.2 text-center text-[10px] font-bold tabular-nums text-rose-800">
                         #{item.ranks[metric.key]}
                       </span>
                       <MemoTeamMark code={item.team} size="sm" />
-                      <span className="truncate text-slate-800">{item.team}</span>
+                      <span className="truncate text-slate-800 text-[11px]">{item.team}</span>
                     </div>
-                    <span className="font-semibold tabular-nums text-slate-900">
+                    <span className="font-semibold tabular-nums text-slate-900 whitespace-nowrap pl-1 text-[11px]">
                       {formatMetric(item.metrics[metric.key], metric.format)}
                     </span>
                   </div>
@@ -662,18 +670,6 @@ function RankingModal({
               })}
             </div>
           </div>
-        </div>
-
-        <div className="mt-5 flex justify-end">
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={onClose}
-            className="rounded-xl px-4 text-xs font-semibold"
-          >
-            閉じる
-          </Button>
         </div>
       </div>
     </div>
@@ -1045,7 +1041,7 @@ export default function Fieldline() {
       {/* 使い方ガイドモーダル */}
       {isGuideOpen && <GuideModal onClose={() => setIsGuideOpen(false)} />}
 
-      {/* Top 5 / Worst 5 モーダル（修正版） */}
+      {/* Top 5 / Worst 5 モーダル（スマホ横並び・スクロールなし最適化版） */}
       {selectedMetric && comparison.data?.left.available && (
         <RankingModal
           metric={selectedMetric}
