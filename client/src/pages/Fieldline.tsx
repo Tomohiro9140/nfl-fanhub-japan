@@ -233,7 +233,7 @@ function SelectPanel({
 
   const brand = fieldlineTeamBrand[value.team];
   const selectableList = availableWeeks.filter((item) => item.hasStats || item.isBye);
-  const venueText = venueLabel(value.venue);
+  const venueText = venueLabel(venueLabel ? value.venue : "all");
 
   return (
     <section
@@ -497,7 +497,7 @@ function GuideModal({ onClose }: { onClose: () => void }) {
   );
 }
 
-// ★ 同率タイをすべて含め、スクロール可能にしたランキングモーダル
+// ★ 修正版：下位5チーム目・上位5チーム目の順位を基準にしたランキングモーダル
 function RankingModal({
   metric,
   allSummaries,
@@ -525,18 +525,19 @@ function RankingModal({
       .sort((a, b) => (a.ranks[metric.key] ?? 999) - (b.ranks[metric.key] ?? 999));
   }, [allSummaries, metric.key]);
 
-  // ★ 順位が #5 以内のチームを全員抽出（同率タイが何チームいても漏れなく含める）
+  // ★ TOP 5（5番目のチームがいる順位タイまでを正確に抽出）
   const topRanked = useMemo(() => {
-    const filtered = validSummaries.filter((item) => (item.ranks[metric.key] ?? 999) <= 5);
-    return filtered.length > 0 ? filtered : validSummaries.slice(0, 5);
+    if (validSummaries.length <= 5) return validSummaries;
+    const cutoffRank = validSummaries[4]?.ranks[metric.key] ?? 5;
+    return validSummaries.filter((item) => (item.ranks[metric.key] ?? 999) <= cutoffRank);
   }, [validSummaries, metric.key]);
 
-  // ★ 下位5つの順位階層（Worst 5位層）に属するチームを全員抽出
+  // ★ WORST 5（下位から5番目のチームがいる順位タイまでを正確に抽出）
   const worstRanked = useMemo(() => {
     if (validSummaries.length <= 5) return [];
-    const distinctRanks = Array.from(new Set(validSummaries.map((item) => item.ranks[metric.key] as number))).sort((a, b) => a - b);
-    const worstRanks = new Set(distinctRanks.slice(Math.max(0, distinctRanks.length - 5)));
-    return validSummaries.filter((item) => worstRanks.has(item.ranks[metric.key]));
+    const cutoffIndex = Math.max(0, validSummaries.length - 5);
+    const cutoffRank = validSummaries[cutoffIndex]?.ranks[metric.key] ?? 28;
+    return validSummaries.filter((item) => (item.ranks[metric.key] ?? 0) >= cutoffRank);
   }, [validSummaries, metric.key]);
 
   const leftRank = leftSummary?.ranks?.[metric.key];
@@ -588,7 +589,7 @@ function RankingModal({
           </div>
         </div>
 
-        {/* Top 5 & Worst 5 グリッド（スクロール可能） */}
+        {/* Top 5 & Worst 5 グリッド */}
         <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
           {/* TOP 5 */}
           <div className="rounded-2xl border border-emerald-200/70 bg-emerald-50/20 p-3">
@@ -1044,7 +1045,7 @@ export default function Fieldline() {
       {/* 使い方ガイドモーダル */}
       {isGuideOpen && <GuideModal onClose={() => setIsGuideOpen(false)} />}
 
-      {/* Top 5 / Worst 5 モーダル（同率タイ全表示版） */}
+      {/* Top 5 / Worst 5 モーダル（修正版） */}
       {selectedMetric && comparison.data?.left.available && (
         <RankingModal
           metric={selectedMetric}
