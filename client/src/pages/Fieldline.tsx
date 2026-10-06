@@ -154,8 +154,14 @@ function getStoredTeam(side: "left" | "right", fallback: string) {
   }
 }
 
-function formatMetric(value: number | null | undefined, format: "number" | "decimal" | "percent" | "epa") {
+// ★ PFR形式（Own XX.X）のフォーマットに対応
+function formatMetric(
+  value: number | null | undefined,
+  format: "number" | "decimal" | "percent" | "epa",
+  key?: MetricKey
+) {
   if (value === null || value === undefined) return "—";
+  if (key === "startFieldPos") return `Own ${value.toFixed(1)}`;
   if (format === "percent") return `${(value * 100).toFixed(1)}%`;
   if (format === "decimal") return value.toFixed(1);
   if (format === "epa") return value > 0 ? `+${value.toFixed(3)}` : value.toFixed(3);
@@ -423,7 +429,6 @@ function Unavailable({ side, message }: { side: string; message?: string }) {
   );
 }
 
-// ★ 使い方（ヘルプ）モーダルコンポーネント
 function GuideModal({ onClose }: { onClose: () => void }) {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -498,7 +503,6 @@ function GuideModal({ onClose }: { onClose: () => void }) {
   );
 }
 
-// ★ Top 5 / Worst 5 表示モーダルコンポーネント
 function RankingModal({
   metric,
   allSummaries,
@@ -566,7 +570,7 @@ function RankingModal({
             </div>
             <div className="text-right">
               <span className="text-xs font-bold text-[#e85d2a]">#{leftRank ?? "—"}</span>
-              <p className="text-[11px] font-medium tabular-nums text-slate-500">{formatMetric(leftValue, metric.format)}</p>
+              <p className="text-[11px] font-medium tabular-nums text-slate-500">{formatMetric(leftValue, metric.format, metric.key)}</p>
             </div>
           </div>
           <div className="flex items-center justify-between rounded-xl bg-white px-3 py-2 border border-slate-100 shadow-sm">
@@ -576,7 +580,7 @@ function RankingModal({
             </div>
             <div className="text-right">
               <span className="text-xs font-bold text-[#e85d2a]">#{rightRank ?? "—"}</span>
-              <p className="text-[11px] font-medium tabular-nums text-slate-500">{formatMetric(rightValue, metric.format)}</p>
+              <p className="text-[11px] font-medium tabular-nums text-slate-500">{formatMetric(rightValue, metric.format, metric.key)}</p>
             </div>
           </div>
         </div>
@@ -609,7 +613,7 @@ function RankingModal({
                       <span className="truncate text-slate-800">{item.team}</span>
                     </div>
                     <span className="font-semibold tabular-nums text-slate-900">
-                      {formatMetric(item.metrics[metric.key], metric.format)}
+                      {formatMetric(item.metrics[metric.key], metric.format, metric.key)}
                     </span>
                   </div>
                 );
@@ -643,7 +647,7 @@ function RankingModal({
                       <span className="truncate text-slate-800">{item.team}</span>
                     </div>
                     <span className="font-semibold tabular-nums text-slate-900">
-                      {formatMetric(item.metrics[metric.key], metric.format)}
+                      {formatMetric(item.metrics[metric.key], metric.format, metric.key)}
                     </span>
                   </div>
                 );
@@ -698,7 +702,7 @@ function MetricGroup({
                     leftSuperior ? "bg-emerald-50 px-1.5 py-0.5 text-emerald-700 ring-1 ring-emerald-200" : "text-slate-900"
                   }`}
                 >
-                  {formatMetric(leftValue, metric.format)}
+                  {formatMetric(leftValue, metric.format, metric.key)}
                 </span>
                 <span className="ml-2 text-xs font-medium tabular-nums text-slate-400">#{left.summary.ranks[metric.key] ?? "—"}</span>
               </div>
@@ -722,7 +726,7 @@ function MetricGroup({
                     rightSuperior ? "bg-emerald-50 px-1.5 py-0.5 text-emerald-700 ring-1 ring-emerald-200" : "text-slate-900"
                   }`}
                 >
-                  {formatMetric(rightValue, metric.format)}
+                  {formatMetric(rightValue, metric.format, metric.key)}
                 </span>
                 <span className="ml-2 text-xs font-medium tabular-nums text-slate-400">#{right.summary.ranks[metric.key] ?? "—"}</span>
               </div>
@@ -826,7 +830,6 @@ export default function Fieldline() {
   const rightVenueChange = useRef(false);
   const prefetched = useRef(false);
 
-  // ★ モーダル状態管理
   const [selectedMetric, setSelectedMetric] = useState<MetricConfig | null>(null);
   const [isGuideOpen, setIsGuideOpen] = useState(false);
 
@@ -918,7 +921,6 @@ export default function Fieldline() {
       {/* ★ ヘッダー：左端に「使い方」ボタンを配置 */}
       <header className="border-b border-white/10 bg-[#101827] text-white">
         <div className="container relative flex min-h-20 items-center justify-center">
-          {/* 使い方ボタン（ヘッダー左側に配置） */}
           <button
             type="button"
             onClick={() => setIsGuideOpen(true)}
