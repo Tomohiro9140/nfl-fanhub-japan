@@ -56,7 +56,6 @@ export type FieldlineSummary = {
   ranks: Record<string, number | null>;
 };
 
-// ★ allSummaries を追加して全32チームのランキング情報も提供可能に拡張
 export type FieldlineComparisonResult =
   | { available: false; reason: string }
   | { available: true; summary: FieldlineSummary; allSummaries: FieldlineSummary[] };
@@ -158,6 +157,7 @@ function aggregateRecords(rows: Aggregate[]) {
 function toMetrics(stat: Aggregate) {
   const games = stat.games || 1;
   return {
+    // OFFENSE
     pointsPerGame: stat.games ? stat.pointsFor / games : null,
     yardsPerGame: stat.games ? stat.yardsFor / games : null,
     passYardsPerGame: stat.games ? stat.passYardsFor / games : null,
@@ -171,6 +171,7 @@ function toMetrics(stat: Aggregate) {
     sacksAllowed: stat.games ? stat.sacksAllowed : null,
     giveaways: stat.games ? stat.giveaways : null,
 
+    // DEFENSE
     pointsAllowedPerGame: stat.games ? stat.pointsAgainst / games : null,
     yardsAllowedPerGame: stat.games ? stat.yardsAgainst / games : null,
     passYardsAllowedPerGame: stat.games ? stat.passYardsAgainst / games : null,
@@ -184,28 +185,34 @@ function toMetrics(stat: Aggregate) {
     interceptionsDefense: stat.games ? stat.interceptionsDefense : null,
     turnovers: stat.games ? stat.turnovers : null,
 
+    // SPECIAL TEAMS
     fieldGoalPct: stat.fieldGoalAttempts ? stat.fieldGoalsMade / stat.fieldGoalAttempts : null,
     extraPointPct: stat.extraPointAttempts ? stat.extraPointsMade / stat.extraPointAttempts : null,
     puntInside20Pct: stat.puntAttempts ? stat.puntsInside20 / stat.puntAttempts : null,
     netPuntAvg: stat.puntAttempts ? stat.netPuntYards / stat.puntAttempts : null,
     startFieldPos: stat.startDriveCount ? stat.startYardlineSum / stat.startDriveCount : null,
 
+    // DISCIPLINE
     penalties: stat.games ? stat.penalties : null,
     penaltyYardsPerGame: stat.games ? stat.penaltyYards / games : null,
   };
 }
 
 const metricRules: [string, "asc" | "desc"][] = [
+  // OFFENSE
   ["pointsPerGame", "desc"], ["yardsPerGame", "desc"], ["passYardsPerGame", "desc"], ["rushYardsPerGame", "desc"],
   ["passEpaPerPlay", "desc"], ["rushEpaPerPlay", "desc"], ["successRate", "desc"], ["passerRating", "desc"],
   ["thirdDownPct", "desc"], ["redZoneTdPct", "desc"], ["sacksAllowed", "asc"], ["giveaways", "asc"],
 
+  // DEFENSE
   ["pointsAllowedPerGame", "asc"], ["yardsAllowedPerGame", "asc"], ["passYardsAllowedPerGame", "asc"], ["rushYardsAllowedPerGame", "asc"],
   ["opponentPassEpaPerPlay", "asc"], ["opponentRushEpaPerPlay", "asc"], ["opponentSuccessRate", "asc"],
   ["opponentThirdDownPct", "asc"], ["opponentRedZoneTdPct", "asc"], ["sacksDefense", "desc"], ["interceptionsDefense", "desc"], ["turnovers", "desc"],
 
+  // SPECIAL TEAMS
   ["fieldGoalPct", "desc"], ["extraPointPct", "desc"], ["puntInside20Pct", "desc"], ["netPuntAvg", "desc"], ["startFieldPos", "desc"],
 
+  // DISCIPLINE
   ["penalties", "asc"], ["penaltyYardsPerGame", "asc"],
 ];
 
@@ -417,7 +424,8 @@ export async function importFieldlineSeasonFromNflverse(season: number, imported
       "pass_touchdown", "interception", "sack", "fumble_lost", "third_down_converted", "third_down_failed",
       "two_point_attempt", "field_goal_attempt", "field_goal_result", "extra_point_attempt", "extra_point_result",
       "punt_attempt", "punt_inside_twenty", "penalty", "penalty_yards",
-      "play_type", "success", "kick_distance", "return_yards", "touchback", "yardline_100"
+      "play_type", "success", "kick_distance", "return_yards", "touchback", "yardline_100",
+      "down" // ★ ドライブ開始判定に必須
     ];
     const file = await asyncBufferFromUrl({ url: sourceUrl });
     const rawRows = await parquetReadObjects({ file, columns }) as PbpRow[];
@@ -490,12 +498,24 @@ export async function importFieldlineSeasonFromNflverse(season: number, imported
           }
         }
 
+        // ★ PFR準拠：ドライブ開始地点（キックオフ等を除外したオフェンス最初の1stダウンスナップから取得）
         const driveKey = `${gameId}-${offense}-${keyString(row.fixed_drive)}`;
-        if (keyString(row.fixed_drive) && !driveStarts.has(driveKey) && row.yardline_100 !== null && row.yardline_100 !== undefined) {
+        const isSpecialKick = playType === "kickoff" || playType === "extra_point" || isTwoPoint;
+        if (
+          !isSpecialKick &&
+          asNumber(row.down) === 1 &&
+          keyString(row.fixed_drive) &&
+          !driveStarts.has(driveKey) &&
+          row.yardline_100 !== null &&
+          row.yardline_100 !== undefined
+        ) {
           driveStarts.add(driveKey);
+          // 相手ゴールまでの距離から自陣ヤード（Own Yard）に換算
           const startOwnYard = 100 - asNumber(row.yardline_100);
-          stat.startYardlineSum += startOwnYard;
-          stat.startDriveCount += 1;
+          if (startOwnYard >= 1 && startOwnYard <= 99) {
+            stat.startYardlineSum += startOwnYard;
+            stat.startDriveCount += 1;
+          }
         }
 
         const drive = redZoneDrives.get(driveKey) ?? { team: offense, opponent: teamKnown(defense) ? defense : "", week, entered: false, result: "" };
