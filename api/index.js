@@ -3577,7 +3577,23 @@ function emptyAggregate(season, team, week) {
     penalties: 0,
     penaltyYards: 0,
     blitzPct: null,
-    missedTackles: null
+    missedTackles: null,
+    offensePassEpa: 0,
+    offensePassEpaPlays: 0,
+    offenseRushEpa: 0,
+    offenseRushEpaPlays: 0,
+    offenseSuccessPlays: 0,
+    offenseTotalPlays: 0,
+    giveaways: 0,
+    defensePassEpaAllowed: 0,
+    defensePassEpaPlays: 0,
+    defenseRushEpaAllowed: 0,
+    defenseRushEpaPlays: 0,
+    defenseSuccessPlays: 0,
+    defenseTotalPlays: 0,
+    netPuntYards: 0,
+    startYardlineSum: 0,
+    startDriveCount: 0
   };
 }
 function passerRating2(stat) {
@@ -3625,7 +3641,23 @@ var aggregateKeys = [
   "puntAttempts",
   "puntsInside20",
   "penalties",
-  "penaltyYards"
+  "penaltyYards",
+  "offensePassEpa",
+  "offensePassEpaPlays",
+  "offenseRushEpa",
+  "offenseRushEpaPlays",
+  "offenseSuccessPlays",
+  "offenseTotalPlays",
+  "giveaways",
+  "defensePassEpaAllowed",
+  "defensePassEpaPlays",
+  "defenseRushEpaAllowed",
+  "defenseRushEpaPlays",
+  "defenseSuccessPlays",
+  "defenseTotalPlays",
+  "netPuntYards",
+  "startYardlineSum",
+  "startDriveCount"
 ];
 function aggregateRows(season, rows) {
   const totals = new Map(FIELDLINE_TEAM_CODES.map((team) => [team, emptyAggregate(season, team, 0)]));
@@ -3651,55 +3683,79 @@ function aggregateRecords(rows) {
 function toMetrics(stat) {
   const games = stat.games || 1;
   return {
+    // OFFENSE
     pointsPerGame: stat.games ? stat.pointsFor / games : null,
     yardsPerGame: stat.games ? stat.yardsFor / games : null,
-    epaPerPlay: stat.offenseEpaPlays ? stat.offenseEpa / stat.offenseEpaPlays : null,
     passYardsPerGame: stat.games ? stat.passYardsFor / games : null,
     rushYardsPerGame: stat.games ? stat.rushYardsFor / games : null,
+    passEpaPerPlay: stat.offensePassEpaPlays ? stat.offensePassEpa / stat.offensePassEpaPlays : null,
+    rushEpaPerPlay: stat.offenseRushEpaPlays ? stat.offenseRushEpa / stat.offenseRushEpaPlays : null,
+    successRate: stat.offenseTotalPlays ? stat.offenseSuccessPlays / stat.offenseTotalPlays : null,
     passerRating: passerRating2(stat),
     thirdDownPct: stat.thirdDownAttempts ? stat.thirdDownConversions / stat.thirdDownAttempts : null,
     redZoneTdPct: stat.redZoneAttempts ? stat.redZoneTouchdowns / stat.redZoneAttempts : null,
     sacksAllowed: stat.games ? stat.sacksAllowed : null,
+    giveaways: stat.games ? stat.giveaways : null,
+    // DEFENSE
     pointsAllowedPerGame: stat.games ? stat.pointsAgainst / games : null,
     yardsAllowedPerGame: stat.games ? stat.yardsAgainst / games : null,
-    opponentEpaPerPlay: stat.defenseEpaPlays ? stat.defenseEpaAllowed / stat.defenseEpaPlays : null,
     passYardsAllowedPerGame: stat.games ? stat.passYardsAgainst / games : null,
     rushYardsAllowedPerGame: stat.games ? stat.rushYardsAgainst / games : null,
+    opponentPassEpaPerPlay: stat.defensePassEpaPlays ? stat.defensePassEpaAllowed / stat.defensePassEpaPlays : null,
+    opponentRushEpaPerPlay: stat.defenseRushEpaPlays ? stat.defenseRushEpaAllowed / stat.defenseRushEpaPlays : null,
+    opponentSuccessRate: stat.defenseTotalPlays ? stat.defenseSuccessPlays / stat.defenseTotalPlays : null,
     opponentThirdDownPct: stat.opponentThirdDownAttempts ? stat.opponentThirdDownConversions / stat.opponentThirdDownAttempts : null,
     opponentRedZoneTdPct: stat.opponentRedZoneAttempts ? stat.opponentRedZoneTouchdowns / stat.opponentRedZoneAttempts : null,
     sacksDefense: stat.games ? stat.sacksDefense : null,
     interceptionsDefense: stat.games ? stat.interceptionsDefense : null,
     turnovers: stat.games ? stat.turnovers : null,
+    // SPECIAL TEAMS
     fieldGoalPct: stat.fieldGoalAttempts ? stat.fieldGoalsMade / stat.fieldGoalAttempts : null,
     extraPointPct: stat.extraPointAttempts ? stat.extraPointsMade / stat.extraPointAttempts : null,
     puntInside20Pct: stat.puntAttempts ? stat.puntsInside20 / stat.puntAttempts : null,
-    penalties: stat.games ? stat.penalties : null
+    netPuntAvg: stat.puntAttempts ? stat.netPuntYards / stat.puntAttempts : null,
+    startFieldPos: stat.startDriveCount ? stat.startYardlineSum / stat.startDriveCount : null,
+    // DISCIPLINE
+    penalties: stat.games ? stat.penalties : null,
+    penaltyYardsPerGame: stat.games ? stat.penaltyYards / games : null
   };
 }
 var metricRules = [
+  // OFFENSE
   ["pointsPerGame", "desc"],
   ["yardsPerGame", "desc"],
-  ["epaPerPlay", "desc"],
   ["passYardsPerGame", "desc"],
   ["rushYardsPerGame", "desc"],
+  ["passEpaPerPlay", "desc"],
+  ["rushEpaPerPlay", "desc"],
+  ["successRate", "desc"],
   ["passerRating", "desc"],
   ["thirdDownPct", "desc"],
   ["redZoneTdPct", "desc"],
   ["sacksAllowed", "asc"],
+  ["giveaways", "asc"],
+  // DEFENSE
   ["pointsAllowedPerGame", "asc"],
   ["yardsAllowedPerGame", "asc"],
-  ["opponentEpaPerPlay", "asc"],
   ["passYardsAllowedPerGame", "asc"],
   ["rushYardsAllowedPerGame", "asc"],
+  ["opponentPassEpaPerPlay", "asc"],
+  ["opponentRushEpaPerPlay", "asc"],
+  ["opponentSuccessRate", "asc"],
   ["opponentThirdDownPct", "asc"],
   ["opponentRedZoneTdPct", "asc"],
   ["sacksDefense", "desc"],
   ["interceptionsDefense", "desc"],
   ["turnovers", "desc"],
+  // SPECIAL TEAMS
   ["fieldGoalPct", "desc"],
   ["extraPointPct", "desc"],
   ["puntInside20Pct", "desc"],
-  ["penalties", "asc"]
+  ["netPuntAvg", "desc"],
+  ["startFieldPos", "desc"],
+  // DISCIPLINE
+  ["penalties", "asc"],
+  ["penaltyYardsPerGame", "asc"]
 ];
 function makeRanks(summaries) {
   for (const [metric, direction] of metricRules) {
@@ -3873,7 +3929,7 @@ async function compareFieldlineSelections(inputs) {
       });
       makeRanks(summaries);
       const summary = summaries.find((item) => item.team === input.team);
-      return !summary || !summary.games ? { available: false, reason: "\u9078\u629E\u3057\u305FWeek\u306B\u306F\u8A66\u5408\u30C7\u30FC\u30BF\u304C\u3042\u308A\u307E\u305B\u3093\u3002\u5225\u306EWeek\u3092\u9078\u629E\u3057\u3066\u304F\u3060\u3055\u3044\u3002" } : { available: true, summary };
+      return !summary || !summary.games ? { available: false, reason: "\u9078\u629E\u3057\u305FWeek\u306B\u306F\u8A66\u5408\u30C7\u30FC\u30BF\u304C\u3042\u308A\u307E\u305B\u3093\u3002\u5225\u306EWeek\u3092\u9078\u629E\u3057\u3066\u304F\u3060\u3055\u3044\u3002" } : { available: true, summary, allSummaries: summaries };
     });
   });
 }
@@ -3883,7 +3939,51 @@ async function importFieldlineSeasonFromNflverse(season, importedBy) {
   const sourceUrl = fieldlinePbpSource(season);
   await db.insert(seasonImports).values({ season, status: "importing", sourceUrl, importedBy: importedBy ?? null, gamesImported: 0, rowsImported: 0, errorMessage: null }).onDuplicateKeyUpdate({ set: { status: "importing", sourceUrl, importedBy: importedBy ?? null, errorMessage: null } });
   try {
-    const columns = ["season_type", "week", "game_id", "home_team", "away_team", "posteam", "defteam", "penalty_team", "fixed_drive", "fixed_drive_result", "drive_inside20", "total_home_score", "total_away_score", "epa", "yards_gained", "passing_yards", "rushing_yards", "lateral_rushing_yards", "pass_attempt", "complete_pass", "pass_touchdown", "interception", "sack", "fumble_lost", "third_down_converted", "third_down_failed", "two_point_attempt", "field_goal_attempt", "field_goal_result", "extra_point_attempt", "extra_point_result", "punt_attempt", "punt_inside_twenty", "penalty", "penalty_yards"];
+    const columns = [
+      "season_type",
+      "week",
+      "game_id",
+      "home_team",
+      "away_team",
+      "posteam",
+      "defteam",
+      "penalty_team",
+      "fixed_drive",
+      "fixed_drive_result",
+      "drive_inside20",
+      "total_home_score",
+      "total_away_score",
+      "epa",
+      "yards_gained",
+      "passing_yards",
+      "rushing_yards",
+      "lateral_rushing_yards",
+      "pass_attempt",
+      "complete_pass",
+      "pass_touchdown",
+      "interception",
+      "sack",
+      "fumble_lost",
+      "third_down_converted",
+      "third_down_failed",
+      "two_point_attempt",
+      "field_goal_attempt",
+      "field_goal_result",
+      "extra_point_attempt",
+      "extra_point_result",
+      "punt_attempt",
+      "punt_inside_twenty",
+      "penalty",
+      "penalty_yards",
+      "play_type",
+      "success",
+      "kick_distance",
+      "return_yards",
+      "touchback",
+      "yardline_100",
+      "down"
+      // ★ ドライブ開始判定に必須
+    ];
     const file = await asyncBufferFromUrl({ url: sourceUrl });
     const rawRows = await parquetReadObjects({ file, columns });
     const pbp = rawRows.filter((row) => asString(row.season_type) === "REG" && asNumber(row.week) >= 1 && asNumber(row.week) <= 18);
@@ -3893,6 +3993,7 @@ async function importFieldlineSeasonFromNflverse(season, importedBy) {
     const get = (team, week) => stats.get(`${team}-${week}`);
     const gameScores = /* @__PURE__ */ new Map();
     const redZoneDrives = /* @__PURE__ */ new Map();
+    const driveStarts = /* @__PURE__ */ new Set();
     for (const row of pbp) {
       const week = asNumber(row.week);
       const offense = normalizedTeam(row.posteam);
@@ -3900,6 +4001,8 @@ async function importFieldlineSeasonFromNflverse(season, importedBy) {
       const gameId = asString(row.game_id);
       const home = normalizedTeam(row.home_team);
       const away = normalizedTeam(row.away_team);
+      const playType = asString(row.play_type);
+      const isTwoPoint = asNumber(row.two_point_attempt) === 1;
       if (teamKnown(home) && teamKnown(away) && gameId) {
         const game = gameScores.get(gameId) ?? { week, home, away, homeScore: 0, awayScore: 0 };
         game.homeScore = Math.max(game.homeScore, asNumber(row.total_home_score));
@@ -3911,7 +4014,7 @@ async function importFieldlineSeasonFromNflverse(season, importedBy) {
         const netPassYards = fieldlineNetPassingYardsForPlay(row);
         const rushYards = asNumber(row.rushing_yards) + asNumber(row.lateral_rushing_yards);
         const totalYards = fieldlineTotalYardsForPlay(row);
-        if (asNumber(row.two_point_attempt) !== 1) {
+        if (!isTwoPoint) {
           stat.passYardsFor += netPassYards;
           stat.rushYardsFor += rushYards;
           stat.yardsFor += totalYards;
@@ -3919,7 +4022,19 @@ async function importFieldlineSeasonFromNflverse(season, importedBy) {
           if (epa !== null) {
             stat.offenseEpa += epa;
             stat.offenseEpaPlays += 1;
+            if (playType === "pass" || asNumber(row.pass_attempt) === 1 || asNumber(row.sack) === 1) {
+              stat.offensePassEpa += epa;
+              stat.offensePassEpaPlays += 1;
+            } else if (playType === "run") {
+              stat.offenseRushEpa += epa;
+              stat.offenseRushEpaPlays += 1;
+            }
           }
+          if (playType === "pass" || playType === "run") {
+            stat.offenseTotalPlays += 1;
+            if (asNumber(row.success) === 1) stat.offenseSuccessPlays += 1;
+          }
+          stat.giveaways += asNumber(row.interception) + asNumber(row.fumble_lost);
           stat.passAttempts += asNumber(row.pass_attempt) - asNumber(row.sack);
           stat.passCompletions += asNumber(row.complete_pass);
           stat.passTouchdowns += asNumber(row.pass_touchdown);
@@ -3933,20 +4048,36 @@ async function importFieldlineSeasonFromNflverse(season, importedBy) {
           stat.extraPointsMade += asString(row.extra_point_result) === "good" ? 1 : 0;
           stat.puntAttempts += asNumber(row.punt_attempt);
           stat.puntsInside20 += asNumber(row.punt_inside_twenty);
+          if (asNumber(row.punt_attempt) === 1) {
+            const kickDist = asNumber(row.kick_distance);
+            const retYards = asNumber(row.return_yards);
+            const isTouchback = asNumber(row.touchback) === 1;
+            const netYds = isTouchback ? Math.max(0, kickDist - 20) : Math.max(0, kickDist - retYards);
+            stat.netPuntYards += netYds;
+          }
         }
-        const driveId = `${gameId}-${offense}-${keyString(row.fixed_drive)}`;
-        const drive = redZoneDrives.get(driveId) ?? { team: offense, opponent: teamKnown(defense) ? defense : "", week, entered: false, result: "" };
+        const driveKey = `${gameId}-${offense}-${keyString(row.fixed_drive)}`;
+        const isSpecialKick = playType === "kickoff" || playType === "extra_point" || isTwoPoint;
+        if (!isSpecialKick && asNumber(row.down) === 1 && keyString(row.fixed_drive) && !driveStarts.has(driveKey) && row.yardline_100 !== null && row.yardline_100 !== void 0) {
+          driveStarts.add(driveKey);
+          const startOwnYard = 100 - asNumber(row.yardline_100);
+          if (startOwnYard >= 1 && startOwnYard <= 99) {
+            stat.startYardlineSum += startOwnYard;
+            stat.startDriveCount += 1;
+          }
+        }
+        const drive = redZoneDrives.get(driveKey) ?? { team: offense, opponent: teamKnown(defense) ? defense : "", week, entered: false, result: "" };
         drive.entered ||= asNumber(row.drive_inside20) === 1;
         const result = asString(row.fixed_drive_result);
         if (result) drive.result = result;
-        redZoneDrives.set(driveId, drive);
+        redZoneDrives.set(driveKey, drive);
       }
       if (teamKnown(defense)) {
         const stat = get(defense, week);
         const netPassYards = fieldlineNetPassingYardsForPlay(row);
         const rushYards = asNumber(row.rushing_yards) + asNumber(row.lateral_rushing_yards);
         const totalYards = fieldlineTotalYardsForPlay(row);
-        if (asNumber(row.two_point_attempt) !== 1) {
+        if (!isTwoPoint) {
           stat.yardsAgainst += totalYards;
           stat.passYardsAgainst += netPassYards;
           stat.rushYardsAgainst += rushYards;
@@ -3954,6 +4085,17 @@ async function importFieldlineSeasonFromNflverse(season, importedBy) {
           if (epa !== null) {
             stat.defenseEpaAllowed += epa;
             stat.defenseEpaPlays += 1;
+            if (playType === "pass" || asNumber(row.pass_attempt) === 1 || asNumber(row.sack) === 1) {
+              stat.defensePassEpaAllowed += epa;
+              stat.defensePassEpaPlays += 1;
+            } else if (playType === "run") {
+              stat.defenseRushEpaAllowed += epa;
+              stat.defenseRushEpaPlays += 1;
+            }
+          }
+          if (playType === "pass" || playType === "run") {
+            stat.defenseTotalPlays += 1;
+            if (asNumber(row.success) === 1) stat.defenseSuccessPlays += 1;
           }
           stat.sacksDefense += asNumber(row.sack);
           stat.interceptionsDefense += asNumber(row.interception);
