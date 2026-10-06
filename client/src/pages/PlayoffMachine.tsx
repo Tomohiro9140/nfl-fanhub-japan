@@ -658,7 +658,7 @@ export default function PlayoffMachine() {
                     )}
                   </div>
                 ) : (
-                  /* ドラフト順位一覧（解説ボタンなし・トレード譲渡バッジ付きリスト形式） */
+                  /* ドラフト順位一覧（所属地区削除・すっきり1行表示） */
                   <div>
                     <div className="border-b border-slate-100 bg-slate-50/70 px-3 py-1.5 flex items-center justify-between">
                       <span className="text-[10px] font-bold tracking-wider text-slate-500">
@@ -1027,7 +1027,7 @@ function SeedRow({
   );
 }
 
-// ★ ドラフト行コンポーネント（解説ボタン全廃 ＆ トレード譲渡先バッジ表示）
+// ★ ドラフト行コンポーネント（所属地区を削除し、チーム名＋譲渡バッジ＋勝敗＋SOSの1行スッキリ構成）
 function DraftRow({
   item,
   isFocus,
@@ -1057,22 +1057,19 @@ function DraftRow({
           {item.pickNumber}
         </span>
         <MemoTeamMark code={item.team} size="sm" />
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-1.5 flex-wrap min-w-0">
-            <span className="text-xs font-bold truncate text-slate-800">
-              {item.teamName}
-            </span>
-            {traded && (
-              <span className="inline-flex items-center gap-0.5 rounded bg-amber-100/90 border border-amber-300/80 px-1 py-0.1 text-[9px] font-bold text-amber-900 shrink-0">
-                <span>→</span>
-                <span>{traded.toTeam}へ譲渡</span>
-              </span>
-            )}
-          </div>
-          <span className="text-[9px] text-slate-400 block truncate">
-            {item.division}
-            {traded && <span className="ml-1 text-amber-700/80">({traded.note})</span>}
+        <div className="min-w-0 flex-1 flex items-center gap-1.5 flex-wrap">
+          <span className="text-xs font-bold truncate text-slate-800">
+            {item.teamName}
           </span>
+          {traded && (
+            <span
+              className="inline-flex items-center gap-0.5 rounded bg-amber-100/90 border border-amber-300/80 px-1 py-0.2 text-[9px] font-bold text-amber-900 shrink-0"
+              title={traded.note}
+            >
+              <span>→</span>
+              <span>{traded.toTeam}へ譲渡</span>
+            </span>
+          )}
         </div>
       </div>
 
