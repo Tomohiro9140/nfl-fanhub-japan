@@ -36,7 +36,6 @@ type Aggregate = {
   puntAttempts: number; puntsInside20: number; penalties: number; penaltyYards: number; blitzPct: number | null;
   missedTackles: number | null;
 
-  // ★ 新規追加集計フィールド
   offensePassEpa: number; offensePassEpaPlays: number;
   offenseRushEpa: number; offenseRushEpaPlays: number;
   offenseSuccessPlays: number; offenseTotalPlays: number;
@@ -56,7 +55,11 @@ export type FieldlineSummary = {
   metrics: Record<string, number | null>;
   ranks: Record<string, number | null>;
 };
-export type FieldlineComparisonResult = { available: false; reason: string } | { available: true; summary: FieldlineSummary };
+
+// ★ allSummaries を追加して全32チームのランキング情報も提供可能に拡張
+export type FieldlineComparisonResult =
+  | { available: false; reason: string }
+  | { available: true; summary: FieldlineSummary; allSummaries: FieldlineSummary[] };
 
 const TEAM_ALIASES: Record<string, string> = { LA: "LAR", JAC: "JAX", WSH: "WAS" };
 const asNumber = (value: unknown) => {
@@ -93,7 +96,6 @@ function emptyAggregate(season: number, team: string, week: number): Aggregate {
     extraPointAttempts: 0, extraPointsMade: 0, puntAttempts: 0, puntsInside20: 0, penalties: 0,
     penaltyYards: 0, blitzPct: null, missedTackles: null,
 
-    // ★ 新規追加フィールド初期化
     offensePassEpa: 0, offensePassEpaPlays: 0,
     offenseRushEpa: 0, offenseRushEpaPlays: 0,
     offenseSuccessPlays: 0, offenseTotalPlays: 0,
@@ -123,7 +125,6 @@ const aggregateKeys = [
   "thirdDownConversions", "opponentThirdDownAttempts", "opponentThirdDownConversions", "redZoneAttempts",
   "redZoneTouchdowns", "opponentRedZoneAttempts", "opponentRedZoneTouchdowns", "fieldGoalAttempts",
   "fieldGoalsMade", "extraPointAttempts", "extraPointsMade", "puntAttempts", "puntsInside20", "penalties", "penaltyYards",
-  // ★ 追加キー
   "offensePassEpa", "offensePassEpaPlays", "offenseRushEpa", "offenseRushEpaPlays",
   "offenseSuccessPlays", "offenseTotalPlays", "giveaways",
   "defensePassEpaAllowed", "defensePassEpaPlays", "defenseRushEpaAllowed", "defenseRushEpaPlays",
@@ -157,7 +158,6 @@ function aggregateRecords(rows: Aggregate[]) {
 function toMetrics(stat: Aggregate) {
   const games = stat.games || 1;
   return {
-    // OFFENSE
     pointsPerGame: stat.games ? stat.pointsFor / games : null,
     yardsPerGame: stat.games ? stat.yardsFor / games : null,
     passYardsPerGame: stat.games ? stat.passYardsFor / games : null,
@@ -171,7 +171,6 @@ function toMetrics(stat: Aggregate) {
     sacksAllowed: stat.games ? stat.sacksAllowed : null,
     giveaways: stat.games ? stat.giveaways : null,
 
-    // DEFENSE
     pointsAllowedPerGame: stat.games ? stat.pointsAgainst / games : null,
     yardsAllowedPerGame: stat.games ? stat.yardsAgainst / games : null,
     passYardsAllowedPerGame: stat.games ? stat.passYardsAgainst / games : null,
@@ -185,34 +184,28 @@ function toMetrics(stat: Aggregate) {
     interceptionsDefense: stat.games ? stat.interceptionsDefense : null,
     turnovers: stat.games ? stat.turnovers : null,
 
-    // SPECIAL TEAMS
     fieldGoalPct: stat.fieldGoalAttempts ? stat.fieldGoalsMade / stat.fieldGoalAttempts : null,
     extraPointPct: stat.extraPointAttempts ? stat.extraPointsMade / stat.extraPointAttempts : null,
     puntInside20Pct: stat.puntAttempts ? stat.puntsInside20 / stat.puntAttempts : null,
     netPuntAvg: stat.puntAttempts ? stat.netPuntYards / stat.puntAttempts : null,
     startFieldPos: stat.startDriveCount ? stat.startYardlineSum / stat.startDriveCount : null,
 
-    // DISCIPLINE
     penalties: stat.games ? stat.penalties : null,
     penaltyYardsPerGame: stat.games ? stat.penaltyYards / games : null,
   };
 }
 
 const metricRules: [string, "asc" | "desc"][] = [
-  // OFFENSE
   ["pointsPerGame", "desc"], ["yardsPerGame", "desc"], ["passYardsPerGame", "desc"], ["rushYardsPerGame", "desc"],
   ["passEpaPerPlay", "desc"], ["rushEpaPerPlay", "desc"], ["successRate", "desc"], ["passerRating", "desc"],
   ["thirdDownPct", "desc"], ["redZoneTdPct", "desc"], ["sacksAllowed", "asc"], ["giveaways", "asc"],
 
-  // DEFENSE
   ["pointsAllowedPerGame", "asc"], ["yardsAllowedPerGame", "asc"], ["passYardsAllowedPerGame", "asc"], ["rushYardsAllowedPerGame", "asc"],
   ["opponentPassEpaPerPlay", "asc"], ["opponentRushEpaPerPlay", "asc"], ["opponentSuccessRate", "asc"],
   ["opponentThirdDownPct", "asc"], ["opponentRedZoneTdPct", "asc"], ["sacksDefense", "desc"], ["interceptionsDefense", "desc"], ["turnovers", "desc"],
 
-  // SPECIAL TEAMS
   ["fieldGoalPct", "desc"], ["extraPointPct", "desc"], ["puntInside20Pct", "desc"], ["netPuntAvg", "desc"], ["startFieldPos", "desc"],
 
-  // DISCIPLINE
   ["penalties", "asc"], ["penaltyYardsPerGame", "asc"],
 ];
 
@@ -404,7 +397,9 @@ export async function compareFieldlineSelections(inputs: FieldlineSelection[]) {
       });
       makeRanks(summaries);
       const summary = summaries.find(item => item.team === input.team);
-      return !summary || !summary.games ? { available: false as const, reason: "選択したWeekには試合データがありません。別のWeekを選択してください。" } : { available: true as const, summary };
+      return !summary || !summary.games
+        ? { available: false as const, reason: "選択したWeekには試合データがありません。別のWeekを選択してください。" }
+        : { available: true as const, summary, allSummaries: summaries };
     });
   });
 }
@@ -422,7 +417,6 @@ export async function importFieldlineSeasonFromNflverse(season: number, imported
       "pass_touchdown", "interception", "sack", "fumble_lost", "third_down_converted", "third_down_failed",
       "two_point_attempt", "field_goal_attempt", "field_goal_result", "extra_point_attempt", "extra_point_result",
       "punt_attempt", "punt_inside_twenty", "penalty", "penalty_yards",
-      // ★ 追加Parquetカラム
       "play_type", "success", "kick_distance", "return_yards", "touchback", "yardline_100"
     ];
     const file = await asyncBufferFromUrl({ url: sourceUrl });
@@ -460,7 +454,6 @@ export async function importFieldlineSeasonFromNflverse(season: number, imported
           const epa = asFiniteNumber(row.epa);
           if (epa !== null) {
             stat.offenseEpa += epa; stat.offenseEpaPlays += 1;
-            // Pass EPA / Rush EPA
             if (playType === "pass" || asNumber(row.pass_attempt) === 1 || asNumber(row.sack) === 1) {
               stat.offensePassEpa += epa; stat.offensePassEpaPlays += 1;
             } else if (playType === "run") {
@@ -468,15 +461,12 @@ export async function importFieldlineSeasonFromNflverse(season: number, imported
             }
           }
 
-          // Success Rate
           if (playType === "pass" || playType === "run") {
             stat.offenseTotalPlays += 1;
             if (asNumber(row.success) === 1) stat.offenseSuccessPlays += 1;
           }
 
-          // Giveaways
           stat.giveaways += asNumber(row.interception) + asNumber(row.fumble_lost);
-
           stat.passAttempts += asNumber(row.pass_attempt) - asNumber(row.sack);
           stat.passCompletions += asNumber(row.complete_pass);
           stat.passTouchdowns += asNumber(row.pass_touchdown);
@@ -491,7 +481,6 @@ export async function importFieldlineSeasonFromNflverse(season: number, imported
           stat.puntAttempts += asNumber(row.punt_attempt);
           stat.puntsInside20 += asNumber(row.punt_inside_twenty);
 
-          // Net Punt Avg
           if (asNumber(row.punt_attempt) === 1) {
             const kickDist = asNumber(row.kick_distance);
             const retYards = asNumber(row.return_yards);
@@ -501,7 +490,6 @@ export async function importFieldlineSeasonFromNflverse(season: number, imported
           }
         }
 
-        // ドライブ開始地点（各ドライブの最初のプレイから取得）
         const driveKey = `${gameId}-${offense}-${keyString(row.fixed_drive)}`;
         if (keyString(row.fixed_drive) && !driveStarts.has(driveKey) && row.yardline_100 !== null && row.yardline_100 !== undefined) {
           driveStarts.add(driveKey);
@@ -528,7 +516,6 @@ export async function importFieldlineSeasonFromNflverse(season: number, imported
           const epa = asFiniteNumber(row.epa);
           if (epa !== null) {
             stat.defenseEpaAllowed += epa; stat.defenseEpaPlays += 1;
-            // Opponent Pass / Rush EPA
             if (playType === "pass" || asNumber(row.pass_attempt) === 1 || asNumber(row.sack) === 1) {
               stat.defensePassEpaAllowed += epa; stat.defensePassEpaPlays += 1;
             } else if (playType === "run") {
@@ -536,7 +523,6 @@ export async function importFieldlineSeasonFromNflverse(season: number, imported
             }
           }
 
-          // Opponent Success Rate
           if (playType === "pass" || playType === "run") {
             stat.defenseTotalPlays += 1;
             if (asNumber(row.success) === 1) stat.defenseSuccessPlays += 1;
