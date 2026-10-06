@@ -915,9 +915,20 @@ export default function Fieldline() {
     <div className="fieldline-hub-surface min-h-screen text-slate-900">
       <EmbeddedAppNav current="FIELDLINE" />
       
-      {/* ★ ヘッダー：右端に「使い方」ボタンをスッキリ配置 */}
+      {/* ★ ヘッダー：左端に「使い方」ボタンを配置 */}
       <header className="border-b border-white/10 bg-[#101827] text-white">
         <div className="container relative flex min-h-20 items-center justify-center">
+          {/* 使い方ボタン（ヘッダー左側に配置） */}
+          <button
+            type="button"
+            onClick={() => setIsGuideOpen(true)}
+            className="absolute left-4 top-1/2 -translate-y-1/2 flex items-center gap-1.5 rounded-full border border-white/15 bg-white/10 px-2.5 py-1.5 sm:px-3 text-xs font-semibold text-slate-200 backdrop-blur-sm transition hover:bg-white/20 hover:text-white shadow-sm"
+            title="使い方を見る"
+          >
+            <HelpCircle className="h-3.5 w-3.5 text-[#f2bc62]" />
+            <span className="hidden sm:inline">使い方</span>
+          </button>
+
           <div className="flex items-center gap-3">
             <div className="grid h-10 w-10 place-items-center rounded-xl bg-gradient-to-br from-[#f2bc62] to-[#e85d2a] shadow-lg">
               <Trophy className="h-5 w-5 text-[#101827]" />
@@ -927,17 +938,6 @@ export default function Fieldline() {
               <p className="text-[10px] font-medium tracking-[.18em] text-slate-400">NFL TEAM COMPARATOR</p>
             </div>
           </div>
-
-          {/* 使い方ボタン（モーダル展開） */}
-          <button
-            type="button"
-            onClick={() => setIsGuideOpen(true)}
-            className="absolute right-4 top-1/2 -translate-y-1/2 flex items-center gap-1.5 rounded-full border border-white/15 bg-white/10 px-3 py-1.5 text-xs font-semibold text-slate-200 backdrop-blur-sm transition hover:bg-white/20 hover:text-white shadow-sm"
-            title="使い方を見る"
-          >
-            <HelpCircle className="h-3.5 w-3.5 text-[#f2bc62]" />
-            <span className="hidden sm:inline">使い方</span>
-          </button>
         </div>
       </header>
 
