@@ -154,7 +154,6 @@ function getStoredTeam(side: "left" | "right", fallback: string) {
   }
 }
 
-// ★ Ownの文字を排除し、数値のみを綺麗にフォーマット
 function formatMetric(value: number | null | undefined, format: "number" | "decimal" | "percent" | "epa") {
   if (value === null || value === undefined) return "—";
   if (format === "percent") return `${(value * 100).toFixed(1)}%`;
@@ -468,7 +467,7 @@ function GuideModal({ onClose }: { onClose: () => void }) {
             <div>
               <p className="font-bold text-slate-800 text-sm">2. 中央タップでリーグTop 5・Worst 5</p>
               <p className="mt-1">
-                中央のスタッツ名（例: <span className="font-semibold text-slate-700">Pass EPA / Play</span> や <span className="font-semibold text-slate-700">3rd Down</span> 等）をタップすると、<strong>左パネルの条件に基づいたリーグ全体のTop 5（上位）およびWorst 5（下位）</strong>をポップアップで確認できます。
+                中央のスタッツ名（例: <span className="font-semibold text-slate-700">Pass EPA / Play</span> や <span className="font-semibold text-slate-700">3rd Down</span> 等）をタップすると、<strong>左パネルの条件に基づいたリーグ全体のTop 5（上位）およびWorst 5（下位）</strong>をポップアップで確認できます。同率タイのチームもすべて表示されます。
               </p>
             </div>
           </div>
@@ -498,6 +497,7 @@ function GuideModal({ onClose }: { onClose: () => void }) {
   );
 }
 
+// ★ 同率タイをすべて含め、スクロール可能にしたランキングモーダル
 function RankingModal({
   metric,
   allSummaries,
@@ -525,11 +525,19 @@ function RankingModal({
       .sort((a, b) => (a.ranks[metric.key] ?? 999) - (b.ranks[metric.key] ?? 999));
   }, [allSummaries, metric.key]);
 
-  const top5 = useMemo(() => validSummaries.slice(0, 5), [validSummaries]);
-  const worst5 = useMemo(() => {
+  // ★ 順位が #5 以内のチームを全員抽出（同率タイが何チームいても漏れなく含める）
+  const topRanked = useMemo(() => {
+    const filtered = validSummaries.filter((item) => (item.ranks[metric.key] ?? 999) <= 5);
+    return filtered.length > 0 ? filtered : validSummaries.slice(0, 5);
+  }, [validSummaries, metric.key]);
+
+  // ★ 下位5つの順位階層（Worst 5位層）に属するチームを全員抽出
+  const worstRanked = useMemo(() => {
     if (validSummaries.length <= 5) return [];
-    return validSummaries.slice(Math.max(5, validSummaries.length - 5));
-  }, [validSummaries]);
+    const distinctRanks = Array.from(new Set(validSummaries.map((item) => item.ranks[metric.key] as number))).sort((a, b) => a - b);
+    const worstRanks = new Set(distinctRanks.slice(Math.max(0, distinctRanks.length - 5)));
+    return validSummaries.filter((item) => worstRanks.has(item.ranks[metric.key]));
+  }, [validSummaries, metric.key]);
 
   const leftRank = leftSummary?.ranks?.[metric.key];
   const rightRank = rightSummary?.ranks?.[metric.key];
@@ -556,6 +564,7 @@ function RankingModal({
           </button>
         </div>
 
+        {/* 現在の比較チーム状況カード */}
         <div className="mt-3 grid grid-cols-2 gap-2 rounded-2xl bg-slate-50 p-2.5 border border-slate-200/80">
           <div className="flex items-center justify-between rounded-xl bg-white px-3 py-2 border border-slate-100 shadow-sm">
             <div className="flex items-center gap-1.5 min-w-0">
@@ -579,14 +588,18 @@ function RankingModal({
           </div>
         </div>
 
+        {/* Top 5 & Worst 5 グリッド（スクロール可能） */}
         <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {/* TOP 5 */}
           <div className="rounded-2xl border border-emerald-200/70 bg-emerald-50/20 p-3">
             <div className="mb-2 flex items-center justify-between px-1">
-              <span className="text-[11px] font-bold tracking-wider text-emerald-800 uppercase">TOP 5 (上位)</span>
+              <span className="text-[11px] font-bold tracking-wider text-emerald-800 uppercase">
+                TOP 5 (上位{topRanked.length > 5 ? ` · ${topRanked.length}チーム` : ""})
+              </span>
               <span className="text-[10px] font-semibold text-emerald-600">BEST</span>
             </div>
-            <div className="space-y-1.5">
-              {top5.map((item) => {
+            <div className="space-y-1.5 max-h-60 overflow-y-auto pr-1">
+              {topRanked.map((item) => {
                 const isSelectedTeam = item.team === leftSummary.team || item.team === rightSummary.team;
                 return (
                   <div
@@ -613,13 +626,16 @@ function RankingModal({
             </div>
           </div>
 
+          {/* WORST 5 */}
           <div className="rounded-2xl border border-rose-200/70 bg-rose-50/20 p-3">
             <div className="mb-2 flex items-center justify-between px-1">
-              <span className="text-[11px] font-bold tracking-wider text-rose-800 uppercase">WORST 5 (下位)</span>
+              <span className="text-[11px] font-bold tracking-wider text-rose-800 uppercase">
+                WORST 5 (下位{worstRanked.length > 5 ? ` · ${worstRanked.length}チーム` : ""})
+              </span>
               <span className="text-[10px] font-semibold text-rose-600">BOTTOM</span>
             </div>
-            <div className="space-y-1.5">
-              {worst5.map((item) => {
+            <div className="space-y-1.5 max-h-60 overflow-y-auto pr-1">
+              {worstRanked.map((item) => {
                 const isSelectedTeam = item.team === leftSummary.team || item.team === rightSummary.team;
                 return (
                   <div
@@ -663,7 +679,6 @@ function RankingModal({
   );
 }
 
-// ★ 改行（2段落ち）を防止し、モバイルでも横並びで美しく揃うよう最適化
 function MetricGroup({
   group,
   left,
@@ -691,7 +706,6 @@ function MetricGroup({
               key={metric.key}
               className="grid min-h-11 grid-cols-[1fr_auto_1fr] items-center gap-1.5 sm:gap-3 border-b border-slate-100 px-3 sm:px-5 py-1.5 sm:py-2 last:border-0"
             >
-              {/* 左側チームの数値＋順位（改行禁止＆横並び固定） */}
               <div className="flex items-center justify-end gap-1 sm:gap-1.5 whitespace-nowrap min-w-0">
                 <span
                   className={`inline-block rounded-md text-base sm:text-lg font-semibold tabular-nums leading-tight ${
@@ -705,7 +719,6 @@ function MetricGroup({
                 </span>
               </div>
 
-              {/* 中央スタッツ名 */}
               <div className="min-w-[6.8rem] sm:min-w-[7.8rem] text-center shrink-0">
                 <button
                   type="button"
@@ -719,7 +732,6 @@ function MetricGroup({
                 </button>
               </div>
 
-              {/* 右側チームの数値＋順位（改行禁止＆横並び固定） */}
               <div className="flex items-center justify-start gap-1 sm:gap-1.5 whitespace-nowrap min-w-0">
                 <span
                   className={`inline-block rounded-md text-base sm:text-lg font-semibold tabular-nums leading-tight ${
@@ -920,7 +932,6 @@ export default function Fieldline() {
     <div className="fieldline-hub-surface min-h-screen text-slate-900">
       <EmbeddedAppNav current="FIELDLINE" />
       
-      {/* ヘッダー：左側に使い方ボタン */}
       <header className="border-b border-white/10 bg-[#101827] text-white">
         <div className="container relative flex min-h-20 items-center justify-center">
           <button
@@ -1033,7 +1044,7 @@ export default function Fieldline() {
       {/* 使い方ガイドモーダル */}
       {isGuideOpen && <GuideModal onClose={() => setIsGuideOpen(false)} />}
 
-      {/* Top 5 / Worst 5 モーダル */}
+      {/* Top 5 / Worst 5 モーダル（同率タイ全表示版） */}
       {selectedMetric && comparison.data?.left.available && (
         <RankingModal
           metric={selectedMetric}
