@@ -6,7 +6,7 @@ import { Separator } from "@/components/ui/separator";
 import { EmbeddedAppNav } from "@/components/EmbeddedAppNav";
 import { trpc } from "@/lib/trpc";
 import { fieldlineTeamBrand } from "@/lib/fieldlineTeams";
-import { ArrowLeftRight, CalendarRange, ChevronDown, ChevronUp, ShieldAlert, Trophy } from "lucide-react";
+import { ArrowLeftRight, CalendarRange, ChevronDown, ChevronUp, ShieldAlert, Trophy, X } from "lucide-react";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 type VenueFilter = "all" | "home" | "away";
@@ -50,7 +50,13 @@ type MetricKey =
   | "penalties"
   | "penaltyYardsPerGame";
 
-const metricGroups: { title: string; metrics: { key: MetricKey; label: string; format: "number" | "decimal" | "percent" | "epa" }[] }[] = [
+type MetricConfig = {
+  key: MetricKey;
+  label: string;
+  format: "number" | "decimal" | "percent" | "epa";
+};
+
+const metricGroups: { title: string; metrics: MetricConfig[] }[] = [
   {
     title: "OFFENSE",
     metrics: [
@@ -152,7 +158,7 @@ function formatMetric(value: number | null | undefined, format: "number" | "deci
   if (value === null || value === undefined) return "—";
   if (format === "percent") return `${(value * 100).toFixed(1)}%`;
   if (format === "decimal") return value.toFixed(1);
-  if (format === "epa") return (value > 0 ? `+${value.toFixed(3)}` : value.toFixed(3));
+  if (format === "epa") return value > 0 ? `+${value.toFixed(3)}` : value.toFixed(3);
   return new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(value);
 }
 
@@ -188,7 +194,6 @@ const venueLabel = (venue: VenueFilter) => (venue === "home" ? "ホーム" : ven
 
 function SelectPanel({
   title,
-  side,
   value,
   onChange,
   onVenueChange,
@@ -418,7 +423,189 @@ function Unavailable({ side, message }: { side: string; message?: string }) {
   );
 }
 
-function MetricGroup({ group, left, right }: { group: (typeof metricGroups)[number]; left: any; right: any }) {
+// ★ Top 5 / Worst 5 表示モーダルコンポーネント
+function RankingModal({
+  metric,
+  allSummaries,
+  leftSummary,
+  rightSummary,
+  onClose,
+}: {
+  metric: MetricConfig;
+  allSummaries: any[];
+  leftSummary: any;
+  rightSummary: any;
+  onClose: () => void;
+}) {
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [onClose]);
+
+  const validSummaries = useMemo(() => {
+    return allSummaries
+      .filter((item) => item.games > 0 && item.metrics[metric.key] !== null)
+      .sort((a, b) => (a.ranks[metric.key] ?? 999) - (b.ranks[metric.key] ?? 999));
+  }, [allSummaries, metric.key]);
+
+  const top5 = useMemo(() => validSummaries.slice(0, 5), [validSummaries]);
+  const worst5 = useMemo(() => {
+    if (validSummaries.length <= 5) return [];
+    return validSummaries.slice(Math.max(5, validSummaries.length - 5));
+  }, [validSummaries]);
+
+  const leftRank = leftSummary?.ranks?.[metric.key];
+  const rightRank = rightSummary?.ranks?.[metric.key];
+  const leftValue = leftSummary?.metrics?.[metric.key];
+  const rightValue = rightSummary?.metrics?.[metric.key];
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+      <div className="relative w-full max-w-xl max-h-[90vh] overflow-y-auto rounded-3xl border border-slate-200 bg-white p-5 sm:p-6 shadow-2xl">
+        {/* ヘッダー */}
+        <div className="flex items-start justify-between border-b border-slate-100 pb-3">
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="rounded-md bg-amber-100 px-2 py-0.5 text-[11px] font-bold text-amber-800">LEAGUE RANKINGS</span>
+              <span className="text-[11px] font-medium text-slate-400">（左パネル選択条件）</span>
+            </div>
+            <h2 className="mt-1 text-lg font-bold text-slate-900">{metric.label}</h2>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-full p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        {/* 現在の比較チーム状況カード */}
+        <div className="mt-3 grid grid-cols-2 gap-2 rounded-2xl bg-slate-50 p-2.5 border border-slate-200/80">
+          <div className="flex items-center justify-between rounded-xl bg-white px-3 py-2 border border-slate-100 shadow-sm">
+            <div className="flex items-center gap-1.5 min-w-0">
+              <MemoTeamMark code={leftSummary.team} size="sm" />
+              <span className="truncate text-xs font-semibold text-slate-800">{leftSummary.team}</span>
+            </div>
+            <div className="text-right">
+              <span className="text-xs font-bold text-[#e85d2a]">#{leftRank ?? "—"}</span>
+              <p className="text-[11px] font-medium tabular-nums text-slate-500">{formatMetric(leftValue, metric.format)}</p>
+            </div>
+          </div>
+          <div className="flex items-center justify-between rounded-xl bg-white px-3 py-2 border border-slate-100 shadow-sm">
+            <div className="flex items-center gap-1.5 min-w-0">
+              <MemoTeamMark code={rightSummary.team} size="sm" />
+              <span className="truncate text-xs font-semibold text-slate-800">{rightSummary.team}</span>
+            </div>
+            <div className="text-right">
+              <span className="text-xs font-bold text-[#e85d2a]">#{rightRank ?? "—"}</span>
+              <p className="text-[11px] font-medium tabular-nums text-slate-500">{formatMetric(rightValue, metric.format)}</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Top 5 & Worst 5 グリッド */}
+        <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {/* TOP 5 */}
+          <div className="rounded-2xl border border-emerald-200/70 bg-emerald-50/20 p-3">
+            <div className="mb-2 flex items-center justify-between px-1">
+              <span className="text-[11px] font-bold tracking-wider text-emerald-800 uppercase">TOP 5 (上位)</span>
+              <span className="text-[10px] font-semibold text-emerald-600">BEST</span>
+            </div>
+            <div className="space-y-1.5">
+              {top5.map((item) => {
+                const isSelectedTeam = item.team === leftSummary.team || item.team === rightSummary.team;
+                return (
+                  <div
+                    key={item.team}
+                    className={`flex items-center justify-between rounded-xl px-2.5 py-1.5 border text-xs transition ${
+                      isSelectedTeam
+                        ? "border-[#e85d2a] bg-[#fff5f0] shadow-sm font-semibold"
+                        : "border-slate-100 bg-white"
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="inline-block min-w-7 rounded bg-emerald-100 px-1 py-0.5 text-center text-[11px] font-bold tabular-nums text-emerald-800">
+                        #{item.ranks[metric.key]}
+                      </span>
+                      <MemoTeamMark code={item.team} size="sm" />
+                      <span className="truncate text-slate-800">{item.team}</span>
+                    </div>
+                    <span className="font-semibold tabular-nums text-slate-900">
+                      {formatMetric(item.metrics[metric.key], metric.format)}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* WORST 5 */}
+          <div className="rounded-2xl border border-rose-200/70 bg-rose-50/20 p-3">
+            <div className="mb-2 flex items-center justify-between px-1">
+              <span className="text-[11px] font-bold tracking-wider text-rose-800 uppercase">WORST 5 (下位)</span>
+              <span className="text-[10px] font-semibold text-rose-600">BOTTOM</span>
+            </div>
+            <div className="space-y-1.5">
+              {worst5.map((item) => {
+                const isSelectedTeam = item.team === leftSummary.team || item.team === rightSummary.team;
+                return (
+                  <div
+                    key={item.team}
+                    className={`flex items-center justify-between rounded-xl px-2.5 py-1.5 border text-xs transition ${
+                      isSelectedTeam
+                        ? "border-[#e85d2a] bg-[#fff5f0] shadow-sm font-semibold"
+                        : "border-slate-100 bg-white"
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="inline-block min-w-7 rounded bg-rose-100 px-1 py-0.5 text-center text-[11px] font-bold tabular-nums text-rose-800">
+                        #{item.ranks[metric.key]}
+                      </span>
+                      <MemoTeamMark code={item.team} size="sm" />
+                      <span className="truncate text-slate-800">{item.team}</span>
+                    </div>
+                    <span className="font-semibold tabular-nums text-slate-900">
+                      {formatMetric(item.metrics[metric.key], metric.format)}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+
+        {/* 閉じるボタン */}
+        <div className="mt-5 flex justify-end">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={onClose}
+            className="rounded-xl px-4 text-xs font-semibold"
+          >
+            閉じる
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function MetricGroup({
+  group,
+  left,
+  right,
+  onSelectMetric,
+}: {
+  group: (typeof metricGroups)[number];
+  left: any;
+  right: any;
+  onSelectMetric: (metric: MetricConfig) => void;
+}) {
   return (
     <section className="overflow-hidden rounded-[1.4rem] border border-slate-200 bg-white shadow-[0_12px_30px_rgba(15,23,42,.05)]">
       <div className="flex items-center border-b border-slate-100 bg-slate-50/70 px-5 py-2.5">
@@ -442,9 +629,21 @@ function MetricGroup({ group, left, right }: { group: (typeof metricGroups)[numb
                 </span>
                 <span className="ml-2 text-xs font-medium tabular-nums text-slate-400">#{left.summary.ranks[metric.key] ?? "—"}</span>
               </div>
+
+              {/* ★ タップしてTop 5 / Worst 5 モーダルを開くボタン */}
               <div className="min-w-[8.2rem] text-center">
-                <p className="text-xs font-semibold text-slate-700">{metric.label}</p>
+                <button
+                  type="button"
+                  onClick={() => onSelectMetric(metric)}
+                  className="group inline-flex items-center justify-center rounded-lg px-2 py-1 text-xs font-semibold text-slate-700 transition hover:bg-slate-100 hover:text-slate-900 active:scale-95"
+                  title="タップしてリーグTop5・Worst5を表示"
+                >
+                  <span className="border-b border-dashed border-slate-300 group-hover:border-slate-600 pb-0.5">
+                    {metric.label}
+                  </span>
+                </button>
               </div>
+
               <div>
                 <span
                   className={`inline-block rounded-md text-lg font-semibold tabular-nums ${
@@ -463,7 +662,13 @@ function MetricGroup({ group, left, right }: { group: (typeof metricGroups)[numb
   );
 }
 
-function ComparisonTable({ data }: { data: any }) {
+function ComparisonTable({
+  data,
+  onSelectMetric,
+}: {
+  data: any;
+  onSelectMetric: (metric: MetricConfig) => void;
+}) {
   const left = data?.left;
   const right = data?.right;
   if (!left?.available || !right?.available)
@@ -491,7 +696,13 @@ function ComparisonTable({ data }: { data: any }) {
         <p className="text-center text-base font-bold tabular-nums text-slate-900">{formatRecord(right.summary.record)}</p>
       </div>
       {metricGroups.map((group) => (
-        <MetricGroup key={group.title} group={group} left={left} right={right} />
+        <MetricGroup
+          key={group.title}
+          group={group}
+          left={left}
+          right={right}
+          onSelectMetric={onSelectMetric}
+        />
       ))}
     </div>
   );
@@ -542,6 +753,9 @@ export default function Fieldline() {
   const leftVenueChange = useRef(false);
   const rightVenueChange = useRef(false);
   const prefetched = useRef(false);
+
+  // ★ 選択中のスタッツモーダル状態
+  const [selectedMetric, setSelectedMetric] = useState<MetricConfig | null>(null);
 
   useEffect(() => {
     try {
@@ -654,9 +868,10 @@ export default function Fieldline() {
           </Card>
         ) : (
           <>
+            {/* ★ 更新後の注意書き（Top5/Worst5の案内を追加） */}
             <div className="mb-5 rounded-2xl border border-[#e5dcc8] bg-[#fffdf7] px-5 py-3 text-sm text-slate-600">
               <CalendarRange className="mr-2 inline h-4 w-4 text-[#9a7530]" />
-              Week 1〜18から任意の複数Weekと開催地を選ぶと、条件に合う試合だけを合算して比較します。Bye Weekも選択できますが、試合数・勝敗数・ゲーム平均の分母には含めません。
+              Week 1〜18から任意の複数Weekと開催地を選ぶと、条件に合う試合だけを合算して比較します。中央のスタッツ名をタップすると、左パネルの条件に基づいたリーグTop 5・Worst 5を表示します。
             </div>
             <div className="space-y-3">
               <MemoSelectPanel
@@ -721,10 +936,24 @@ export default function Fieldline() {
           ) : pending ? (
             <ComparisonSkeleton />
           ) : (
-            <ComparisonTable data={comparison.data} />
+            <ComparisonTable
+              data={comparison.data}
+              onSelectMetric={(metric) => setSelectedMetric(metric)}
+            />
           )}
         </section>
       </main>
+
+      {/* ★ ポップアップ（モーダル）レンダリング */}
+      {selectedMetric && comparison.data?.left.available && (
+        <RankingModal
+          metric={selectedMetric}
+          allSummaries={comparison.data.left.allSummaries ?? []}
+          leftSummary={comparison.data.left.summary}
+          rightSummary={comparison.data.right?.available ? comparison.data.right.summary : null}
+          onClose={() => setSelectedMetric(null)}
+        />
+      )}
     </div>
   );
 }
