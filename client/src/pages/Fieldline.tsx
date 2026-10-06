@@ -12,30 +12,43 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 type VenueFilter = "all" | "home" | "away";
 type Selection = { season: number; team: string; weeks: number[]; venue: VenueFilter };
 type AvailableWeek = { week: number; opponent: string; isHome: boolean | null; isBye: boolean; hasStats?: boolean };
+
 type MetricKey =
+  // OFFENSE
   | "pointsPerGame"
   | "yardsPerGame"
-  | "epaPerPlay"
   | "passYardsPerGame"
   | "rushYardsPerGame"
+  | "passEpaPerPlay"
+  | "rushEpaPerPlay"
+  | "successRate"
   | "passerRating"
   | "thirdDownPct"
   | "redZoneTdPct"
   | "sacksAllowed"
+  | "giveaways"
+  // DEFENSE
   | "pointsAllowedPerGame"
   | "yardsAllowedPerGame"
-  | "opponentEpaPerPlay"
   | "passYardsAllowedPerGame"
   | "rushYardsAllowedPerGame"
+  | "opponentPassEpaPerPlay"
+  | "opponentRushEpaPerPlay"
+  | "opponentSuccessRate"
   | "opponentThirdDownPct"
   | "opponentRedZoneTdPct"
   | "sacksDefense"
   | "interceptionsDefense"
   | "turnovers"
+  // SPECIAL TEAMS
   | "fieldGoalPct"
   | "extraPointPct"
   | "puntInside20Pct"
-  | "penalties";
+  | "netPuntAvg"
+  | "startFieldPos"
+  // DISCIPLINE
+  | "penalties"
+  | "penaltyYardsPerGame";
 
 const metricGroups: { title: string; metrics: { key: MetricKey; label: string; format: "number" | "decimal" | "percent" | "epa" }[] }[] = [
   {
@@ -43,13 +56,16 @@ const metricGroups: { title: string; metrics: { key: MetricKey; label: string; f
     metrics: [
       { key: "pointsPerGame", label: "得点 / G", format: "decimal" },
       { key: "yardsPerGame", label: "獲得ヤード / G", format: "decimal" },
-      { key: "epaPerPlay", label: "EPA / Play", format: "epa" },
       { key: "passYardsPerGame", label: "パスヤード / G", format: "decimal" },
       { key: "rushYardsPerGame", label: "ランヤード / G", format: "decimal" },
+      { key: "passEpaPerPlay", label: "Pass EPA / Play", format: "epa" },
+      { key: "rushEpaPerPlay", label: "Rush EPA / Play", format: "epa" },
+      { key: "successRate", label: "Success Rate", format: "percent" },
       { key: "passerRating", label: "Passer Rating", format: "decimal" },
       { key: "thirdDownPct", label: "3rd Down", format: "percent" },
       { key: "redZoneTdPct", label: "RZ TD", format: "percent" },
       { key: "sacksAllowed", label: "被サック数", format: "number" },
+      { key: "giveaways", label: "Giveaways", format: "number" },
     ],
   },
   {
@@ -57,11 +73,13 @@ const metricGroups: { title: string; metrics: { key: MetricKey; label: string; f
     metrics: [
       { key: "pointsAllowedPerGame", label: "失点 / G", format: "decimal" },
       { key: "yardsAllowedPerGame", label: "喪失ヤード / G", format: "decimal" },
-      { key: "opponentEpaPerPlay", label: "Opponent EPA / Play", format: "epa" },
       { key: "passYardsAllowedPerGame", label: "パス喪失ヤード / G", format: "decimal" },
       { key: "rushYardsAllowedPerGame", label: "ラン喪失ヤード / G", format: "decimal" },
-      { key: "opponentThirdDownPct", label: "Opponent 3rd Down", format: "percent" },
-      { key: "opponentRedZoneTdPct", label: "Opponent RZ TD", format: "percent" },
+      { key: "opponentPassEpaPerPlay", label: "Opp. Pass EPA / P", format: "epa" },
+      { key: "opponentRushEpaPerPlay", label: "Opp. Rush EPA / P", format: "epa" },
+      { key: "opponentSuccessRate", label: "Opp. Success Rate", format: "percent" },
+      { key: "opponentThirdDownPct", label: "Opp. 3rd Down", format: "percent" },
+      { key: "opponentRedZoneTdPct", label: "Opp. RZ TD", format: "percent" },
       { key: "sacksDefense", label: "Sacks", format: "number" },
       { key: "interceptionsDefense", label: "INT", format: "number" },
       { key: "turnovers", label: "Takeaways", format: "number" },
@@ -73,21 +91,35 @@ const metricGroups: { title: string; metrics: { key: MetricKey; label: string; f
       { key: "fieldGoalPct", label: "FG%", format: "percent" },
       { key: "extraPointPct", label: "XP%", format: "percent" },
       { key: "puntInside20Pct", label: "Punt In-20%", format: "percent" },
+      { key: "netPuntAvg", label: "Net Punt Avg", format: "decimal" },
+      { key: "startFieldPos", label: "Start Field Pos", format: "decimal" },
     ],
   },
-  { title: "DISCIPLINE", metrics: [{ key: "penalties", label: "Penalties", format: "number" }] },
+  {
+    title: "DISCIPLINE",
+    metrics: [
+      { key: "penalties", label: "Penalties", format: "number" },
+      { key: "penaltyYardsPerGame", label: "Penalty Yds / G", format: "decimal" },
+    ],
+  },
 ];
+
 const lowerIsBetter = new Set<MetricKey>([
   "sacksAllowed",
+  "giveaways",
   "pointsAllowedPerGame",
   "yardsAllowedPerGame",
-  "opponentEpaPerPlay",
   "passYardsAllowedPerGame",
   "rushYardsAllowedPerGame",
+  "opponentPassEpaPerPlay",
+  "opponentRushEpaPerPlay",
+  "opponentSuccessRate",
   "opponentThirdDownPct",
   "opponentRedZoneTdPct",
   "penalties",
+  "penaltyYardsPerGame",
 ]);
+
 const storageKey = "fieldline:selected-teams:v1";
 const staticQueryOptions = { staleTime: 10 * 60_000, gcTime: 30 * 60_000, refetchOnWindowFocus: false, retry: 1 } as const;
 const weekQueryOptions = { staleTime: 5 * 60_000, gcTime: 15 * 60_000, refetchOnWindowFocus: false, retry: 1 } as const;
@@ -120,7 +152,7 @@ function formatMetric(value: number | null | undefined, format: "number" | "deci
   if (value === null || value === undefined) return "—";
   if (format === "percent") return `${(value * 100).toFixed(1)}%`;
   if (format === "decimal") return value.toFixed(1);
-  if (format === "epa") return value.toFixed(3);
+  if (format === "epa") return (value > 0 ? `+${value.toFixed(3)}` : value.toFixed(3));
   return new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(value);
 }
 
@@ -195,7 +227,6 @@ function SelectPanel({
   };
 
   const brand = fieldlineTeamBrand[value.team];
-  const team = teams.find((item) => item.code === value.team);
   const selectableList = availableWeeks.filter((item) => item.hasStats || item.isBye);
   const venueText = venueLabel(value.venue);
 
@@ -205,7 +236,6 @@ function SelectPanel({
       style={{ backgroundImage: `linear-gradient(135deg, ${brand?.primary ?? "#1f2e50"}, ${brand?.accent ?? "#e85d2a"})` }}
     >
       <div className="rounded-[1.55rem] bg-white/[.97] p-3.5 sm:p-5">
-        {/* ヘッダー: サイド名と開閉バッジ */}
         <div className="mb-2 flex items-center justify-between gap-2">
           <div className="flex items-center gap-2 min-w-0">
             <MemoTeamMark code={value.team} size="sm" />
@@ -225,7 +255,6 @@ function SelectPanel({
           </Button>
         </div>
 
-        {/* 1行化: シーズン（数字のみ） + チーム選択 */}
         <div className="grid grid-cols-[84px_1fr] gap-2">
           <Select value={String(value.season)} onValueChange={(item) => update("season", item)}>
             <SelectTrigger className="h-9 text-xs font-bold font-mono">
@@ -257,10 +286,8 @@ function SelectPanel({
           </Select>
         </div>
 
-        {/* アコーディオン展開エリア（開催地 & Week選択） */}
         {isFilterOpen && (
           <div className="mt-3 pt-3 border-t border-slate-200/80 space-y-3">
-            {/* 開催地 */}
             <div className="space-y-1.5">
               <Label className="text-[10px] font-bold text-slate-500">開催地</Label>
               <div className="flex rounded-lg border border-slate-200 bg-slate-50 p-1" role="group" aria-label="開催地フィルター">
@@ -283,7 +310,6 @@ function SelectPanel({
               </div>
             </div>
 
-            {/* 比較するWeek */}
             <div className="space-y-2">
               <div className="flex items-center justify-between gap-3">
                 <Label className="text-[10px] font-bold text-slate-500">比較するWeek</Label>
@@ -416,7 +442,7 @@ function MetricGroup({ group, left, right }: { group: (typeof metricGroups)[numb
                 </span>
                 <span className="ml-2 text-xs font-medium tabular-nums text-slate-400">#{left.summary.ranks[metric.key] ?? "—"}</span>
               </div>
-              <div className="min-w-[7.4rem] text-center">
+              <div className="min-w-[8.2rem] text-center">
                 <p className="text-xs font-semibold text-slate-700">{metric.label}</p>
               </div>
               <div>
