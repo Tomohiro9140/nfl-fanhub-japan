@@ -70,6 +70,14 @@ interface DraftPickItem {
   tiebreakReason: string;
 }
 
+// 2027年NFLドラフト 1巡目トレード譲渡データ
+const TRADED_PICKS_2027: Record<string, { toTeam: string; note: string }> = {
+  IND: { toTeam: "NYJ", note: "Sauce Gardnerトレード" },
+  LAR: { toTeam: "CLE", note: "Myles Garrettトレード" },
+  GB: { toTeam: "DAL", note: "Micah Parsonsトレード" },
+  DAL: { toTeam: "NYJ", note: "Quinnen Williamsトレード" },
+};
+
 const FOCUS_TEAM_STORAGE_KEY = "nfl:playoff-machine:focus-team";
 
 function getStoredFocusTeam(fallback = "NE"): string {
@@ -92,7 +100,6 @@ export default function PlayoffMachine() {
   const [mainViewMode, setMainViewMode] = useState<"playoffs" | "draft">("playoffs");
   const [activeTab, setActiveTab] = useState<"simulator" | "rooting">("simulator");
   const [explanationModalSeed, setExplanationModalSeed] = useState<PlayoffSeed | null>(null);
-  const [explanationModalDraft, setExplanationModalDraft] = useState<DraftPickItem | null>(null);
   const [showLowGuides, setShowLowGuides] = useState<boolean>(false);
 
   const [isPredictionOpen, setIsPredictionOpen] = useState(false);
@@ -367,28 +374,6 @@ export default function PlayoffMachine() {
     return sorted.slice(0, 18).map((t, idx) => {
       const pickNumber = idx + 1;
       const teamSos = sosMap[t.code] ?? 0.5;
-      let tiebreakReason = "全体勝率最下位";
-
-      const prev = sorted[idx - 1];
-      const next = sorted[idx + 1];
-      const isTied =
-        (prev && Math.abs(prev.record.pct - t.record.pct) < 0.0001) ||
-        (next && Math.abs(next.record.pct - t.record.pct) < 0.0001);
-
-      if (isTied) {
-        const compareTarget = prev && Math.abs(prev.record.pct - t.record.pct) < 0.0001 ? prev : next;
-        const otherSos = sosMap[compareTarget.code] ?? 0.5;
-        if (Math.abs(teamSos - otherSos) >= 0.0001) {
-          tiebreakReason = `SOS差で優先 (.${Math.round(teamSos * 1000).toString().padStart(3, "0")} < .${Math.round(otherSos * 1000).toString().padStart(3, "0")})`;
-        } else if (t.info.conference === compareTarget.info.conference && t.info.division === compareTarget.info.division) {
-          tiebreakReason = "同率・同SOS・地区勝率差";
-        } else {
-          tiebreakReason = "同率・同SOS・カンファレンス勝率差";
-        }
-      } else if (pickNumber > 1) {
-        tiebreakReason = "単独勝率";
-      }
-
       return {
         pickNumber,
         team: t.code,
@@ -398,7 +383,7 @@ export default function PlayoffMachine() {
         record: `${t.record.wins}-${t.record.losses}${t.record.ties > 0 ? `-${t.record.ties}` : ""}`,
         winPct: t.record.pct,
         sos: teamSos,
-        tiebreakReason,
+        tiebreakReason: "",
       };
     });
   }, [playoffTeamCodes, allTeamRecords, games]);
@@ -467,7 +452,6 @@ export default function PlayoffMachine() {
       <div className="border-b border-slate-200 bg-white shadow-xs">
         <div className="container mx-auto flex flex-col gap-2.5 px-3 py-2.5 sm:px-6 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-2.5 flex-wrap w-full sm:w-auto">
-            {/* 応援チーム選択（localStorage連動） */}
             <div className="w-full sm:w-52">
               <Select
                 value={focusTeam}
@@ -493,7 +477,6 @@ export default function PlayoffMachine() {
               </Select>
             </div>
 
-            {/* 一括プリセット */}
             <div className="relative">
               <Button
                 type="button"
@@ -542,7 +525,6 @@ export default function PlayoffMachine() {
             </div>
           </div>
 
-          {/* プレイオフ予想ボタン */}
           <div className="w-full sm:w-auto">
             <Button
               type="button"
@@ -676,10 +658,15 @@ export default function PlayoffMachine() {
                     )}
                   </div>
                 ) : (
-                  /* ドラフト順位一覧（シード順と同じリスト行形式） */
+                  /* ドラフト順位一覧（解説ボタンなし・トレード譲渡バッジ付きリスト形式） */
                   <div>
-                    <div className="border-b border-slate-100 bg-slate-50/70 px-3 py-1.5 text-[10px] font-bold tracking-wider text-slate-500">
-                      2027 NFL DRAFT ORDER (#1〜#18)
+                    <div className="border-b border-slate-100 bg-slate-50/70 px-3 py-1.5 flex items-center justify-between">
+                      <span className="text-[10px] font-bold tracking-wider text-slate-500">
+                        2027 NFL DRAFT ORDER (#1〜#18)
+                      </span>
+                      <span className="text-[9px] text-slate-400 font-medium">
+                        ※同勝率は対戦相手勝率（SOS）が低いチームが上位
+                      </span>
                     </div>
                     <div className="divide-y divide-slate-100">
                       {draftOrder.map((item) => (
@@ -687,7 +674,6 @@ export default function PlayoffMachine() {
                           key={item.team}
                           item={item}
                           isFocus={item.team === focusTeam}
-                          onExplainClick={() => setExplanationModalDraft(item)}
                         />
                       ))}
                     </div>
@@ -924,59 +910,6 @@ export default function PlayoffMachine() {
           </div>
         </div>
       )}
-
-      {/* ドラフト順位決定理由解説モーダル */}
-      {explanationModalDraft && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs"
-          onClick={() => setExplanationModalDraft(null)}
-        >
-          <div
-            className="max-h-[85vh] w-full max-w-sm overflow-y-auto rounded-2xl bg-white p-5 shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-start justify-between border-b border-slate-100 pb-3">
-              <div className="flex items-center gap-2.5">
-                <MemoTeamMark code={explanationModalDraft.team} size="lg" />
-                <div>
-                  <h3 className="text-sm sm:text-base font-bold text-slate-900">
-                    ドラフト #{explanationModalDraft.pickNumber} {explanationModalDraft.teamName}
-                  </h3>
-                  <p className="text-[11px] text-slate-500">指名順位決定理由</p>
-                </div>
-              </div>
-              <button
-                type="button"
-                className="rounded-lg p-1 text-slate-400 hover:bg-slate-100"
-                onClick={() => setExplanationModalDraft(null)}
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-
-            <div className="mt-3.5 space-y-2">
-              <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3 text-xs space-y-1">
-                <div className="flex items-center gap-1.5">
-                  <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
-                  <span className="font-bold text-slate-800">タイブレーク適用</span>
-                </div>
-                <p className="text-slate-700 leading-relaxed text-[11px] font-mono mt-1">
-                  {explanationModalDraft.tiebreakReason}
-                </p>
-              </div>
-              <p className="text-[10px] text-slate-400 leading-relaxed">
-                ※同勝率の場合、レギュラーシーズンの対戦相手勝率（SOS: Strength of Schedule）が低いチームに上位指名権が与えられます。
-              </p>
-            </div>
-
-            <div className="mt-4 flex justify-end">
-              <Button type="button" variant="outline" size="sm" onClick={() => setExplanationModalDraft(null)}>
-                閉じる
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
@@ -1094,21 +1027,15 @@ function SeedRow({
   );
 }
 
-// ★ シード順位表と同じ規格で統一したドラフト順位行コンポーネント
+// ★ ドラフト行コンポーネント（解説ボタン全廃 ＆ トレード譲渡先バッジ表示）
 function DraftRow({
   item,
   isFocus,
-  onExplainClick,
 }: {
   item: DraftPickItem;
   isFocus: boolean;
-  onExplainClick: () => void;
 }) {
-  const hasTiebreaker = Boolean(
-    item.tiebreakReason &&
-    item.tiebreakReason !== "単独勝率" &&
-    item.tiebreakReason !== "全体勝率最下位"
-  );
+  const traded = TRADED_PICKS_2027[item.team];
 
   return (
     <div
@@ -1116,7 +1043,7 @@ function DraftRow({
         isFocus ? "bg-amber-50/80 ring-1 ring-amber-300 ring-inset" : "hover:bg-slate-50"
       }`}
     >
-      {/* 左側: 指名順バッジ ＋ ロゴ ＋ チーム名 ＋ 地区 */}
+      {/* 左側: 指名順バッジ ＋ ロゴ ＋ チーム名 ＋ トレード譲渡先 */}
       <div className="flex items-center gap-2 min-w-0 flex-1 mr-2">
         <span
           className={`flex h-5 w-5 shrink-0 items-center justify-center rounded text-[11px] font-bold ${
@@ -1131,38 +1058,34 @@ function DraftRow({
         </span>
         <MemoTeamMark code={item.team} size="sm" />
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-1 min-w-0">
+          <div className="flex items-center gap-1.5 flex-wrap min-w-0">
             <span className="text-xs font-bold truncate text-slate-800">
               {item.teamName}
             </span>
+            {traded && (
+              <span className="inline-flex items-center gap-0.5 rounded bg-amber-100/90 border border-amber-300/80 px-1 py-0.1 text-[9px] font-bold text-amber-900 shrink-0">
+                <span>→</span>
+                <span>{traded.toTeam}へ譲渡</span>
+              </span>
+            )}
           </div>
-          <span className="text-[9px] text-slate-400 block truncate">{item.division}</span>
+          <span className="text-[9px] text-slate-400 block truncate">
+            {item.division}
+            {traded && <span className="ml-1 text-amber-700/80">({traded.note})</span>}
+          </span>
         </div>
       </div>
 
-      {/* 右側: 勝敗 ＋ SOS ＋ 解説ボタン */}
-      <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+      {/* 右側: 勝敗 ＋ SOS */}
+      <div className="flex items-center gap-3 shrink-0">
         <span className="text-xs font-bold tabular-nums text-slate-700 font-mono">
           {item.record}
         </span>
 
-        <span className="text-[11px] font-bold tabular-nums text-sky-700 font-mono">
+        <span className="text-[11px] font-bold tabular-nums text-sky-700 font-mono min-w-[3.6rem] text-right">
           <span className="text-[9px] text-slate-400 font-sans font-normal mr-0.5 hidden sm:inline">SOS</span>
           .{Math.round(item.sos * 1000).toString().padStart(3, "0")}
         </span>
-
-        {hasTiebreaker ? (
-          <button
-            type="button"
-            onClick={onExplainClick}
-            className="flex items-center gap-0.5 rounded border border-slate-200 bg-white px-1.5 py-0.5 text-[9px] font-semibold text-slate-600 hover:border-[#e85d2a] hover:text-[#e85d2a]"
-          >
-            <span>解説</span>
-            <HelpCircle className="h-2.5 w-2.5 text-[#e85d2a]" />
-          </button>
-        ) : (
-          <div className="w-8" />
-        )}
       </div>
     </div>
   );
