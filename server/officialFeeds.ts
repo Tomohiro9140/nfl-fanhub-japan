@@ -143,14 +143,21 @@ function isInjuryRelated(title: string, sourceUrl?: string) {
 
 function isTransactionRelated(title: string, sourceUrl?: string) {
   const text = `${title} ${sourceUrl ?? ""}`;
-  if (isViewingGuide(title, sourceUrl) || /\b(?:autographs?|signature event|signed poster|signed memorabilia)\b/i.test(text)) return false;
+  if (
+    isViewingGuide(title, sourceUrl) ||
+    /\b(?:autographs?|signature event|signed poster|signed memorabilia)\b/i.test(text) ||
+    /\b(?:analysis|opinion|grades?|takeaways?|film review)\b/i.test(title)
+  ) {
+    return false;
+  }
   return /\b(?:transactions?|roster moves?|sign(?:ed|s)?|released?|waived|waivers?|claimed|claim|trade(?:d)?|contract(?: extension)?|extensions?|activated?|designated (?:for|to return)|placed on (?:injured reserve|ir|pup))\b/i.test(text);
 }
 
 export function classifyOfficialFeedItem(title: string, _summary: string, sourceUrl?: string): "news" | "injury" | "transaction" {
   if (isTeamWideCampReport(title) || isEditorialHighlight(title) || isNonInjuryAbsence(title)) return "news";
+  if (isTransactionRelated(title, sourceUrl)) return "transaction";
   if (isInjuryRelated(title, sourceUrl)) return "injury";
-  return isTransactionRelated(title, sourceUrl) ? "transaction" : "news";
+  return "news";
 }
 
 export function getOfficialSources(teamCode: string): OfficialSource[] {
