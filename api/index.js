@@ -1958,13 +1958,16 @@ function isInjuryRelated(title, sourceUrl) {
 }
 function isTransactionRelated(title, sourceUrl) {
   const text4 = `${title} ${sourceUrl ?? ""}`;
-  if (isViewingGuide(title, sourceUrl) || /\b(?:autographs?|signature event|signed poster|signed memorabilia)\b/i.test(text4)) return false;
+  if (isViewingGuide(title, sourceUrl) || /\b(?:autographs?|signature event|signed poster|signed memorabilia)\b/i.test(text4) || /\b(?:analysis|opinion|grades?|takeaways?|film review)\b/i.test(title)) {
+    return false;
+  }
   return /\b(?:transactions?|roster moves?|sign(?:ed|s)?|released?|waived|waivers?|claimed|claim|trade(?:d)?|contract(?: extension)?|extensions?|activated?|designated (?:for|to return)|placed on (?:injured reserve|ir|pup))\b/i.test(text4);
 }
 function classifyOfficialFeedItem(title, _summary, sourceUrl) {
   if (isTeamWideCampReport(title) || isEditorialHighlight(title) || isNonInjuryAbsence(title)) return "news";
+  if (isTransactionRelated(title, sourceUrl)) return "transaction";
   if (isInjuryRelated(title, sourceUrl)) return "injury";
-  return isTransactionRelated(title, sourceUrl) ? "transaction" : "news";
+  return "news";
 }
 function getOfficialSources(teamCode) {
   const domain = teamDomains[teamCode];
