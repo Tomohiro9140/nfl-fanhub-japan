@@ -48,21 +48,21 @@ jobs:
 
       - name: 1. 全試合日程の同期
         continue-on-error: true
-        timeout-minutes: 5
+        timeout-minutes: 6
         run: |
-          npx tsx -e 'import("./scripts/syncAllLeagueSchedules.mjs").then(() => process.exit(0)).catch(e => { console.error(e); process.exit(1); })'
+          pnpm tsx scripts/syncAllLeagueSchedules.mjs
 
       - name: 2. リーグ順位・最新スコア更新
         continue-on-error: true
         timeout-minutes: 5
         run: |
-          npx tsx -e 'import("./scripts/refreshOfficialLeagueDashboard.mjs").then(() => process.exit(0)).catch(e => { console.error(e); process.exit(1); })'
+          pnpm tsx scripts/refreshOfficialLeagueDashboard.mjs
 
       - name: 3. チーム公式ロスター更新
         continue-on-error: true
         timeout-minutes: 6
         run: |
-          npx tsx -e '
+          pnpm tsx -e '
             import("./server/officialTeamData.ts").then(async m => {
               const groups = [
                 ["ARI","ATL","BAL","BUF","CAR","CHI","CIN","CLE"],
@@ -84,7 +84,7 @@ jobs:
         continue-on-error: true
         timeout-minutes: 6
         run: |
-          npx tsx -e '
+          pnpm tsx -e '
             import("./server/officialFeeds.ts").then(async m => {
               const groups = [
                 ["ARI","ATL","BAL","BUF","CAR","CHI","CIN","CLE"],
@@ -106,7 +106,7 @@ jobs:
         continue-on-error: true
         timeout-minutes: 5
         run: |
-          npx tsx -e '
+          pnpm tsx -e '
             import("./server/externalTeamNews.ts").then(async m => {
               const allTeams = ["ARI","ATL","BAL","BUF","CAR","CHI","CIN","CLE","DAL","DEN","DET","GB","HOU","IND","JAX","KC","LV","LAC","LAR","MIA","MIN","NE","NO","NYG","NYJ","PHI","PIT","SF","SEA","TB","TEN","WAS"];
               const res = await m.refreshExternalTeamNews(allTeams);
@@ -119,24 +119,13 @@ jobs:
         continue-on-error: true
         timeout-minutes: 4
         run: |
-          npx tsx -e 'import("./scripts/refreshPftAvailability.mjs").then(() => process.exit(0)).catch(e => { console.error(e); process.exit(1); })'
+          pnpm tsx scripts/refreshPftAvailability.mjs
 
       - name: 7. FIELDLINE 週次集計
         continue-on-error: true
         timeout-minutes: 5
         run: |
-          npx tsx -e '
-            process.argv = ["node", "import-fieldline-season.mjs", "2026"];
-            import("./scripts/import-fieldline-season.mjs")
-              .then(() => {
-                console.log("[FIELDLINE] 2026 集計完了");
-                process.exit(0);
-              })
-              .catch((err) => {
-                console.log("[FIELDLINE] スキップまたは通知:", err?.message);
-                process.exit(0);
-              });
-          '
+          pnpm tsx scripts/import-fieldline-season.mjs 2026
 
       - name: 生成ファイルと最新データをGitHubに保存
         if: always()
