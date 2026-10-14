@@ -4,7 +4,7 @@ on:
   schedule:
     # 0分を避け「17分」に設定（GitHubの全世界00分渋滞・キュー破棄を完全回避）
     - cron: '17 */3 * * *' # 3時間ごと（JST 0:17, 3:17, 6:17, 9:17, 12:17, 15:17, 18:17, 21:17）
-    - cron: '17 21 * * 2'  # 毎週水曜 06:17 JST (火曜 21:17 UTC) FIELDLINE週次更新用
+    - cron: '17 21 * * 2'  # 毎週水曜 06:17 JST (火曜 21:17 UTC)
   workflow_dispatch:
 
 permissions:
@@ -46,18 +46,46 @@ jobs:
         run: |
           pnpm run db:push || true
 
+      # -------------------------------------------------------------
+      # 1 & 2. 全試合日程・順位の同期
+      # （JST当日ですでに1回成功していればスキップ。失敗時は次回リトライ）
+      # -------------------------------------------------------------
       - name: 1. 全試合日程の同期
         continue-on-error: true
         timeout-minutes: 6
         run: |
+          mkdir -p .sync_state
+          TODAY_JST=$(TZ="Asia/Tokyo" date +%Y-%m-%d)
+          LAST_SYNC=$(cat .sync_state/last_schedule_sync.txt 2>/dev/null || echo "")
+
+          if [ "$LAST_SYNC" = "$TODAY_JST" ]; then
+            echo "⚡ 本日 ($TODAY_JST JST) は既に全日程の同期が完了しているためスキップします。"
+            exit 0
+          fi
+
+          echo "🚀 本日初回（または再試行）の全試合日程同期を実行します..."
           pnpm tsx scripts/syncAllLeagueSchedules.mjs
+          echo "$TODAY_JST" > .sync_state/last_schedule_sync.txt
 
       - name: 2. リーグ順位・最新スコア更新
         continue-on-error: true
         timeout-minutes: 5
         run: |
-          pnpm tsx scripts/refreshOfficialLeagueDashboard.mjs
+          TODAY_JST=$(TZ="Asia/Tokyo" date +%Y-%m-%d)
+          LAST_SYNC=$(cat .sync_state/last_dashboard_sync.txt 2>/dev/null || echo "")
 
+          if [ "$LAST_SYNC" = "$TODAY_JST" ]; then
+            echo "⚡ 本日 ($TODAY_JST JST) は既にリーグ順位の更新が完了しているためスキップします。"
+            exit 0
+          fi
+
+          echo "🚀 本日初回（または再試行）のリーグ順位更新を実行します..."
+          pnpm tsx scripts/refreshOfficialLeagueDashboard.mjs
+          echo "$TODAY_JST" > .sync_state/last_dashboard_sync.txt
+
+      # -------------------------------------------------------------
+      # 3. チーム公式ロスター更新（3時間ローテーションで負荷分散）
+      # -------------------------------------------------------------
       - name: 3. チーム公式ロスター更新
         continue-on-error: true
         timeout-minutes: 6
@@ -80,6 +108,9 @@ jobs:
             }).catch(e => { console.error(e); process.exit(1); });
           '
 
+      # -------------------------------------------------------------
+      # 4. チーム公式ニュース・負傷情報更新
+      # -------------------------------------------------------------
       - name: 4. チーム公式ニュース・負傷情報更新
         continue-on-error: true
         timeout-minutes: 6
@@ -102,6 +133,9 @@ jobs:
             }).catch(e => { console.error(e); process.exit(1); });
           '
 
+      # -------------------------------------------------------------
+      # 5. PFT / CBS 補助ニュース取得
+      # -------------------------------------------------------------
       - name: 5. PFT / CBS 補助ニュース取得
         continue-on-error: true
         timeout-minutes: 5
@@ -115,27 +149,44 @@ jobs:
             }).catch(e => { console.error(e); process.exit(1); });
           '
 
+      # -------------------------------------------------------------
+      # 6. PFT出場可否・ステータス更新
+      # -------------------------------------------------------------
       - name: 6. PFT出場可否・ステータス更新
         continue-on-error: true
         timeout-minutes: 4
         run: |
           pnpm tsx scripts/refreshPftAvailability.mjs
 
+      # -------------------------------------------------------------
+      # 7. FIELDLINE 週次集計
+      # （試合結果が出る JST 月・火・金 のみ実行。水・木・土・日はスキップ）
+      # -------------------------------------------------------------
       - name: 7. FIELDLINE 週次集計
         continue-on-error: true
         timeout-minutes: 5
         run: |
+          JST_DOW=$(TZ="Asia/Tokyo" date +%u) # 1:月, 2:火, 3:水, 4:木, 5:金, 6:土, 7:日
+          if [ "$JST_DOW" != "1" ] && [ "$JST_DOW" != "2" ] && [ "$JST_DOW" != "5" ]; then
+            echo "⚡ 本日（JST曜日: $JST_DOW）は試合後集計の対象外（水・木・土・日）のためスキップします。"
+            exit 0
+          fi
+
+          echo "🚀 試合後集計日（JST曜日: $JST_DOW）のため FIELDLINE 2026 を集計します..."
           pnpm tsx scripts/import-fieldline-season.mjs 2026
 
+      # -------------------------------------------------------------
+      # 生成ファイル・同期状態フラグをGitHubへ永続化
+      # -------------------------------------------------------------
       - name: 生成ファイルと最新データをGitHubに保存
         if: always()
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git add api/index.js
+          git add api/index.js .sync_state/ || true
           git add -A
           if ! git diff --staged --quiet; then
-            git commit -m "chore: API完全ビルドとデータ同期"
+            git commit -m "chore: API完全ビルドとデータ同期状態の記録"
             git pull --rebase origin main
             git push origin main
           fi
