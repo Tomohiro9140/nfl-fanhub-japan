@@ -448,11 +448,11 @@ export default function PlayoffMachine() {
         </div>
       </header>
 
-      {/* コントロールバー */}
+      {/* コントロールバー（スマホ最適化：チーム選択と一括プリセットを横並びに統合） */}
       <div className="border-b border-slate-200 bg-white shadow-xs">
-        <div className="container mx-auto flex flex-col gap-2.5 px-3 py-2.5 sm:px-6 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-2.5 flex-wrap w-full sm:w-auto">
-            <div className="w-full sm:w-52">
+        <div className="container mx-auto flex flex-col gap-2 px-3 py-2 sm:px-6 sm:flex-row sm:items-center sm:justify-between">
+          <div className="grid grid-cols-2 gap-2 w-full sm:flex sm:w-auto sm:items-center sm:gap-2.5">
+            <div className="w-full sm:w-52 min-w-0">
               <Select
                 value={focusTeam}
                 onValueChange={(val) => {
@@ -477,17 +477,19 @@ export default function PlayoffMachine() {
               </Select>
             </div>
 
-            <div className="relative">
+            <div className="relative w-full sm:w-auto min-w-0">
               <Button
                 type="button"
                 variant="outline"
                 size="sm"
                 onClick={() => setPresetDropdownOpen(!presetDropdownOpen)}
-                className="h-8 border-slate-200 bg-slate-50 text-xs font-bold text-slate-700 hover:bg-slate-100 px-3"
+                className="w-full h-8 border-slate-200 bg-slate-50 text-xs font-bold text-slate-700 hover:bg-slate-100 px-2 sm:px-3 justify-between sm:justify-center"
               >
-                <Sparkles className="mr-1.5 h-3.5 w-3.5 text-[#e85d2a]" />
-                <span>一括プリセット</span>
-                <ChevronDown className={`ml-1 h-3 w-3 ${presetDropdownOpen ? "rotate-180" : ""}`} />
+                <span className="flex items-center truncate min-w-0">
+                  <Sparkles className="mr-1 h-3.5 w-3.5 text-[#e85d2a] shrink-0" />
+                  <span className="truncate">一括プリセット</span>
+                </span>
+                <ChevronDown className={`ml-1 h-3 w-3 shrink-0 ${presetDropdownOpen ? "rotate-180" : ""}`} />
               </Button>
 
               {presetDropdownOpen && (
@@ -540,17 +542,18 @@ export default function PlayoffMachine() {
       </div>
 
       {/* メインレイアウト */}
-      <main className="container mx-auto mt-3 px-2 sm:px-6">
-        <div className="grid gap-3.5 lg:grid-cols-12">
+      <main className="container mx-auto mt-2 sm:mt-3 px-2 sm:px-6">
+        <div className="grid gap-2.5 sm:gap-3.5 lg:grid-cols-12">
           {/* 左カラム: シード順位表 ⇔ ドラフト指名順 */}
           <div className="space-y-3 lg:col-span-7 min-w-0">
             <Card className="border-slate-200 shadow-xs">
-              <CardHeader className="flex flex-col gap-2 border-b border-slate-100 p-2.5 sm:flex-row sm:items-center sm:justify-between">
-                <div className="flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-100 p-0.5">
+              {/* カードヘッダー：スマホでもシード/ドラフトとAFC/NFCを横並び1行に配置し余白を圧縮 */}
+              <CardHeader className="flex flex-row items-center justify-between gap-1.5 border-b border-slate-100 p-2 sm:p-2.5">
+                <div className="flex items-center gap-0.5 rounded-lg border border-slate-200 bg-slate-100 p-0.5">
                   <button
                     type="button"
                     onClick={() => setMainViewMode("playoffs")}
-                    className={`flex items-center gap-1 rounded px-2.5 py-1 text-xs font-bold ${
+                    className={`flex items-center gap-1 rounded px-2 py-1 text-[11px] sm:text-xs font-bold transition-all ${
                       mainViewMode === "playoffs" ? "bg-white text-slate-900 shadow-xs" : "text-slate-600"
                     }`}
                   >
@@ -560,23 +563,24 @@ export default function PlayoffMachine() {
                   <button
                     type="button"
                     onClick={() => setMainViewMode("draft")}
-                    className={`flex items-center gap-1 rounded px-2.5 py-1 text-xs font-bold ${
+                    className={`flex items-center gap-1 rounded px-2 py-1 text-[11px] sm:text-xs font-bold transition-all ${
                       mainViewMode === "draft" ? "bg-white text-slate-900 shadow-xs" : "text-slate-600"
                     }`}
                   >
                     <Award className="h-3 w-3 text-cyan-600" />
-                    <span>ドラフト順 (#1〜#18)</span>
+                    <span className="hidden sm:inline">ドラフト順 (#1〜#18)</span>
+                    <span className="sm:hidden">ドラフト順</span>
                   </button>
                 </div>
 
                 {mainViewMode === "playoffs" && (
-                  <div className="flex rounded-lg border border-slate-200 bg-slate-100 p-0.5">
+                  <div className="flex rounded-lg border border-slate-200 bg-slate-100 p-0.5 shrink-0">
                     {(["AFC", "NFC"] as Conference[]).map((conf) => (
                       <button
                         key={conf}
                         type="button"
                         onClick={() => setActiveConf(conf)}
-                        className={`rounded px-2.5 py-0.5 text-xs font-bold ${
+                        className={`rounded px-2.5 py-0.5 text-[11px] sm:text-xs font-bold transition-all ${
                           activeConf === conf ? "bg-[#101827] text-white shadow-xs" : "text-slate-600"
                         }`}
                       >
@@ -590,7 +594,7 @@ export default function PlayoffMachine() {
               <CardContent className="p-0">
                 {mainViewMode === "playoffs" ? (
                   <div>
-                    <div className="border-b border-slate-100 bg-slate-50/70 px-3 py-1.5 text-[10px] font-bold tracking-wider text-slate-500">
+                    <div className="border-b border-slate-100 bg-slate-50/70 px-3 py-1 text-[10px] font-bold tracking-wider text-slate-500">
                       DIVISION LEADERS (#1〜#4)
                     </div>
                     <div className="divide-y divide-slate-100">
@@ -604,7 +608,7 @@ export default function PlayoffMachine() {
                       ))}
                     </div>
 
-                    <div className="border-y border-slate-100 bg-amber-50/50 px-3 py-1.5 text-[10px] font-bold tracking-wider text-amber-800">
+                    <div className="border-y border-slate-100 bg-amber-50/50 px-3 py-1 text-[10px] font-bold tracking-wider text-amber-800">
                       WILD CARD (#5〜#7)
                     </div>
                     <div className="divide-y divide-slate-100">
@@ -618,7 +622,7 @@ export default function PlayoffMachine() {
                       ))}
                     </div>
 
-                    <div className="flex items-center gap-1 border-y border-slate-100 bg-blue-50/50 px-3 py-1.5 text-[10px] font-bold tracking-wider text-blue-800">
+                    <div className="flex items-center gap-1 border-y border-slate-100 bg-blue-50/50 px-3 py-1 text-[10px] font-bold tracking-wider text-blue-800">
                       <Flame className="h-3 w-3 text-blue-600" />
                       IN THE HUNT (進出可能性あり)
                     </div>
@@ -639,7 +643,7 @@ export default function PlayoffMachine() {
 
                     {eliminatedTeams.length > 0 && (
                       <>
-                        <div className="flex items-center gap-1 border-y border-slate-100 bg-slate-100/70 px-3 py-1.5 text-[10px] font-bold tracking-wider text-slate-500">
+                        <div className="flex items-center gap-1 border-y border-slate-100 bg-slate-100/70 px-3 py-1 text-[10px] font-bold tracking-wider text-slate-500">
                           <Ban className="h-3 w-3 text-rose-500" />
                           ELIMINATED (完全敗退決定)
                         </div>
@@ -660,7 +664,7 @@ export default function PlayoffMachine() {
                 ) : (
                   /* ドラフト順位一覧（所属地区削除・すっきり1行表示） */
                   <div>
-                    <div className="border-b border-slate-100 bg-slate-50/70 px-3 py-1.5 flex items-center justify-between">
+                    <div className="border-b border-slate-100 bg-slate-50/70 px-3 py-1 flex items-center justify-between">
                       <span className="text-[10px] font-bold tracking-wider text-slate-500">
                         2027 NFL DRAFT ORDER (#1〜#18)
                       </span>
