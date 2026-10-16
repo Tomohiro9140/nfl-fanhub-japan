@@ -1,5 +1,5 @@
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { EmbeddedAppNav } from "@/components/EmbeddedAppNav";
 import { PlayoffPredictionModal } from "@/components/PlayoffPredictionModal";
@@ -546,15 +546,15 @@ export default function PlayoffMachine() {
         <div className="grid gap-2.5 sm:gap-3.5 lg:grid-cols-12">
           {/* 左カラム: シード順位表 ⇔ ドラフト指名順 */}
           <div className="space-y-3 lg:col-span-7 min-w-0">
-            <Card className="border-slate-200 shadow-xs">
-              {/* カードヘッダー：スマホでもシード/ドラフトとAFC/NFCを横並び1行に配置し余白を圧縮 */}
-              <CardHeader className="flex flex-row items-center justify-between gap-1.5 border-b border-slate-100 p-2 sm:p-2.5">
+            <Card className="border-slate-200 shadow-xs overflow-hidden">
+              {/* カードヘッダー：上下パディングを極限まで圧縮（py-1〜1.5） */}
+              <div className="flex items-center justify-between gap-1.5 border-b border-slate-100 bg-white px-2 py-1 sm:px-3 sm:py-1.5">
                 <div className="flex items-center gap-0.5 rounded-lg border border-slate-200 bg-slate-100 p-0.5">
                   <button
                     type="button"
                     onClick={() => setMainViewMode("playoffs")}
-                    className={`flex items-center gap-1 rounded px-2 py-1 text-[11px] sm:text-xs font-bold transition-all ${
-                      mainViewMode === "playoffs" ? "bg-white text-slate-900 shadow-xs" : "text-slate-600"
+                    className={`flex items-center gap-1 rounded px-2 py-0.5 text-[11px] sm:text-xs font-bold transition-all ${
+                      mainViewMode === "playoffs" ? "bg-white text-slate-900 shadow-xs" : "text-slate-600 hover:text-slate-900"
                     }`}
                   >
                     <Trophy className="h-3 w-3 text-[#e85d2a]" />
@@ -563,8 +563,8 @@ export default function PlayoffMachine() {
                   <button
                     type="button"
                     onClick={() => setMainViewMode("draft")}
-                    className={`flex items-center gap-1 rounded px-2 py-1 text-[11px] sm:text-xs font-bold transition-all ${
-                      mainViewMode === "draft" ? "bg-white text-slate-900 shadow-xs" : "text-slate-600"
+                    className={`flex items-center gap-1 rounded px-2 py-0.5 text-[11px] sm:text-xs font-bold transition-all ${
+                      mainViewMode === "draft" ? "bg-white text-slate-900 shadow-xs" : "text-slate-600 hover:text-slate-900"
                     }`}
                   >
                     <Award className="h-3 w-3 text-cyan-600" />
@@ -581,7 +581,7 @@ export default function PlayoffMachine() {
                         type="button"
                         onClick={() => setActiveConf(conf)}
                         className={`rounded px-2.5 py-0.5 text-[11px] sm:text-xs font-bold transition-all ${
-                          activeConf === conf ? "bg-[#101827] text-white shadow-xs" : "text-slate-600"
+                          activeConf === conf ? "bg-[#101827] text-white shadow-xs" : "text-slate-600 hover:text-slate-900"
                         }`}
                       >
                         {conf}
@@ -589,7 +589,7 @@ export default function PlayoffMachine() {
                     ))}
                   </div>
                 )}
-              </CardHeader>
+              </div>
 
               <CardContent className="p-0">
                 {mainViewMode === "playoffs" ? (
@@ -1031,7 +1031,7 @@ function SeedRow({
   );
 }
 
-// ★ ドラフト行コンポーネント（所属地区を削除し、チーム名＋譲渡バッジ＋勝敗＋SOSの1行スッキリ構成）
+// ドラフト行コンポーネント（所属地区削除・1行スッキリ構成）
 function DraftRow({
   item,
   isFocus,
