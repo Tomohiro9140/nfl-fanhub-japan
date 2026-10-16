@@ -1,5 +1,4 @@
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { EmbeddedAppNav } from "@/components/EmbeddedAppNav";
 import { PlayoffPredictionModal } from "@/components/PlayoffPredictionModal";
@@ -546,9 +545,10 @@ export default function PlayoffMachine() {
         <div className="grid gap-2.5 sm:gap-3.5 lg:grid-cols-12">
           {/* 左カラム: シード順位表 ⇔ ドラフト指名順 */}
           <div className="space-y-3 lg:col-span-7 min-w-0">
-            <Card className="border-slate-200 shadow-xs overflow-hidden">
-              {/* カードヘッダー：上下パディングを極限まで圧縮（py-1〜1.5） */}
-              <div className="flex items-center justify-between gap-1.5 border-b border-slate-100 bg-white px-2 py-1 sm:px-3 sm:py-1.5">
+            {/* ★ Cardコンポーネント固有の隠れ上部余白(pt-6)を完全排除し、素のdivで上下均等に圧縮 */}
+            <div className="rounded-xl border border-slate-200 bg-white shadow-xs overflow-hidden">
+              {/* カードヘッダー：上下均等に極小パディング（py-1） */}
+              <div className="flex items-center justify-between gap-1.5 border-b border-slate-100 bg-white px-2.5 py-1">
                 <div className="flex items-center gap-0.5 rounded-lg border border-slate-200 bg-slate-100 p-0.5">
                   <button
                     type="button"
@@ -591,7 +591,7 @@ export default function PlayoffMachine() {
                 )}
               </div>
 
-              <CardContent className="p-0">
+              <div>
                 {mainViewMode === "playoffs" ? (
                   <div>
                     <div className="border-b border-slate-100 bg-slate-50/70 px-3 py-1 text-[10px] font-bold tracking-wider text-slate-500">
@@ -683,8 +683,8 @@ export default function PlayoffMachine() {
                     </div>
                   </div>
                 )}
-              </CardContent>
-            </Card>
+              </div>
+            </div>
           </div>
 
           {/* 右カラム: 週選択 ＆ 対戦カード */}
