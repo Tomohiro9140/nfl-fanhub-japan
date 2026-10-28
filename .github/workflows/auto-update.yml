@@ -16,6 +16,7 @@ jobs:
     timeout-minutes: 30
     env:
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
     steps:
       - name: リポジトリの読み込み
         uses: actions/checkout@v4
@@ -47,7 +48,7 @@ jobs:
           pnpm run db:push || true
 
       # -------------------------------------------------------------
-      # 1 & 2. 全試合日程・順位の同期
+      # 1. 全試合日程の同期
       # （JST当日ですでに1回成功していればスキップ。失敗時は次回リトライ）
       # -------------------------------------------------------------
       - name: 1. 全試合日程の同期
@@ -67,21 +68,16 @@ jobs:
           pnpm tsx scripts/syncAllLeagueSchedules.mjs
           echo "$TODAY_JST" > .sync_state/last_schedule_sync.txt
 
+      # -------------------------------------------------------------
+      # 2. リーグ順位・最新スコア・ハイライト更新
+      # （約20秒で終わる軽い処理なので毎回実行。1日1回に絞ると、
+      #   米国の試合中に成功した場合に試合後の最終スコアを取り逃すため）
+      # -------------------------------------------------------------
       - name: 2. リーグ順位・最新スコア更新
         continue-on-error: true
         timeout-minutes: 5
         run: |
-          TODAY_JST=$(TZ="Asia/Tokyo" date +%Y-%m-%d)
-          LAST_SYNC=$(cat .sync_state/last_dashboard_sync.txt 2>/dev/null || echo "")
-
-          if [ "$LAST_SYNC" = "$TODAY_JST" ]; then
-            echo "⚡ 本日 ($TODAY_JST JST) は既にリーグ順位の更新が完了しているためスキップします。"
-            exit 0
-          fi
-
-          echo "🚀 本日初回（または再試行）のリーグ順位更新を実行します..."
           pnpm tsx scripts/refreshOfficialLeagueDashboard.mjs
-          echo "$TODAY_JST" > .sync_state/last_dashboard_sync.txt
 
       # -------------------------------------------------------------
       # 3. チーム公式ロスター更新（3時間ローテーションで負荷分散）

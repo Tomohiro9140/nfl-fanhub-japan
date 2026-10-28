@@ -1,0 +1,59 @@
+name: NFL Highlights Update
+
+# 試合終了後にNFL公式YouTubeへ上がるハイライト動画を、試合のある日だけ1時間おきに取り込む。
+# YouTube Data API を1回あたり数リクエスト（無料枠1日10,000ユニット中、数ユニット）しか使わない軽い処理。
+on:
+  schedule:
+    # 時刻はUTC。米国の試合が終わる時間帯（日本時間）に合わせている
+    - cron: '41 16-23 * * 0'    # 日曜（UTC）: 土曜開催・ロンドン等の早い試合 → JST 日曜深夜〜月曜朝
+    - cron: '41 0-12 * * 1,2,5' # 月・火・金（UTC）: 日曜・MNF・TNF の試合後 → JST 月・火・金の朝〜夜
+  workflow_dispatch:
+    inputs:
+      force:
+        description: '紐付け済みの試合も含めて照合し直す'
+        type: boolean
+        default: false
+      week:
+        description: '特定の週だけ照合する（例: 7）。空欄なら全週'
+        required: false
+        default: ''
+
+concurrency:
+  group: highlights
+  cancel-in-progress: false
+
+jobs:
+  highlights:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
+    steps:
+      - name: リポジトリの読み込み
+        uses: actions/checkout@v4
+
+      - name: pnpmのセットアップ
+        uses: pnpm/action-setup@v3
+        with:
+          version: 9
+
+      - name: Node.jsのセットアップ
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'pnpm'
+
+      - name: 依存パッケージのインストール
+        run: pnpm install --no-frozen-lockfile
+
+      - name: ハイライト動画の照合
+        timeout-minutes: 5
+        env:
+          FORCE: ${{ inputs.force }}
+          WEEK: ${{ inputs.week }}
+        run: |
+          ARGS=""
+          if [ "$FORCE" = "true" ]; then ARGS="$ARGS --force"; fi
+          if [ -n "$WEEK" ]; then ARGS="$ARGS --week=$WEEK"; fi
+          pnpm tsx scripts/refreshGameHighlights.mjs $ARGS
