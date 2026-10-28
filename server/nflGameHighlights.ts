@@ -42,6 +42,8 @@ const PUBLISH_WINDOW_AFTER_MS = 10 * DAY_MS;
 // YouTube Data API の取得上限（1ページ50件・1ページあたり1ユニット消費）
 // NFL公式は1日に数十本アップするため、3週間分さかのぼるには500件では足りない
 const MAX_API_PAGES = 20;
+// 一覧が届かない古い試合を個別検索する上限（search は1回100ユニットと高いので絞る）
+const MAX_SEARCHES_PER_RUN = 3;
 
 function parseWeekNumber(weekLabel: string | null): number | null {
   if (!weekLabel) return null;
@@ -133,6 +135,33 @@ async function fetchUploadsViaApi(apiKey: string, oldest: Date): Promise<Channel
   return videos;
 }
 
+/** アップロード一覧が届かない古い試合用：NFL公式チャンネル内を試合前後の期間で検索する（1回100ユニット消費） */
+async function searchChannelForGame(apiKey: string, game: HighlightableGame): Promise<ChannelVideo[]> {
+  const away = TEAM_NICKNAMES[game.awayTeamCode] ?? game.awayTeamCode;
+  const home = TEAM_NICKNAMES[game.homeTeamCode] ?? game.homeTeamCode;
+  const params = new URLSearchParams({
+    part: "snippet",
+    channelId: NFL_CHANNEL_ID,
+    q: `${away} ${home} highlights`,
+    type: "video",
+    maxResults: "10",
+    fields: "items(id/videoId,snippet(title,publishedAt))",
+    key: apiKey,
+  });
+  const reference = gameReferenceTime(game);
+  if (reference) {
+    params.set("publishedAfter", new Date(reference.getTime() - PUBLISH_WINDOW_BEFORE_MS).toISOString());
+    params.set("publishedBefore", new Date(reference.getTime() + PUBLISH_WINDOW_AFTER_MS).toISOString());
+  }
+  const data = await fetchJson(`https://www.googleapis.com/youtube/v3/search?${params}`);
+  return (data.items ?? []).flatMap((item: any) => {
+    const videoId = item.id?.videoId;
+    const title = item.snippet?.title?.replace(/&amp;/g, "&").replace(/&quot;/g, '"').replace(/&#39;/g, "'");
+    const publishedAt = new Date(item.snippet?.publishedAt);
+    return videoId && title && !Number.isNaN(publishedAt.getTime()) ? [{ videoId, title, publishedAt }] : [];
+  });
+}
+
 /** APIキーがない場合の予備：RSSは最新15件しか返らないので取りこぼしが出やすい */
 async function fetchUploadsViaRss(): Promise<ChannelVideo[]> {
   const res = await fetch(NFL_YOUTUBE_RSS_URL, { signal: AbortSignal.timeout(10_000) });
@@ -185,11 +214,33 @@ export async function refreshOfficialGameHighlights(options?: { force?: boolean;
   }
   console.log(`[highlights] 取得した動画: ${videos.length} 件`);
 
+  // 取得した一覧がどこまで過去をカバーしているか（上限に達していなければ全件取れている）
+  const reachedPageLimit = apiKey !== undefined && videos.length >= MAX_API_PAGES * 50;
+  const coveredSince = reachedPageLimit ? videos[videos.length - 1]?.publishedAt ?? null : null;
+  let searchesLeft = apiKey ? MAX_SEARCHES_PER_RUN : 0;
+
   const links: NflHighlightLink[] = [];
   const usedVideoIds = new Set<string>();
   for (const game of targetGames) {
     const label = `${game.weekLabel ?? "W?"} ${game.awayTeamCode} @ ${game.homeTeamCode}`;
-    const match = findHighlightVideo(videos, game);
+    let match = findHighlightVideo(videos, game);
+
+    // 一覧が試合日までさかのぼれていない古い試合だけ、個別に検索する
+    const reference = gameReferenceTime(game);
+    const outsideCoverage = coveredSince !== null && (!reference || reference.getTime() < coveredSince.getTime() + DAY_MS);
+    if (!match && outsideCoverage && searchesLeft > 0 && apiKey) {
+      searchesLeft--;
+      try {
+        const results = await searchChannelForGame(apiKey, game);
+        match = findHighlightVideo(results, game);
+        if (!match) {
+          console.log(`[highlights] 🔍 ${label} を検索しましたが該当なし。検索結果:`);
+          for (const v of results) console.log(`  - ${v.title}（公開: ${v.publishedAt.toISOString()}）`);
+        }
+      } catch (error) {
+        console.error(`[highlights] ${label} の検索に失敗:`, error instanceof Error ? error.message : error);
+      }
+    }
     if (match) {
       const url = `https://www.youtube.com/watch?v=${match.videoId}`;
       usedVideoIds.add(match.videoId);
