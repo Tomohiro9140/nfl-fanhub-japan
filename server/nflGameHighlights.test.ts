@@ -33,6 +33,11 @@ describe("NFL official YouTube highlight matching", () => {
     expect(scoreHighlightVideo(video("Los Angeles Chargers vs. Kansas City Chiefs Game Highlights | Week 6", "2026-10-12T01:00:00Z"), lacAtKc)).toBe(2);
   });
 
+  it("tolerates a missing plural s in the official title", () => {
+    const minAtNo = game({ weekLabel: "WEEK 5", awayTeamCode: "MIN", homeTeamCode: "NO", kickoffAt: new Date("2026-10-11T17:00:00Z") });
+    expect(scoreHighlightVideo(video("Minnesota Vikings vs New Orleans Saint Game Highlights | NFL 2026 Season Week 5", "2026-10-11T20:44:59Z"), minAtNo)).toBe(2);
+  });
+
   it("accepts titles without a week (international games) when the publish date fits", () => {
     expect(scoreHighlightVideo(video("Chiefs vs. Seahawks Highlights | London Game"), game({}))).toBe(1);
   });
