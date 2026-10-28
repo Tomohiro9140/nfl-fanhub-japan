@@ -930,7 +930,7 @@ async function getOfficialScoreboardGamesForHighlightMatching(force = false) {
     (game) => (game.gameState ?? "").toUpperCase().startsWith("FINAL")
   );
   if (force) return finishedGames;
-  return finishedGames.filter((game) => !game.nflHighlightUrl || !game.nflHighlightUrl.includes("youtube.com"));
+  return finishedGames.filter((game) => !game.nflHighlightUrl || !game.nflHighlightUrl.includes("watch?v="));
 }
 async function upsertOfficialScoreboardHighlights(links) {
   if (!links.length) return;
@@ -3204,7 +3204,7 @@ async function fetchOtcComprehensiveData(otcId, teamFallback) {
     const html = await res.text();
     const tables = html.match(/<table[\s\S]*?<\/table>/gi) || [];
     if (tables.length === 0) return null;
-    const t0 = tables[0];
+    const t0 = tables[0] ?? "";
     const t0Rows = t0.match(/<tr[^>]*>[\s\S]*?<\/tr>/gi) || [];
     const seasonHistory = [];
     const isMultiTierBonus = t0.includes("Option") && t0.includes("Signing") && (t0Rows[1] || "").includes("Option");
@@ -5859,194 +5859,214 @@ import { createHash as createHash5 } from "node:crypto";
 // server/nflGameHighlights.ts
 var nflHighlightsSourceUrl = "https://www.youtube.com/channel/UCDVYQ4Zhbm3S2dlz7P1GBDg";
 var NFL_CHANNEL_ID = "UCDVYQ4Zhbm3S2dlz7P1GBDg";
+var NFL_UPLOADS_PLAYLIST_ID = `UU${NFL_CHANNEL_ID.slice(2)}`;
 var NFL_YOUTUBE_RSS_URL = `https://www.youtube.com/feeds/videos.xml?channel_id=${NFL_CHANNEL_ID}`;
-var VERIFIED_HIGHLIGHT_REGISTRY = {
-  // === Week 4 (2026年10月開催) ===
-  "2026_reg_4_PIT_CLE": "https://www.youtube.com/watch?v=qJn2zHTs9BY",
-  "2026_reg_4_IND_WAS": "https://www.youtube.com/watch?v=VSkRsq4Tlfg",
-  "2026_reg_4_DAL_HOU": "https://www.youtube.com/watch?v=Yayn1UWwu1Y",
-  "2026_reg_4_NYJ_CHI": "https://www.youtube.com/watch?v=IlcC1zFWyVw",
-  "2026_reg_4_NE_BUF": "https://www.youtube.com/watch?v=Z5zAM_GLGI0",
-  "2026_reg_4_JAX_CIN": "https://www.youtube.com/watch?v=a2zogEoiXV0",
-  "2026_reg_4_ARI_NYG": "https://www.youtube.com/watch?v=OdvCc-cxRz4",
-  "2026_reg_4_TEN_BAL": "https://www.youtube.com/watch?v=1MzoImgClWQ",
-  "2026_reg_4_LAR_PHI": "https://www.youtube.com/watch?v=h6eywSmXaCI",
-  "2026_reg_4_GB_TB": "https://www.youtube.com/watch?v=13AbO1AEq1E",
-  "2026_reg_4_MIA_MIN": "https://www.youtube.com/watch?v=YHo13wCIHT4",
-  "2026_reg_4_KC_LV": "https://www.youtube.com/watch?v=UH-pYLB0KQ4",
-  "2026_reg_4_DEN_SF": "https://www.youtube.com/watch?v=3T1_zYMHPaQ",
-  "2026_reg_4_LAC_SEA": "https://www.youtube.com/watch?v=a0oq3jtgsvE",
-  "2026_reg_4_DET_CAR": "https://www.youtube.com/watch?v=sD0WZLGybRw",
-  // === Week 3 (2026年9月開催) ===
-  "2026_reg_3_CIN_PIT": "https://www.youtube.com/watch?v=sqOhOfjHhaI",
-  "2026_reg_3_NE_JAX": "https://www.youtube.com/watch?v=Oi9HQlp-ysA",
-  "2026_reg_3_TEN_NYG": "https://www.youtube.com/watch?v=GmCLbwLRGqA",
-  "2026_reg_3_ARI_SF": "https://www.youtube.com/watch?v=7ngu-tT0PQs",
-  "2026_reg_3_MIN_TB": "https://www.youtube.com/watch?v=PwKZhQg5n6w",
-  "2026_reg_3_LV_NO": "https://www.youtube.com/watch?v=xcj0NwyEJUk",
-  "2026_reg_3_BAL_DAL": "https://www.youtube.com/watch?v=7gWPdESD1og",
-  "2026_reg_3_LAR_DEN": "https://www.youtube.com/watch?v=EL-uDgYSYlI",
-  "2026_reg_3_PHI_CHI": "https://www.youtube.com/watch?v=KScULet1ves",
-  "2026_reg_3_ATL_GB": "https://www.youtube.com/watch?v=sbXZBAUOkDw",
-  "2026_reg_3_CAR_CLE": "https://www.youtube.com/watch?v=EyGW6pqjIgs"
-};
-var accumulatedVideoPool = /* @__PURE__ */ new Map();
+var DAY_MS = 24 * 60 * 60 * 1e3;
+var LOOKBACK_DAYS = 21;
+var PUBLISH_WINDOW_BEFORE_MS = 12 * 60 * 60 * 1e3;
+var PUBLISH_WINDOW_AFTER_MS = 10 * DAY_MS;
+var MAX_API_PAGES = 20;
+var MAX_SEARCHES_PER_RUN = 3;
 function parseWeekNumber(weekLabel) {
   if (!weekLabel) return null;
   const m = weekLabel.match(/(\d+)/);
   return m ? Number(m[1]) : null;
 }
-function getTeamAliases(teamCode) {
-  const fullName = TEAM_NAMES[teamCode] ?? teamCode;
-  const parts = fullName.toLowerCase().split(/\s+/);
-  const nickname = parts.pop() ?? teamCode.toLowerCase();
-  const city = parts.join(" ");
-  return [nickname, city, teamCode.toLowerCase()].filter(Boolean);
+function isPreseasonGame(game) {
+  return game.seasonPhase === "preseason" || (game.weekLabel ?? "").toUpperCase().includes("PRE");
 }
-function isMatchingVideo(title, game, weekNum) {
-  const lower = title.toLowerCase();
-  if (!lower.includes("highlight")) return false;
-  const awayAliases = getTeamAliases(game.awayTeamCode);
-  const homeAliases = getTeamAliases(game.homeTeamCode);
-  const hasAway = awayAliases.some((a) => lower.includes(a));
-  const hasHome = homeAliases.some((h) => lower.includes(h));
-  if (!hasAway || !hasHome) return false;
-  if (weekNum !== null) {
-    const hasWeek = new RegExp(`(?:week|wk)\\s*${weekNum}\\b`, "i").test(lower);
-    if (!hasWeek && !lower.includes("rio") && !lower.includes("london")) return false;
-  }
-  return true;
-}
-async function pollYouTubeRssFeed() {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 5e3);
-  try {
-    const res = await fetch(NFL_YOUTUBE_RSS_URL, {
-      signal: controller.signal,
-      headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/122.0.0.0 Safari/537.36" }
-    });
-    if (!res.ok) return Array.from(accumulatedVideoPool.values());
-    const xml = await res.text();
-    const entries = xml.match(/<entry>[\s\S]*?<\/entry>/gi) ?? [];
-    for (const entry of entries) {
-      const title = entry.match(/<title>([\s\S]*?)<\/title>/)?.[1] ?? "";
-      const url = entry.match(/<link[^>]*href="([^"]*)"/)?.[1] ?? "";
-      if (title && url) {
-        accumulatedVideoPool.set(url, { title, url, addedAt: Date.now() });
-      }
-    }
-  } catch {
-  } finally {
-    clearTimeout(timeout);
-  }
-  return Array.from(accumulatedVideoPool.values());
-}
-setInterval(() => {
-  pollYouTubeRssFeed().catch(() => {
-  });
-}, 15 * 60 * 1e3);
-pollYouTubeRssFeed().catch(() => {
-});
-async function searchViaInnerTube(query, game, weekNum) {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 4e3);
-  try {
-    const res = await fetch("https://www.youtube.com/youtubei/v1/search", {
-      method: "POST",
-      signal: controller.signal,
-      headers: {
-        "Content-Type": "application/json",
-        "User-Agent": "com.google.android.youtube/19.09.37 (Linux; U; Android 14; en_US) gzip"
-      },
-      body: JSON.stringify({
-        context: {
-          client: {
-            clientName: "ANDROID",
-            clientVersion: "19.09.37"
-          }
-        },
-        query
-      })
-    });
-    clearTimeout(timeout);
-    if (!res.ok) return null;
-    const data = await res.json();
-    const contents = data?.contents?.sectionListRenderer?.contents?.[0]?.itemSectionRenderer?.contents ?? [];
-    for (const item of contents) {
-      const v = item.videoRenderer || item.compactVideoRenderer;
-      if (!v) continue;
-      const title = v.title?.runs?.[0]?.text || v.title?.simpleText || "";
-      const videoId = v.videoId;
-      const owner = v.ownerText?.runs?.[0]?.text || "";
-      if (owner.includes("NFL") && isMatchingVideo(title, game, weekNum)) {
-        return `https://www.youtube.com/watch?v=${videoId}`;
-      }
-    }
-  } catch {
-    return null;
-  }
+function gameReferenceTime(game) {
+  if (game.kickoffAt) return new Date(game.kickoffAt);
+  if (game.gameDate && /^\d{4}-\d{2}-\d{2}$/.test(game.gameDate)) return /* @__PURE__ */ new Date(`${game.gameDate}T00:00:00Z`);
   return null;
 }
-async function refreshOfficialGameHighlights(options) {
-  const games = await getOfficialScoreboardGamesForHighlightMatching(options?.force ?? false);
-  if (!games.length) return { candidates: 0, linked: 0, sourceUrl: nflHighlightsSourceUrl };
-  const videoPool = await pollYouTubeRssFeed();
-  const links = [];
-  for (const game of games) {
-    if (game.nflHighlightUrl && game.nflHighlightUrl.includes("watch?v=")) {
-      continue;
+function mentionsTeam(lowerTitle, teamCode) {
+  const nickname = (TEAM_NICKNAMES[teamCode] ?? teamCode).toLowerCase();
+  const stem = nickname.endsWith("s") ? nickname.slice(0, -1) : nickname;
+  return new RegExp(`\\b${stem}s?\\b`).test(lowerTitle);
+}
+function scoreHighlightVideo(video, game) {
+  const lower = video.title.toLowerCase();
+  if (!lower.includes("highlight")) return 0;
+  if (!mentionsTeam(lower, game.awayTeamCode) || !mentionsTeam(lower, game.homeTeamCode)) return 0;
+  const weekNum = parseWeekNumber(game.weekLabel);
+  const titleWeek = lower.match(/\b(?:week|wk)\s*(\d{1,2})\b/)?.[1];
+  if (titleWeek && weekNum !== null && Number(titleWeek) !== weekNum) return 0;
+  const reference = gameReferenceTime(game);
+  if (reference) {
+    const diff = video.publishedAt.getTime() - reference.getTime();
+    if (diff < -PUBLISH_WINDOW_BEFORE_MS || diff > PUBLISH_WINDOW_AFTER_MS) return 0;
+  } else if (!titleWeek) {
+    return 0;
+  }
+  return lower.includes("game highlights") ? 2 : 1;
+}
+function findHighlightVideo(videos, game) {
+  let best = null;
+  let bestScore = 0;
+  for (const video of videos) {
+    const score = scoreHighlightVideo(video, game);
+    if (score > bestScore || score === bestScore && score > 0 && best && video.publishedAt < best.publishedAt) {
+      best = video;
+      bestScore = score;
     }
-    const weekNum = parseWeekNumber(game.weekLabel);
-    const season = game.season || 2026;
-    const phase = game.seasonPhase === "regular" || game.seasonPhase === "preseason" ? "reg" : "reg";
-    const keyCandidates = [
-      `${season}_${phase}_${weekNum}_${game.awayTeamCode}_${game.homeTeamCode}`,
-      `${season}_regular_${weekNum}_${game.awayTeamCode}_${game.homeTeamCode}`,
-      `${game.awayTeamCode}_${game.homeTeamCode}_${weekNum}`,
-      `${game.homeTeamCode}_${game.awayTeamCode}_${weekNum}`
-    ];
-    let matchedUrl = null;
-    for (const key of keyCandidates) {
-      if (VERIFIED_HIGHLIGHT_REGISTRY[key]) {
-        matchedUrl = VERIFIED_HIGHLIGHT_REGISTRY[key];
-        break;
+  }
+  return best;
+}
+async function fetchJson(url) {
+  const res = await fetch(url, { signal: AbortSignal.timeout(1e4) });
+  if (!res.ok) throw new Error(`YouTube API ${res.status}: ${(await res.text()).slice(0, 300)}`);
+  return res.json();
+}
+async function fetchUploadsViaApi(apiKey, oldest) {
+  const videos = [];
+  let pageToken;
+  for (let page = 0; page < MAX_API_PAGES; page++) {
+    const params = new URLSearchParams({
+      part: "snippet",
+      playlistId: NFL_UPLOADS_PLAYLIST_ID,
+      maxResults: "50",
+      fields: "nextPageToken,items(snippet(title,publishedAt,resourceId/videoId))",
+      key: apiKey
+    });
+    if (pageToken) params.set("pageToken", pageToken);
+    const data = await fetchJson(`https://www.googleapis.com/youtube/v3/playlistItems?${params}`);
+    for (const item of data.items ?? []) {
+      const videoId = item.snippet?.resourceId?.videoId;
+      const title = item.snippet?.title;
+      const publishedAt = new Date(item.snippet?.publishedAt);
+      if (videoId && title && !Number.isNaN(publishedAt.getTime())) videos.push({ videoId, title, publishedAt });
+    }
+    pageToken = data.nextPageToken;
+    const last = videos[videos.length - 1];
+    if (!pageToken || last && last.publishedAt < oldest) break;
+  }
+  return videos;
+}
+async function searchChannelForGame(apiKey, game) {
+  const away = TEAM_NICKNAMES[game.awayTeamCode] ?? game.awayTeamCode;
+  const home = TEAM_NICKNAMES[game.homeTeamCode] ?? game.homeTeamCode;
+  const params = new URLSearchParams({
+    part: "snippet",
+    channelId: NFL_CHANNEL_ID,
+    q: `${away} ${home} highlights`,
+    type: "video",
+    maxResults: "10",
+    fields: "items(id/videoId,snippet(title,publishedAt))",
+    key: apiKey
+  });
+  const reference = gameReferenceTime(game);
+  if (reference) {
+    params.set("publishedAfter", new Date(reference.getTime() - PUBLISH_WINDOW_BEFORE_MS).toISOString());
+    params.set("publishedBefore", new Date(reference.getTime() + PUBLISH_WINDOW_AFTER_MS).toISOString());
+  }
+  const data = await fetchJson(`https://www.googleapis.com/youtube/v3/search?${params}`);
+  return (data.items ?? []).flatMap((item) => {
+    const videoId = item.id?.videoId;
+    const title = item.snippet?.title?.replace(/&amp;/g, "&").replace(/&quot;/g, '"').replace(/&#39;/g, "'");
+    const publishedAt = new Date(item.snippet?.publishedAt);
+    return videoId && title && !Number.isNaN(publishedAt.getTime()) ? [{ videoId, title, publishedAt }] : [];
+  });
+}
+async function fetchUploadsViaRss() {
+  const res = await fetch(NFL_YOUTUBE_RSS_URL, { signal: AbortSignal.timeout(1e4) });
+  if (!res.ok) throw new Error(`YouTube RSS ${res.status}`);
+  const xml = await res.text();
+  const entries = xml.match(/<entry>[\s\S]*?<\/entry>/gi) ?? [];
+  return entries.flatMap((entry) => {
+    const videoId = entry.match(/<yt:videoId>([^<]+)<\/yt:videoId>/)?.[1];
+    const title = entry.match(/<title>([\s\S]*?)<\/title>/)?.[1]?.replace(/&amp;/g, "&").replace(/&quot;/g, '"').replace(/&#39;/g, "'");
+    const publishedAt = new Date(entry.match(/<published>([^<]+)<\/published>/)?.[1] ?? "");
+    return videoId && title && !Number.isNaN(publishedAt.getTime()) ? [{ videoId, title, publishedAt }] : [];
+  });
+}
+async function refreshOfficialGameHighlights(options) {
+  const force = options?.force ?? false;
+  const allGames = await getOfficialScoreboardGamesForHighlightMatching(force);
+  const now = Date.now();
+  let targetGames = allGames.filter((g) => !isPreseasonGame(g));
+  if (options?.targetWeek) {
+    targetGames = targetGames.filter((g) => parseWeekNumber(g.weekLabel) === options.targetWeek);
+  }
+  if (!force) {
+    targetGames = targetGames.filter((g) => {
+      const reference = gameReferenceTime(g);
+      return !reference || now - reference.getTime() <= LOOKBACK_DAYS * DAY_MS;
+    });
+  }
+  console.log(`[highlights] \u7167\u5408\u5BFE\u8C61: ${targetGames.length} \u8A66\u5408\uFF08\u7D42\u4E86\u6E08\u307F ${allGames.length} \u4EF6\u304B\u3089\u62BD\u51FA\uFF09`);
+  if (!targetGames.length) {
+    return { candidates: 0, linked: 0, videosScanned: 0, sourceUrl: nflHighlightsSourceUrl };
+  }
+  const references = targetGames.map(gameReferenceTime).filter((d) => Boolean(d));
+  const oldest = new Date(Math.min(now - LOOKBACK_DAYS * DAY_MS, ...references.map((d) => d.getTime())));
+  const apiKey = process.env.YOUTUBE_API_KEY;
+  let videos = [];
+  try {
+    if (apiKey) {
+      videos = await fetchUploadsViaApi(apiKey, oldest);
+    } else {
+      console.warn("[highlights] YOUTUBE_API_KEY \u304C\u672A\u8A2D\u5B9A\u306E\u305F\u3081\u3001RSS\uFF08\u6700\u65B015\u4EF6\u306E\u307F\uFF09\u3067\u7167\u5408\u3057\u307E\u3059");
+      videos = await fetchUploadsViaRss();
+    }
+  } catch (error) {
+    console.error("[highlights] \u52D5\u753B\u4E00\u89A7\u306E\u53D6\u5F97\u306B\u5931\u6557:", error instanceof Error ? error.message : error);
+  }
+  console.log(`[highlights] \u53D6\u5F97\u3057\u305F\u52D5\u753B: ${videos.length} \u4EF6`);
+  const reachedPageLimit = apiKey !== void 0 && videos.length >= MAX_API_PAGES * 50;
+  const coveredSince = reachedPageLimit ? videos[videos.length - 1]?.publishedAt ?? null : null;
+  let searchesLeft = apiKey ? MAX_SEARCHES_PER_RUN : 0;
+  const links = [];
+  const usedVideoIds = /* @__PURE__ */ new Set();
+  for (const game of targetGames) {
+    const label = `${game.weekLabel ?? "W?"} ${game.awayTeamCode} @ ${game.homeTeamCode}`;
+    let match = findHighlightVideo(videos, game);
+    const reference = gameReferenceTime(game);
+    const outsideCoverage = coveredSince !== null && (!reference || reference.getTime() < coveredSince.getTime() + DAY_MS);
+    if (!match && outsideCoverage && searchesLeft > 0 && apiKey) {
+      searchesLeft--;
+      try {
+        const results = await searchChannelForGame(apiKey, game);
+        match = findHighlightVideo(results, game);
+        if (!match) {
+          console.log(`[highlights] \u{1F50D} ${label} \u3092\u691C\u7D22\u3057\u307E\u3057\u305F\u304C\u8A72\u5F53\u306A\u3057\u3002\u691C\u7D22\u7D50\u679C:`);
+          for (const v of results) console.log(`  - ${v.title}\uFF08\u516C\u958B: ${v.publishedAt.toISOString()}\uFF09`);
+        }
+      } catch (error) {
+        console.error(`[highlights] ${label} \u306E\u691C\u7D22\u306B\u5931\u6557:`, error instanceof Error ? error.message : error);
       }
     }
-    if (!matchedUrl) {
-      const poolMatch = videoPool.find((v) => isMatchingVideo(v.title, game, weekNum));
-      if (poolMatch) matchedUrl = poolMatch.url;
-    }
-    if (!matchedUrl) {
-      const awayName2 = TEAM_NAMES[game.awayTeamCode] ?? game.awayTeamCode;
-      const homeName2 = TEAM_NAMES[game.homeTeamCode] ?? game.homeTeamCode;
-      const q = `NFL ${awayName2} vs ${homeName2} Week ${weekNum ?? ""} highlights`;
-      matchedUrl = await searchViaInnerTube(q, game, weekNum);
-    }
-    if (matchedUrl) {
-      links.push({
-        externalId: game.externalId,
-        nflHighlightUrl: matchedUrl,
-        sourceUrl: matchedUrl
-      });
+    if (match) {
+      const url = `https://www.youtube.com/watch?v=${match.videoId}`;
+      usedVideoIds.add(match.videoId);
+      console.log(`[highlights] \u2705 ${label} \u2192 ${url} (${match.title})`);
+      links.push({ externalId: game.externalId, nflHighlightUrl: url, sourceUrl: url });
       continue;
     }
-    const awayName = TEAM_NAMES[game.awayTeamCode] ?? game.awayTeamCode;
-    const homeName = TEAM_NAMES[game.homeTeamCode] ?? game.homeTeamCode;
-    const fallbackSearchUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(
-      `NFL ${awayName} vs ${homeName} Week${weekNum ?? ""} highlights`
-    )}`;
+    console.log(`[highlights] \u274C ${label} \u672A\u691C\u51FA`);
     if (!game.nflHighlightUrl) {
-      links.push({
-        externalId: game.externalId,
-        nflHighlightUrl: fallbackSearchUrl,
-        sourceUrl: fallbackSearchUrl
-      });
+      const awayName = TEAM_NAMES[game.awayTeamCode] ?? game.awayTeamCode;
+      const homeName = TEAM_NAMES[game.homeTeamCode] ?? game.homeTeamCode;
+      const fallbackSearchUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(
+        `NFL ${awayName} vs ${homeName} ${game.weekLabel ?? ""} highlights`.replace(/\s+/g, " ")
+      )}`;
+      links.push({ externalId: game.externalId, nflHighlightUrl: fallbackSearchUrl, sourceUrl: fallbackSearchUrl });
     }
+  }
+  const unmatchedGames = targetGames.filter((g) => !links.some((l) => l.externalId === g.externalId && l.nflHighlightUrl.includes("watch?v=")));
+  const unusedHighlightTitles = videos.filter((v) => !usedVideoIds.has(v.videoId) && /highlight/i.test(v.title)).filter((v) => {
+    const lower = v.title.toLowerCase();
+    return unmatchedGames.some((g) => mentionsTeam(lower, g.awayTeamCode) && mentionsTeam(lower, g.homeTeamCode));
+  }).map((v) => `${v.title}\uFF08\u516C\u958B: ${v.publishedAt.toISOString()}\uFF09`);
+  if (unusedHighlightTitles.length) {
+    console.log(`[highlights] \u672A\u691C\u51FA\u306E\u8A66\u5408\u3068\u540C\u3058\u30AB\u30FC\u30C9\u3067\u7D10\u4ED8\u304B\u306A\u304B\u3063\u305F\u52D5\u753B ${unusedHighlightTitles.length} \u4EF6:`);
+    for (const title of unusedHighlightTitles) console.log(`  - ${title}`);
   }
   if (links.length > 0) {
     await upsertOfficialScoreboardHighlights(links);
   }
-  return { candidates: games.length, linked: links.length, sourceUrl: nflHighlightsSourceUrl };
+  const linked = links.filter((l) => l.nflHighlightUrl.includes("watch?v=")).length;
+  return { candidates: targetGames.length, linked, videosScanned: videos.length, sourceUrl: nflHighlightsSourceUrl };
 }
 
 // server/officialLeagueData.ts
@@ -6281,7 +6301,7 @@ async function enrichScoresWithOfficialKickoffTimes(season, scores) {
         const html = await fetchOfficialHtml3(score.gameUrl);
         const kickoffAt = cachedKickoffAt ?? parseNFLGameKickoffAt(html);
         const isOtExisting = Boolean(score.gameState?.toUpperCase().includes("OT"));
-        let { isOT, leadChanges, timesTied } = parseGameDynamics(html, score.awayScore, score.homeScore, isOtExisting);
+        let { isOT, leadChanges, timesTied } = parseGameDynamics(html, score.awayScore ?? null, score.homeScore ?? null, isOtExisting);
         const espnKey = `${score.awayTeamCode}_${score.homeTeamCode}`;
         const espnData = espnDynamicsMap.get(espnKey);
         if (espnData && (espnData.leadChanges > 0 || espnData.timesTied > 0)) {
