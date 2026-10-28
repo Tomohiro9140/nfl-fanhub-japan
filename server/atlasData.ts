@@ -914,7 +914,7 @@ async function fetchOtcComprehensiveData(otcId: string, teamFallback: string): P
     const tables = html.match(/<table[\s\S]*?<\/table>/gi) || [];
     if (tables.length === 0) return null;
 
-    const t0 = tables[0];
+    const t0 = tables[0] ?? "";
     const t0Rows = (t0.match(/<tr[^>]*>[\s\S]*?<\/tr>/gi) || []);
     const seasonHistory: ContractSeason[] = [];
 

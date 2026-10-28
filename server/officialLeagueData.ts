@@ -282,7 +282,7 @@ async function enrichScoresWithOfficialKickoffTimes(season: number, scores: Inse
         const html = await fetchOfficialHtml(score.gameUrl);
         const kickoffAt = cachedKickoffAt ?? parseNFLGameKickoffAt(html);
         const isOtExisting = Boolean(score.gameState?.toUpperCase().includes("OT"));
-        let { isOT, leadChanges, timesTied } = parseGameDynamics(html, score.awayScore, score.homeScore, isOtExisting);
+        let { isOT, leadChanges, timesTied } = parseGameDynamics(html, score.awayScore ?? null, score.homeScore ?? null, isOtExisting);
 
         // ESPN API 由来の正確な得点推移データが存在する場合は優先して適用
         const espnKey = `${score.awayTeamCode}_${score.homeTeamCode}`;

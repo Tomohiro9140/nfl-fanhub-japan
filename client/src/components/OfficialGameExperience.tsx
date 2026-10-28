@@ -121,19 +121,19 @@ export function OfficialGameTicket({ favorite, snapshot, loading, spoilerMode = 
       ) : null}
       {loading ? <p className="mt-5 font-mono text-[11px] text-[#d9e3f3]">LOADING OFFICIAL SCHEDULE…</p> : game && opponent ? <>
         <div className={`mt-2 grid grid-cols-[1fr_auto_1fr] items-center gap-3 ${finalTeamRowClass}`}>
-          <div><p className={`font-display text-base font-bold leading-tight ${isRevealedFinal && favoriteScore !== null && opponentScore !== null && favoriteScore > opponentScore ? "text-[#ffc1a7]" : ""}`}>{favoriteLabel}</p></div>
+          <div><p className={`font-display text-base font-bold leading-tight ${isRevealedFinal && favoriteScore != null && opponentScore != null && favoriteScore > opponentScore ? "text-[#ffc1a7]" : ""}`}>{favoriteLabel}</p></div>
           <div className={`border-x border-dashed border-white/25 px-3 text-center ${isFinalTicket ? "flex h-[72px] flex-col justify-center" : ""}`}>
             {gameStatus.label === "FINAL" ? <>
               <p className="-mt-1 font-mono text-[9px] font-semibold tracking-[.14em] text-[#a5b3c9]">OFFICIAL GAME DATE</p>
               <p className="mt-1 font-display text-lg font-extrabold leading-none">{fmtFinalGameDate(game.kickoffAt ?? gameDay?.kickoffAt, game.gameDate ?? gameDay?.gameDate)}</p>
-              {isRevealedFinal ? <><p className="mt-1 font-display text-3xl font-black leading-none tracking-[.03em] text-white"><span className={favoriteScore !== null && opponentScore !== null && favoriteScore > opponentScore ? "text-[#ffc1a7]" : ""}>{favoriteScore}</span><span> — </span><span className={favoriteScore !== null && opponentScore !== null && opponentScore > favoriteScore ? "text-[#ffc1a7]" : ""}>{opponentScore}</span></p><p className="mt-1 font-mono text-[8px] font-bold tracking-[.14em] text-[#ffc1a7]">FINAL SCORE</p></> : <p className="mt-2 font-mono text-[8px] font-bold tracking-[.14em] text-[#a5b3c9]">FINAL · SCORE HIDDEN</p>}
+              {isRevealedFinal ? <><p className="mt-1 font-display text-3xl font-black leading-none tracking-[.03em] text-white"><span className={favoriteScore != null && opponentScore != null && favoriteScore > opponentScore ? "text-[#ffc1a7]" : ""}>{favoriteScore}</span><span> — </span><span className={favoriteScore != null && opponentScore != null && opponentScore > favoriteScore ? "text-[#ffc1a7]" : ""}>{opponentScore}</span></p><p className="mt-1 font-mono text-[8px] font-bold tracking-[.14em] text-[#ffc1a7]">FINAL SCORE</p></> : <p className="mt-2 font-mono text-[8px] font-bold tracking-[.14em] text-[#a5b3c9]">FINAL · SCORE HIDDEN</p>}
             </> : <>
               <p className="font-mono text-[9px] font-semibold tracking-[.14em] text-[#a5b3c9]">{game.kickoffAtEstimated && gameStatus.label === "LIVE" ? "OFFICIAL SCOREBOARD" : "JST"}</p>
               <p className="mt-1 font-display text-lg font-extrabold leading-none">{game.kickoffAtEstimated && gameStatus.label === "LIVE" ? "LIVE NOW" : fmtDate(game.kickoffAt)}</p>
               <GameCountdown kickoffAt={game.kickoffAt} result={{ gameState: game.gameState, awayScore: game.awayScore, homeScore: game.homeScore }} hideFinalScore={spoilerMode} className="mt-1 text-[9px]" />
             </>}
           </div>
-          <div className="text-right"><p className={`font-display text-base font-bold leading-tight ${isRevealedFinal && favoriteScore !== null && opponentScore !== null && opponentScore > favoriteScore ? "text-[#ffc1a7]" : ""}`}>{opponentLabel}</p></div>
+          <div className="text-right"><p className={`font-display text-base font-bold leading-tight ${isRevealedFinal && favoriteScore != null && opponentScore != null && opponentScore > favoriteScore ? "text-[#ffc1a7]" : ""}`}>{opponentLabel}</p></div>
         </div>
         {game.broadcast ? <p className="mt-2 font-mono text-[9px] tracking-[.08em] text-[#d9e3f3]">{game.broadcast}</p> : null}
         <div className="border-t border-white/15 pt-2 font-mono text-[9px]">

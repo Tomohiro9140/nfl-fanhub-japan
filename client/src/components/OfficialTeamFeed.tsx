@@ -22,7 +22,7 @@ type FeedItem = {
   isPaid?: boolean;
 };
 
-type CompletedGame = { gameState: string | null; gameDate?: string | null; finishedAt?: Date | null; kickoffAt: Date; kickoffAtEstimated?: boolean };
+type CompletedGame = { gameState: string | null; gameDate?: string | null; finishedAt?: Date | null; kickoffAt: Date | null; kickoffAtEstimated?: boolean };
 
 // ブログ記事の表示期限（7日間）
 const BLOG_EXPIRATION_MS = 7 * 24 * 60 * 60 * 1000;
@@ -84,7 +84,7 @@ function SourceMark({ kind }: { kind: SourceKind }) {
 
 export function spoilerNewsCutoff(game?: CompletedGame) {
   if (!game) return null;
-  const kickoffAt = new Date(game.kickoffAt);
+  const kickoffAt = new Date(game.kickoffAt ?? 0);
   if (!game.kickoffAtEstimated && !Number.isNaN(kickoffAt.getTime())) {
     return new Date(kickoffAt.getTime() - 90 * 60 * 1000);
   }
@@ -246,7 +246,7 @@ export function OfficialTeamFeed({ favorite, spoilerMode = false, completedGame 
     [items, blogItems, hideFrom, hideAll, effectiveSpoilerMode, isExpanded]
   );
 
-  const [activeArticle, setActiveArticle] = useState<FeedItem | null>(null);
+  const [activeArticle, setActiveArticle] = useState<(FeedItem & { id: number }) | null>(null);
 
   return (
     <section id="updates" className="scroll-mt-24">
@@ -290,8 +290,9 @@ export function OfficialTeamFeed({ favorite, spoilerMode = false, completedGame 
                     onClick={() => {
                       if (item.sourceKind === "blog") {
                         window.open(item.sourceUrl, "_blank", "noopener,noreferrer");
-                      } else {
-                        setActiveArticle(item);
+                      } else if (typeof item.id === "number") {
+                        // 要約APIは数値IDのみ受け付ける（文字列IDはブログ記事だけで、上の分岐で外部リンクになる）
+                        setActiveArticle({ ...item, id: item.id });
                       }
                     }}
                     data-feed-article="latest-news"
