@@ -20,6 +20,8 @@ export type ScheduledGame = {
   awayTeam: string;
   outcome?: GameOutcome;
   isFinished: boolean;
+  homeScore?: number;
+  awayScore?: number;
 };
 
 export type TeamRecord = {

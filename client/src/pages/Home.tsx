@@ -293,7 +293,7 @@ export default function Home() {
   /** 週を跨いだ古いスキップ情報が残っていた場合に自動破棄する安全策 */
   useEffect(() => {
     if (!latestCompletedGameForResult || !watchedTicketUrl || typeof window === "undefined") return;
-    const currentMatchKey = `${latestCompletedGameForResult.gameDate ?? ""}_${new Date(latestCompletedGameForResult.kickoffAt).getTime()}`;
+    const currentMatchKey = `${latestCompletedGameForResult.gameDate ?? ""}_${new Date(latestCompletedGameForResult.kickoffAt ?? 0).getTime()}`;
     const savedMatchKey = window.localStorage.getItem(`${watchedTicketStorageKey}:${favorite.code}:matchKey`);
     if (savedMatchKey && savedMatchKey !== currentMatchKey) {
       window.localStorage.removeItem(`${watchedTicketStorageKey}:${favorite.code}`);
@@ -346,7 +346,7 @@ export default function Home() {
     if (typeof window !== "undefined") {
       window.localStorage.setItem(`${watchedTicketStorageKey}:${favorite.code}`, gameSourceUrl);
       if (latestCompletedGameForResult) {
-        const currentMatchKey = `${latestCompletedGameForResult.gameDate ?? ""}_${new Date(latestCompletedGameForResult.kickoffAt).getTime()}`;
+        const currentMatchKey = `${latestCompletedGameForResult.gameDate ?? ""}_${new Date(latestCompletedGameForResult.kickoffAt ?? 0).getTime()}`;
         window.localStorage.setItem(`${watchedTicketStorageKey}:${favorite.code}:matchKey`, currentMatchKey);
       }
     }
