@@ -578,7 +578,8 @@ export async function getOfficialScoreboardGamesForHighlightMatching(force = fal
     (game.gameState ?? "").toUpperCase().startsWith("FINAL")
   );
   if (force) return finishedGames;
-  return finishedGames.filter((game) => !game.nflHighlightUrl || !game.nflHighlightUrl.includes("youtube.com"));
+  // 検索結果URL（results?search_query=）は暫定リンクなので、個別動画（watch?v=）が入るまで再照合対象に残す
+  return finishedGames.filter((game) => !game.nflHighlightUrl || !game.nflHighlightUrl.includes("watch?v="));
 }
 
 export async function upsertOfficialScoreboardHighlights(links: Array<{ externalId: string; nflHighlightUrl: string; sourceUrl: string }>) {
