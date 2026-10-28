@@ -40,7 +40,8 @@ const LOOKBACK_DAYS = 21;
 const PUBLISH_WINDOW_BEFORE_MS = 12 * 60 * 60 * 1000;
 const PUBLISH_WINDOW_AFTER_MS = 10 * DAY_MS;
 // YouTube Data API の取得上限（1ページ50件・1ページあたり1ユニット消費）
-const MAX_API_PAGES = 10;
+// NFL公式は1日に数十本アップするため、3週間分さかのぼるには500件では足りない
+const MAX_API_PAGES = 20;
 
 function parseWeekNumber(weekLabel: string | null): number | null {
   if (!weekLabel) return null;
@@ -208,10 +209,17 @@ export async function refreshOfficialGameHighlights(options?: { force?: boolean;
     }
   }
 
-  // 照合ロジックの改善用：どの試合にも紐付かなかったハイライト動画のタイトルを残す
-  const unusedHighlightTitles = videos.filter((v) => !usedVideoIds.has(v.videoId) && /game highlights/i.test(v.title)).map((v) => v.title);
+  // 照合ロジックの改善用：未検出の試合と同じカードなのに紐付かなかったハイライト動画のタイトルを残す
+  const unmatchedGames = targetGames.filter((g) => !links.some((l) => l.externalId === g.externalId && l.nflHighlightUrl.includes("watch?v=")));
+  const unusedHighlightTitles = videos
+    .filter((v) => !usedVideoIds.has(v.videoId) && /highlight/i.test(v.title))
+    .filter((v) => {
+      const lower = v.title.toLowerCase();
+      return unmatchedGames.some((g) => mentionsTeam(lower, g.awayTeamCode) && mentionsTeam(lower, g.homeTeamCode));
+    })
+    .map((v) => `${v.title}（公開: ${v.publishedAt.toISOString()}）`);
   if (unusedHighlightTitles.length) {
-    console.log(`[highlights] 紐付かなかった "Game Highlights" 動画 ${unusedHighlightTitles.length} 件:`);
+    console.log(`[highlights] 未検出の試合と同じカードで紐付かなかった動画 ${unusedHighlightTitles.length} 件:`);
     for (const title of unusedHighlightTitles) console.log(`  - ${title}`);
   }
 
