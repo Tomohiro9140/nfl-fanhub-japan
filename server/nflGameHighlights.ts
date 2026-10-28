@@ -63,8 +63,10 @@ function gameReferenceTime(game: HighlightableGame): Date | null {
 
 function mentionsTeam(lowerTitle: string, teamCode: string): boolean {
   // 都市名はLA（Rams/Chargers）・NY（Jets/Giants）が重複するので、ニックネームだけで判定する
+  // 公式タイトルでも "Saint"（Saints）のように末尾の s が抜けることがあるので、s は省略可にする
   const nickname = (TEAM_NICKNAMES[teamCode] ?? teamCode).toLowerCase();
-  return new RegExp(`\\b${nickname}\\b`).test(lowerTitle);
+  const stem = nickname.endsWith("s") ? nickname.slice(0, -1) : nickname;
+  return new RegExp(`\\b${stem}s?\\b`).test(lowerTitle);
 }
 
 /** 動画タイトルと公開日時が、その試合の公式ハイライトとして妥当かを点数で返す（0なら不一致） */
