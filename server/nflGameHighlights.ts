@@ -1,3 +1,5 @@
+import fs from "fs";
+import path from "path";
 import { TEAM_NAMES } from "./officialTeamData";
 import { getOfficialScoreboardGamesForHighlightMatching, upsertOfficialScoreboardHighlights } from "./db";
 
@@ -23,43 +25,42 @@ export const nflHighlightsSourceUrl = "https://www.youtube.com/channel/UCDVYQ4Zh
 const NFL_CHANNEL_ID = "UCDVYQ4Zhbm3S2dlz7P1GBDg";
 const NFL_YOUTUBE_RSS_URL = `https://www.youtube.com/feeds/videos.xml?channel_id=${NFL_CHANNEL_ID}`;
 
-/**
- * 2026シーズン公式確定ハイライトレジストリ（Week 3 & Week 4 完全網羅）
- */
-const VERIFIED_HIGHLIGHT_REGISTRY: Record<string, string> = {
-  // === Week 4 (2026年10月開催) ===
-  "2026_reg_4_PIT_CLE": "https://www.youtube.com/watch?v=qJn2zHTs9BY",
-  "2026_reg_4_IND_WAS": "https://www.youtube.com/watch?v=VSkRsq4Tlfg",
-  "2026_reg_4_DAL_HOU": "https://www.youtube.com/watch?v=Yayn1UWwu1Y",
-  "2026_reg_4_NYJ_CHI": "https://www.youtube.com/watch?v=IlcC1zFWyVw",
-  "2026_reg_4_NE_BUF":  "https://www.youtube.com/watch?v=Z5zAM_GLGI0",
-  "2026_reg_4_JAX_CIN": "https://www.youtube.com/watch?v=a2zogEoiXV0",
-  "2026_reg_4_ARI_NYG": "https://www.youtube.com/watch?v=OdvCc-cxRz4",
-  "2026_reg_4_TEN_BAL": "https://www.youtube.com/watch?v=1MzoImgClWQ",
-  "2026_reg_4_LAR_PHI": "https://www.youtube.com/watch?v=h6eywSmXaCI",
-  "2026_reg_4_GB_TB":   "https://www.youtube.com/watch?v=13AbO1AEq1E",
-  "2026_reg_4_MIA_MIN": "https://www.youtube.com/watch?v=YHo13wCIHT4",
-  "2026_reg_4_KC_LV":   "https://www.youtube.com/watch?v=UH-pYLB0KQ4",
-  "2026_reg_4_DEN_SF":  "https://www.youtube.com/watch?v=3T1_zYMHPaQ",
-  "2026_reg_4_LAC_SEA": "https://www.youtube.com/watch?v=a0oq3jtgsvE",
-  "2026_reg_4_DET_CAR": "https://www.youtube.com/watch?v=sD0WZLGybRw",
+// 永続化キャッシュファイルの保存先
+const CACHE_DIR = path.resolve(process.cwd(), "server/data");
+const CACHE_FILE_PATH = path.join(CACHE_DIR, "youtube_video_pool.json");
 
-  // === Week 3 (2026年9月開催) ===
-  "2026_reg_3_CIN_PIT": "https://www.youtube.com/watch?v=sqOhOfjHhaI",
-  "2026_reg_3_NE_JAX":  "https://www.youtube.com/watch?v=Oi9HQlp-ysA",
-  "2026_reg_3_TEN_NYG": "https://www.youtube.com/watch?v=GmCLbwLRGqA",
-  "2026_reg_3_ARI_SF":  "https://www.youtube.com/watch?v=7ngu-tT0PQs",
-  "2026_reg_3_MIN_TB":  "https://www.youtube.com/watch?v=PwKZhQg5n6w",
-  "2026_reg_3_LV_NO":   "https://www.youtube.com/watch?v=xcj0NwyEJUk",
-  "2026_reg_3_BAL_DAL": "https://www.youtube.com/watch?v=7gWPdESD1og",
-  "2026_reg_3_LAR_DEN": "https://www.youtube.com/watch?v=EL-uDgYSYlI",
-  "2026_reg_3_PHI_CHI": "https://www.youtube.com/watch?v=KScULet1ves",
-  "2026_reg_3_ATL_GB":  "https://www.youtube.com/watch?v=sbXZBAUOkDw",
-  "2026_reg_3_CAR_CLE": "https://www.youtube.com/watch?v=EyGW6pqjIgs",
-};
-
-// サーバー起動中にRSSから蓄積し続ける動画プール（15件上限の押し流され対策）
+// 過去に取得した動画を保持する永続プール
 const accumulatedVideoPool = new Map<string, { title: string; url: string; addedAt: number }>();
+
+// 起動時にファイルからプールを復元
+function loadVideoPoolFromFile() {
+  try {
+    if (fs.existsSync(CACHE_FILE_PATH)) {
+      const raw = fs.readFileSync(CACHE_FILE_PATH, "utf-8");
+      const list = JSON.parse(raw) as Array<[string, { title: string; url: string; addedAt: number }]>;
+      for (const [url, item] of list) {
+        accumulatedVideoPool.set(url, item);
+      }
+    }
+  } catch {
+    // キャッシュファイル読み込みエラー時は新規プールを使用
+  }
+}
+
+// プールをファイルへ永続化
+function saveVideoPoolToFile() {
+  try {
+    if (!fs.existsSync(CACHE_DIR)) {
+      fs.mkdirSync(CACHE_DIR, { recursive: true });
+    }
+    const list = Array.from(accumulatedVideoPool.entries());
+    fs.writeFileSync(CACHE_FILE_PATH, JSON.stringify(list, null, 2), "utf-8");
+  } catch {
+    // ファイル書き込みエラー時はメモリのみで継続
+  }
+}
+
+loadVideoPoolFromFile();
 
 function parseWeekNumber(weekLabel: string | null): number | null {
   if (!weekLabel) return null;
@@ -75,7 +76,13 @@ function getTeamAliases(teamCode: string): string[] {
   return [nickname, city, teamCode.toLowerCase()].filter(Boolean);
 }
 
-/** タイトルが対象試合の公式ハイライトに合致するかあいまい照合 */
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * 動画タイトルが「対象試合の公式ハイライト」であるかを厳密に判定
+ */
 function isMatchingVideo(title: string, game: HighlightableGame, weekNum: number | null): boolean {
   const lower = title.toLowerCase();
   if (!lower.includes("highlight")) return false;
@@ -88,13 +95,17 @@ function isMatchingVideo(title: string, game: HighlightableGame, weekNum: number
   if (!hasAway || !hasHome) return false;
 
   if (weekNum !== null) {
-    const hasWeek = new RegExp(`(?:week|wk)\\s*${weekNum}\\b`, "i").test(lower);
-    if (!hasWeek && !lower.includes("rio") && !lower.includes("london")) return false;
+    const hasWeek = new RegExp(`(?:week|wk|w)\\s*${weekNum}\\b`, "i").test(lower);
+    if (!hasWeek && !lower.includes("rio") && !lower.includes("london") && !lower.includes("munich")) {
+      return false;
+    }
   }
   return true;
 }
 
-/** YouTube RSSフィードから取得し、動画プールに蓄積 */
+/**
+ * YouTube RSSフィードから最新15件を取得してプールを更新
+ */
 async function pollYouTubeRssFeed(): Promise<Array<{ title: string; url: string }>> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 5000);
@@ -107,12 +118,17 @@ async function pollYouTubeRssFeed(): Promise<Array<{ title: string; url: string 
     const xml = await res.text();
     const entries = xml.match(/<entry>[\s\S]*?<\/entry>/gi) ?? [];
 
+    let hasNew = false;
     for (const entry of entries) {
       const title = entry.match(/<title>([\s\S]*?)<\/title>/)?.[1] ?? "";
       const url = entry.match(/<link[^>]*href="([^"]*)"/)?.[1] ?? "";
-      if (title && url) {
+      if (title && url && !accumulatedVideoPool.has(url)) {
         accumulatedVideoPool.set(url, { title, url, addedAt: Date.now() });
+        hasNew = true;
       }
+    }
+    if (hasNew) {
+      saveVideoPoolToFile();
     }
   } catch {
     // 取得失敗時は現在のプールを保持
@@ -122,114 +138,99 @@ async function pollYouTubeRssFeed(): Promise<Array<{ title: string; url: string 
   return Array.from(accumulatedVideoPool.values());
 }
 
-// 15分ごとにバックグラウンドで自動取得（日曜〜月曜の試合動画を全件プールに保護）
 setInterval(() => {
   pollYouTubeRssFeed().catch(() => {});
 }, 15 * 60 * 1000);
 
-// 初回即時実行
 pollYouTubeRssFeed().catch(() => {});
 
 /**
- * YouTube InnerTube API（Androidクライアント経由でBot遮断を完全回避）
+ * YouTube 公開検索スクレイピング
+ * API Key不要でブラウザと同等の検索結果からNFL公式ハイライトを自律特定
  */
-async function searchViaInnerTube(query: string, game: HighlightableGame, weekNum: number | null): Promise<string | null> {
+async function searchViaYouTubeHtml(query: string, game: HighlightableGame, weekNum: number | null): Promise<string | null> {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 4000);
+  const timeout = setTimeout(() => controller.abort(), 6000);
   try {
-    const res = await fetch("https://www.youtube.com/youtubei/v1/search", {
-      method: "POST",
+    const searchUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`;
+    const res = await fetch(searchUrl, {
       signal: controller.signal,
       headers: {
-        "Content-Type": "application/json",
-        "User-Agent": "com.google.android.youtube/19.09.37 (Linux; U; Android 14; en_US) gzip",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+        "Accept-Language": "en-US,en;q=0.9",
       },
-      body: JSON.stringify({
-        context: {
-          client: {
-            clientName: "ANDROID",
-            clientVersion: "19.09.37",
-          },
-        },
-        query,
-      }),
     });
-    clearTimeout(timeout);
     if (!res.ok) return null;
-    const data = await res.json();
+    const html = await res.text();
+    const dataMatch = html.match(/var ytInitialData\s*=\s*({[\s\S]*?});<\/script>/);
+    if (!dataMatch) return null;
 
-    // 検索結果から動画項目を抽出
-    const contents =
-      data?.contents?.sectionListRenderer?.contents?.[0]?.itemSectionRenderer?.contents ?? [];
+    const data = JSON.parse(dataMatch[1]);
+    const sections = data?.contents?.twoColumnSearchResultsRenderer?.primaryContents?.sectionListRenderer?.contents ?? [];
 
-    for (const item of contents) {
-      const v = item.videoRenderer || item.compactVideoRenderer;
-      if (!v) continue;
-      const title = v.title?.runs?.[0]?.text || v.title?.simpleText || "";
-      const videoId = v.videoId;
-      const owner = v.ownerText?.runs?.[0]?.text || "";
+    for (const sec of sections) {
+      const items = sec?.itemSectionRenderer?.contents ?? [];
+      for (const item of items) {
+        const v = item.videoRenderer;
+        if (!v) continue;
+        const title = v.title?.runs?.[0]?.text || v.title?.simpleText || "";
+        const videoId = v.videoId;
+        if (!videoId) continue;
+        const owner = v.ownerText?.runs?.[0]?.text || "";
 
-      // NFL公式チャンネル検証
-      if (owner.includes("NFL") && isMatchingVideo(title, game, weekNum)) {
-        return `https://www.youtube.com/watch?v=${videoId}`;
+        // NFL公式チャンネルかつタイトルが合致するか検証
+        const isOfficial = owner.toLowerCase().includes("nfl") || !owner;
+        if (isOfficial && isMatchingVideo(title, game, weekNum)) {
+          const matchedUrl = `https://www.youtube.com/watch?v=${videoId}`;
+          accumulatedVideoPool.set(matchedUrl, { title, url: matchedUrl, addedAt: Date.now() });
+          saveVideoPoolToFile();
+          return matchedUrl;
+        }
       }
     }
   } catch {
     return null;
+  } finally {
+    clearTimeout(timeout);
   }
   return null;
 }
 
-/** 試合終了後のハイライト自動取得・同期メイン関数 */
+/**
+ * 試合終了後のハイライト完全自動取得・同期メイン関数
+ */
 export async function refreshOfficialGameHighlights(options?: { force?: boolean }) {
   const games = (await getOfficialScoreboardGamesForHighlightMatching(options?.force ?? false)) as HighlightableGame[];
   if (!games.length) return { candidates: 0, linked: 0, sourceUrl: nflHighlightsSourceUrl };
 
-  // 1. 最新RSSおよび蓄積プールを更新
   const videoPool = await pollYouTubeRssFeed();
   const links: NflHighlightLink[] = [];
 
   for (const game of games) {
-    // すでにYouTube動画URLが確定している場合は保護
-    if (game.nflHighlightUrl && game.nflHighlightUrl.includes("watch?v=")) {
+    // 正式な動画URL（watch?v=）がすでに登録されている場合はスキップ（force時を除く）
+    if (!options?.force && game.nflHighlightUrl && game.nflHighlightUrl.includes("watch?v=")) {
       continue;
     }
 
     const weekNum = parseWeekNumber(game.weekLabel);
-    const season = game.season || 2026;
-    const phase = game.seasonPhase === "regular" || game.seasonPhase === "preseason" ? "reg" : "reg";
-
-    // A. 確定レジストリチェック（表記揺れパターンをすべて網羅判定）
-    const keyCandidates = [
-      `${season}_${phase}_${weekNum}_${game.awayTeamCode}_${game.homeTeamCode}`,
-      `${season}_regular_${weekNum}_${game.awayTeamCode}_${game.homeTeamCode}`,
-      `${game.awayTeamCode}_${game.homeTeamCode}_${weekNum}`,
-      `${game.homeTeamCode}_${game.awayTeamCode}_${weekNum}`,
-    ];
-
     let matchedUrl: string | null = null;
-    for (const key of keyCandidates) {
-      if (VERIFIED_HIGHLIGHT_REGISTRY[key]) {
-        matchedUrl = VERIFIED_HIGHLIGHT_REGISTRY[key];
-        break;
-      }
+
+    // 1. 永続化プール（RSS＋過去検索蓄積）からの照合
+    const poolMatch = videoPool.find((v) => isMatchingVideo(v.title, game, weekNum));
+    if (poolMatch) {
+      matchedUrl = poolMatch.url;
     }
 
-    // B. 常時蓄積プールからのあいまい照合
-    if (!matchedUrl) {
-      const poolMatch = videoPool.find((v) => isMatchingVideo(v.title, game, weekNum));
-      if (poolMatch) matchedUrl = poolMatch.url;
-    }
-
-    // C. InnerTube API（Android経由）での安全検索
+    // 2. プールにない場合は自律Web検索を実行
     if (!matchedUrl) {
       const awayName = TEAM_NAMES[game.awayTeamCode] ?? game.awayTeamCode;
       const homeName = TEAM_NAMES[game.homeTeamCode] ?? game.homeTeamCode;
       const q = `NFL ${awayName} vs ${homeName} Week ${weekNum ?? ""} highlights`;
-      matchedUrl = await searchViaInnerTube(q, game, weekNum);
+      matchedUrl = await searchViaYouTubeHtml(q, game, weekNum);
+      await sleep(350); // APIレートリミット回避
     }
 
-    // D. 取得成功時はリンク配列へ追加
+    // 3. 正式なハイライト動画URLが見つかった場合はDB更新対象に追加
     if (matchedUrl) {
       links.push({
         externalId: game.externalId,
@@ -239,14 +240,14 @@ export async function refreshOfficialGameHighlights(options?: { force?: boolean 
       continue;
     }
 
-    // E. 万が一未投稿の場合のセーフティネット（NFL.comではなく公式YouTube検索へ誘導）
-    const awayName = TEAM_NAMES[game.awayTeamCode] ?? game.awayTeamCode;
-    const homeName = TEAM_NAMES[game.homeTeamCode] ?? game.homeTeamCode;
-    const fallbackSearchUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(
-      `NFL ${awayName} vs ${homeName} Week${weekNum ?? ""} highlights`
-    )}`;
-
+    // 4. まだ動画がアップロードされていない場合のみ、セーフティネットとして検索URLを登録
     if (!game.nflHighlightUrl) {
+      const awayName = TEAM_NAMES[game.awayTeamCode] ?? game.awayTeamCode;
+      const homeName = TEAM_NAMES[game.homeTeamCode] ?? game.homeTeamCode;
+      const fallbackSearchUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(
+        `NFL ${awayName} vs ${homeName} Week${weekNum ?? ""} highlights`
+      )}`;
+
       links.push({
         externalId: game.externalId,
         nflHighlightUrl: fallbackSearchUrl,
@@ -255,6 +256,7 @@ export async function refreshOfficialGameHighlights(options?: { force?: boolean 
     }
   }
 
+  // 取得できた動画を一括UPSERT
   if (links.length > 0) {
     await upsertOfficialScoreboardHighlights(links);
   }
