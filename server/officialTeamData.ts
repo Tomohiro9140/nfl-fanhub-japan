@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { nflSeasonFor } from "@shared/season";
 import type { InsertOfficialGame, InsertOfficialRosterEntry } from "../drizzle/schema";
 import { replaceOfficialGamesForTeam, replaceOfficialRosterEntriesForTeam } from "./db";
 
@@ -43,8 +44,7 @@ function hash(value: string) {
 }
 
 function currentSeason() {
-  const now = new Date();
-  return now.getUTCMonth() < 2 ? now.getUTCFullYear() - 1 : now.getUTCFullYear();
+  return nflSeasonFor();
 }
 
 export function getOfficialTeamDataSources(teamCode: string) {

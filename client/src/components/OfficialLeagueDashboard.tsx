@@ -4,6 +4,7 @@ import { nflTeams, officialTeamScheduleUrl, type FavoriteTeam } from "@/lib/nflT
 import { abbreviatedMatchup, getFavoriteLatestResults, getFavoriteSchedule, getNextSevenDayGames, seasonWeekLabel, type LeagueCalendarGame } from "@/lib/leagueCalendar";
 import { daznWatchTarget } from "@/lib/daznWatch";
 import { hasIndividualOfficialHighlight } from "@/lib/nflHighlights";
+import { nflSeasonFor } from "@shared/season";
 
 export type LeagueDashboard = {
   standings: Array<{ teamCode: string; wins: number; losses: number; ties: number; pct: string; pointsFor: number | null; pointsAgainst: number | null; sourceUrl: string; fetchedAt: Date }>;
@@ -209,7 +210,7 @@ export function OfficialLeagueDashboard({ favorite, dashboard, loading, calendar
                 NFL公式順位表の初回同期を待っています。
               </div>
             )}
-            <a href="https://www.nfl.com/standings/league/2026/REG" target="_blank" rel="noreferrer" className="mt-3 inline-flex items-center gap-1 text-[10px] font-bold underline decoration-[#e85d2a] decoration-2 underline-offset-3">
+            <a href={`https://www.nfl.com/standings/league/${nflSeasonFor()}/REG`} target="_blank" rel="noreferrer" className="mt-3 inline-flex items-center gap-1 text-[10px] font-bold underline decoration-[#e85d2a] decoration-2 underline-offset-3">
               OFFICIAL STANDINGS <ChevronRight className="h-3 w-3" />
             </a>
           </div>

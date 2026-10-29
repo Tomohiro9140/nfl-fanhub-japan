@@ -165,8 +165,9 @@ jobs:
             exit 0
           fi
 
-          echo "🚀 試合後集計日（JST曜日: $JST_DOW）のため FIELDLINE 2026 を集計します..."
-          pnpm tsx scripts/import-fieldline-season.mjs 2026
+          # シーズン年は shared/season.ts の nflSeasonFor()（7月1日切り替え）で自動判定する
+          echo "🚀 試合後集計日（JST曜日: $JST_DOW）のため FIELDLINE を集計します..."
+          pnpm tsx scripts/import-fieldline-season.mjs
 
       # -------------------------------------------------------------
       # 生成ファイル・同期状態フラグをGitHubへ永続化

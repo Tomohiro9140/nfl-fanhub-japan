@@ -4,6 +4,7 @@ import { getDb } from "./db";
 import { officialScoreboardGames } from "../drizzle/schema";
 import { desc, eq } from "drizzle-orm";
 import { calculateExciteIndex } from "./exciteIndex";
+import { nflSeasonFor } from "@shared/season";
 
 export const exciteIndexRouter = router({
   /**
@@ -13,13 +14,13 @@ export const exciteIndexRouter = router({
     .input(
       z
         .object({
-          season: z.number().int().default(2026),
+          season: z.number().int().default(() => nflSeasonFor()),
           weekLabel: z.string().optional(),
         })
         .optional()
     )
     .query(async ({ input }) => {
-      const season = input?.season ?? 2026;
+      const season = input?.season ?? nflSeasonFor();
       const db = await getDb();
       if (!db) {
         return { season, weekLabel: null, availableWeeks: [], games: [] };

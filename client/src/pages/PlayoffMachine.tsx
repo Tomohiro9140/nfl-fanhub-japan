@@ -22,6 +22,7 @@ import {
   X,
 } from "lucide-react";
 import { memo, useMemo, useState, useEffect } from "react";
+import { nflDraftYearFor, nflSeasonFor } from "@shared/season";
 
 const ESPN_LOGO_CODES: Record<string, string> = {
   WAS: "wsh",
@@ -69,13 +70,20 @@ interface DraftPickItem {
   tiebreakReason: string;
 }
 
-// 2027年NFLドラフト 1巡目トレード譲渡データ
-const TRADED_PICKS_2027: Record<string, { toTeam: string; note: string }> = {
-  IND: { toTeam: "NYJ", note: "Sauce Gardnerトレード" },
-  LAR: { toTeam: "CLE", note: "Myles Garrettトレード" },
-  GB: { toTeam: "DAL", note: "Micah Parsonsトレード" },
-  DAL: { toTeam: "NYJ", note: "Quinnen Williamsトレード" },
+// 表示中のシーズン（7月1日に翌シーズンへ切り替わる）
+const SEASON = nflSeasonFor();
+const DRAFT_YEAR = nflDraftYearFor(SEASON);
+
+// NFLドラフト 1巡目トレード譲渡データ（ドラフト年ごと。新しい年の分は毎年追記する）
+const TRADED_PICKS_BY_DRAFT_YEAR: Record<number, Record<string, { toTeam: string; note: string }>> = {
+  2027: {
+    IND: { toTeam: "NYJ", note: "Sauce Gardnerトレード" },
+    LAR: { toTeam: "CLE", note: "Myles Garrettトレード" },
+    GB: { toTeam: "DAL", note: "Micah Parsonsトレード" },
+    DAL: { toTeam: "NYJ", note: "Quinnen Williamsトレード" },
+  },
 };
+const TRADED_PICKS = TRADED_PICKS_BY_DRAFT_YEAR[DRAFT_YEAR] ?? {};
 
 const FOCUS_TEAM_STORAGE_KEY = "nfl:playoff-machine:focus-team";
 
@@ -117,7 +125,7 @@ export default function PlayoffMachine() {
   }, []);
 
   const officialScheduleQuery = trpc.playoff.getSchedule.useQuery(
-    { season: 2026 },
+    { season: SEASON },
     { staleTime: 5 * 60_000 }
   );
 
@@ -666,7 +674,7 @@ export default function PlayoffMachine() {
                   <div>
                     <div className="border-b border-slate-100 bg-slate-50/70 px-3 py-1 flex items-center justify-between">
                       <span className="text-[10px] font-bold tracking-wider text-slate-500">
-                        2027 NFL DRAFT ORDER (#1〜#18)
+                        {DRAFT_YEAR} NFL DRAFT ORDER (#1〜#18)
                       </span>
                       <span className="text-[9px] text-slate-400 font-medium">
                         ※同勝率は対戦相手勝率（SOS）が低いチームが上位
@@ -1039,7 +1047,7 @@ function DraftRow({
   item: DraftPickItem;
   isFocus: boolean;
 }) {
-  const traded = TRADED_PICKS_2027[item.team];
+  const traded = TRADED_PICKS[item.team];
 
   return (
     <div

@@ -8,6 +8,7 @@ import { trpc } from "@/lib/trpc";
 import { fieldlineTeamBrand } from "@/lib/fieldlineTeams";
 import { ArrowLeftRight, CalendarRange, ChevronDown, ChevronUp, HelpCircle, ShieldAlert, Trophy, X, BarChart3, SlidersHorizontal } from "lucide-react";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { nflSeasonFor } from "@shared/season";
 
 type VenueFilter = "all" | "home" | "away";
 type Selection = { season: number; team: string; weeks: number[]; venue: VenueFilter };
@@ -817,12 +818,12 @@ export default function Fieldline() {
   const { data: teams = [] } = trpc.fieldline.teams.useQuery(undefined, staticQueryOptions);
   const { data: imports = [], isLoading: seasonsLoading } = trpc.fieldline.seasons.useQuery(undefined, staticQueryOptions);
   const seasons = useMemo(() => {
-    const currentYear = Math.max(2026, new Date().getFullYear());
+    const currentYear = Math.max(2026, nflSeasonFor());
     const selectableYears = Array.from({ length: currentYear - 2024 }, (_, index) => 2025 + index);
     return Array.from(new Set([...selectableYears, ...imports.map((item) => item.season)])).sort((a, b) => b - a);
   }, [imports]);
-  const [left, setLeft] = useState<Selection>(() => ({ season: 2026, team: getStoredTeam("left", "DAL"), weeks: [], venue: "all" }));
-  const [right, setRight] = useState<Selection>(() => ({ season: 2026, team: getStoredTeam("right", "SEA"), weeks: [], venue: "all" }));
+  const [left, setLeft] = useState<Selection>(() => ({ season: nflSeasonFor(), team: getStoredTeam("left", "DAL"), weeks: [], venue: "all" }));
+  const [right, setRight] = useState<Selection>(() => ({ season: nflSeasonFor(), team: getStoredTeam("right", "SEA"), weeks: [], venue: "all" }));
   const freshnessInput = useMemo(() => ({ seasons: [left.season] }), [left.season]);
   const freshness = trpc.fieldline.freshness.useQuery(freshnessInput, { ...weekQueryOptions, refetchInterval: 5 * 60_000 });
   const leftWeekInput = useMemo(() => ({ season: left.season, team: left.team, venue: left.venue }), [left.season, left.team, left.venue]);
@@ -849,8 +850,8 @@ export default function Fieldline() {
   }, [left.team, right.team]);
 
   useEffect(() => {
-    if (!seasons.includes(left.season)) setLeft((item) => ({ ...item, season: seasons[0] ?? 2026 }));
-    if (!seasons.includes(right.season)) setRight((item) => ({ ...item, season: seasons[0] ?? 2026 }));
+    if (!seasons.includes(left.season)) setLeft((item) => ({ ...item, season: seasons[0] ?? nflSeasonFor() }));
+    if (!seasons.includes(right.season)) setRight((item) => ({ ...item, season: seasons[0] ?? nflSeasonFor() }));
   }, [seasons, left.season, right.season]);
 
   useEffect(() => {

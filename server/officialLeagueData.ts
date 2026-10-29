@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { nflSeasonFor } from "@shared/season";
 import type { InsertOfficialScoreboardGame, InsertOfficialStanding } from "../drizzle/schema";
 import { getOfficialScoreboardKickoffTimes, hasOfficialScorePulseWindow, replaceOfficialScoreboardGames, upsertOfficialStandings } from "./db";
 import { refreshOfficialGameHighlights } from "./nflGameHighlights";
@@ -16,8 +17,7 @@ function officialPreseasonScoreUrls(season: number) {
 }
 
 function currentSeason() {
-  const now = new Date();
-  return now.getUTCMonth() < 2 ? now.getUTCFullYear() - 1 : now.getUTCFullYear();
+  return nflSeasonFor();
 }
 
 function hash(value: string) {
@@ -84,7 +84,24 @@ export function parseNFLStandingsPage(html: string, season: number, sourceUrl: s
   });
 }
 
+/** NFL公式の試合URL末尾 "-post-N" とラウンド名の対応（2025シーズンのページで確認） */
+const POSTSEASON_ROUND_LABELS: Record<string, string> = {
+  "1": "WILD CARD",
+  "2": "DIVISIONAL",
+  "3": "CONF CHAMP",
+  "4": "SUPER BOWL",
+};
+
+export function officialPostseasonScoreUrls(season: number) {
+  return ["wild-card-weekend", "divisional-playoffs", "conference-championships", "super-bowl-sunday"].map(
+    (slug) => `https://www.nfl.com/schedules/${season}/by-week/${slug}`
+  );
+}
+
 function phaseAndWeek(html: string, gamePath?: string) {
+  // ページ内のナビゲーションに "PRESEASON WEEK 1" などが含まれるため、まずURLの形式で判定する
+  const postseasonFromPath = gamePath?.match(/-post-(\d+)/i)?.[1];
+  if (postseasonFromPath) return { seasonPhase: "postseason" as const, weekLabel: POSTSEASON_ROUND_LABELS[postseasonFromPath] ?? `POSTSEASON ${postseasonFromPath}` };
   const preseasonFromPath = gamePath?.match(/-pre-(\d+)/i)?.[1];
   if (preseasonFromPath) return { seasonPhase: "preseason" as const, weekLabel: `PRESEASON WEEK ${preseasonFromPath}` };
   const regularFromPath = gamePath?.match(/-reg-(\d+)/i)?.[1];
@@ -324,8 +341,15 @@ export async function refreshOfficialScorePulse() {
 export async function refreshOfficialLeagueDashboard() {
   const season = currentSeason();
   const standingsUrl = officialStandingsUrl(season);
-  const scoreSourceUrls = [officialScheduleUrl, ...officialPreseasonScoreUrls(season)];
-  const [standingsHtml, ...scorePages] = await Promise.all([fetchOfficialHtml(standingsUrl), ...scoreSourceUrls.map((url) => fetchOfficialHtml(url))]);
+  // 1〜2月はプレーオフ各ラウンドのページも読み、実行の取りこぼしがあっても結果を拾えるようにする
+  const isPostseasonMonth = new Date().getUTCMonth() < 2;
+  const postseasonUrls = isPostseasonMonth ? officialPostseasonScoreUrls(season) : [];
+  const scoreSourceUrls = [officialScheduleUrl, ...officialPreseasonScoreUrls(season), ...postseasonUrls];
+  // 追加のプレーオフページは補助なので、読めなくても更新全体は止めない
+  const [standingsHtml, ...scorePages] = await Promise.all([
+    fetchOfficialHtml(standingsUrl),
+    ...scoreSourceUrls.map((url) => postseasonUrls.includes(url) ? fetchOfficialHtml(url).catch(() => "") : fetchOfficialHtml(url)),
+  ]);
   const standings = parseNFLStandingsPage(standingsHtml, season, standingsUrl);
   const scoresByExternalId = new Map<string, InsertOfficialScoreboardGame>();
 

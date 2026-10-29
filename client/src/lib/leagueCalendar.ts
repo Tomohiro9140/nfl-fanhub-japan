@@ -83,5 +83,7 @@ export function abbreviatedMatchup(game: LeagueCalendarGame) {
 export function seasonWeekLabel(game: LeagueCalendarGame) {
   const phase = game.seasonPhase === "preseason" ? "PRE" : game.seasonPhase === "postseason" ? "POST" : "REG";
   const week = game.weekLabel?.match(/(\d+)/)?.[1];
+  // プレーオフはラウンド名（WILD CARD など）をそのまま見せる
+  if (game.seasonPhase === "postseason" && game.weekLabel && !week) return `${phase} · ${game.weekLabel}`;
   return `${phase} · WEEK ${week ?? "TBD"}`;
 }

@@ -16,4 +16,11 @@ describe("official schedule/score joining", () => {
   it("does not leak a score from the same teams in a different week", () => {
     expect(attachOfficialScore({ teamCode: "BUF", opponentCode: "PIT", weekLabel: "Week 3" }, scores)).toMatchObject({ gameState: null, awayScore: null, homeScore: null });
   });
+
+  it("keeps a playoff rematch separate from the regular-season meeting", () => {
+    const withPlayoff = [...scores, { awayTeamCode: "PIT", homeTeamCode: "BUF", weekLabel: "WILD CARD", gameState: "FINAL", awayScore: 10, homeScore: 31 }];
+    expect(findOfficialScoreForGame(withPlayoff, { teamCode: "BUF", opponentCode: "PIT", weekLabel: "Week 1" })).toEqual(scores[1]);
+    expect(findOfficialScoreForGame(withPlayoff, { teamCode: "BUF", opponentCode: "PIT", weekLabel: "WILD CARD" })).toEqual(withPlayoff[2]);
+    expect(findOfficialScoreForGame(withPlayoff, { teamCode: "BUF", opponentCode: "PIT", weekLabel: "DIVISIONAL" })).toBeUndefined();
+  });
 });

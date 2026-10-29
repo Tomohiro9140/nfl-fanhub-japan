@@ -83,5 +83,6 @@ describe("league calendar presentation", () => {
   it("always exposes the phase and numeric week together", () => {
     expect(seasonWeekLabel(games[0]!)).toBe("PRE · WEEK 2");
     expect(seasonWeekLabel(games[1]!)).toBe("REG · WEEK 1");
+    expect(seasonWeekLabel({ ...games[1]!, seasonPhase: "postseason", weekLabel: "WILD CARD" })).toBe("POST · WILD CARD");
   });
 });

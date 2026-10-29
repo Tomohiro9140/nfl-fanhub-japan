@@ -1,6 +1,7 @@
 import React, { useMemo, useRef, useState, useEffect } from "react";
 import { X, Trophy, Download, RotateCcw } from "lucide-react";
 import { NFL_TEAMS } from "@/lib/tiebreaker/nflTeams";
+import { nflSeasonDisplayLabel, nflSeasonFor } from "@shared/season";
 
 // ESPN CDN 略称マップ
 const ESPN_LOGO_CODES: Record<string, string> = {
@@ -477,7 +478,7 @@ export function PlayoffPredictionModal({ isOpen, onClose, afcSeeds, nfcSeeds }: 
           return;
         }
 
-        const fileName = "NFL_Playoff_Prediction_2026.png";
+        const fileName = `NFL_Playoff_Prediction_${nflSeasonFor()}.png`;
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
         a.href = url;
@@ -497,7 +498,7 @@ export function PlayoffPredictionModal({ isOpen, onClose, afcSeeds, nfcSeeds }: 
   const openTwitterIntent = () => {
     const champName = superBowlChamp ? getTeamInfo(superBowlChamp).name : "未定";
     const text = encodeURIComponent(
-      `2026-27シーズン NFLプレーオフ勝敗予想！\n` +
+      `${nflSeasonDisplayLabel(nflSeasonFor())}シーズン NFLプレーオフ勝敗予想！\n` +
       `スーパーボウル覇者は【${champName}】🏆\n\n` +
       `#NFL #NFLJapan #NFLプレーオフ予想\n` +
       `https://nfl-fanhub.onrender.com/simulator`
