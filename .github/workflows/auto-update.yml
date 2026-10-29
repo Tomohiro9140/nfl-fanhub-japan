@@ -23,10 +23,9 @@ jobs:
         with:
           fetch-depth: 0
 
+      # pnpm のバージョンは package.json の packageManager に揃える
       - name: pnpmのセットアップ
         uses: pnpm/action-setup@v3
-        with:
-          version: 9
 
       - name: Node.jsのセットアップ
         uses: actions/setup-node@v4
@@ -35,17 +34,15 @@ jobs:
           cache: 'pnpm'
 
       - name: 依存パッケージのインストール
-        run: pnpm install --no-frozen-lockfile
+        run: pnpm install --frozen-lockfile
 
       - name: APIサーバーの完全合体ビルド
         run: |
           mkdir -p api
           pnpm exec esbuild server/api.ts --platform=node --packages=external --bundle --format=esm --outfile=api/index.js
 
-      - name: データベースのテーブル同期
-        continue-on-error: true
-        run: |
-          pnpm run db:push || true
+      # ※ DBのテーブル構造の変更（pnpm run db:push）は、本番DBを無人で書き換えないよう
+      #   自動実行には含めず、drizzle/schema.ts を変えたときに手動で実行する
 
       # -------------------------------------------------------------
       # 1. 全試合日程の同期
@@ -179,8 +176,8 @@ jobs:
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          # 保存するのはビルド結果と同期状態だけ（それ以外の変更が main に紛れ込まないようにする）
           git add api/index.js .sync_state/ || true
-          git add -A
           if ! git diff --staged --quiet; then
             git commit -m "chore: API完全ビルドとデータ同期状態の記録"
             git pull --rebase origin main
