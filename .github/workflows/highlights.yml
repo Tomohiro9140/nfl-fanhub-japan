@@ -33,10 +33,9 @@ jobs:
       - name: リポジトリの読み込み
         uses: actions/checkout@v4
 
+      # pnpm のバージョンは package.json の packageManager に揃える
       - name: pnpmのセットアップ
         uses: pnpm/action-setup@v3
-        with:
-          version: 9
 
       - name: Node.jsのセットアップ
         uses: actions/setup-node@v4
@@ -45,7 +44,7 @@ jobs:
           cache: 'pnpm'
 
       - name: 依存パッケージのインストール
-        run: pnpm install --no-frozen-lockfile
+        run: pnpm install --frozen-lockfile
 
       - name: ハイライト動画の照合
         timeout-minutes: 5
