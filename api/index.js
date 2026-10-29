@@ -35,7 +35,11 @@ import { and, asc, desc, eq, gt, gte, inArray, lt, ne, sql, or } from "drizzle-o
 function matchupKey(firstTeam, secondTeam) {
   return [firstTeam, secondTeam].sort().join("-");
 }
+var POSTSEASON_LABEL = /^(?:WILD CARD|DIVISIONAL|CONF CHAMP|SUPER BOWL|POSTSEASON)\b/i;
 function sameWeek(left, right) {
+  const leftPost = Boolean(left && POSTSEASON_LABEL.test(left));
+  const rightPost = Boolean(right && POSTSEASON_LABEL.test(right));
+  if (left && right && (leftPost || rightPost)) return leftPost && rightPost && left.toUpperCase() === right.toUpperCase();
   const leftWeek = left?.match(/\d+/)?.[0];
   const rightWeek = right?.match(/\d+/)?.[0];
   return !leftWeek || !rightWeek || leftWeek === rightWeek;
@@ -1512,6 +1516,14 @@ import { asc as asc2, desc as desc2, gte as gte2, lt as lt2 } from "drizzle-orm"
 
 // server/officialTeamData.ts
 import { createHash } from "node:crypto";
+
+// shared/season.ts
+var SEASON_ROLLOVER_MONTH = 7;
+function nflSeasonFor(date = /* @__PURE__ */ new Date()) {
+  return date.getUTCMonth() + 1 >= SEASON_ROLLOVER_MONTH ? date.getUTCFullYear() : date.getUTCFullYear() - 1;
+}
+
+// server/officialTeamData.ts
 var TEAM_DOMAINS = {
   ARI: "azcardinals.com",
   ATL: "atlantafalcons.com",
@@ -1635,8 +1647,7 @@ function hash(value) {
   return createHash("sha256").update(value).digest("hex");
 }
 function currentSeason() {
-  const now = /* @__PURE__ */ new Date();
-  return now.getUTCMonth() < 2 ? now.getUTCFullYear() - 1 : now.getUTCFullYear();
+  return nflSeasonFor();
 }
 function getOfficialTeamDataSources(teamCode) {
   const domain = TEAM_DOMAINS[teamCode];
@@ -2421,7 +2432,7 @@ async function storageGetSignedUrl(relKey) {
 var cache = /* @__PURE__ */ new Map();
 var inFlight = /* @__PURE__ */ new Map();
 var NFLVERSE_RELEASES = "https://github.com/nflverse/nflverse-data/releases/download";
-var currentSeason2 = Math.max(2025, (/* @__PURE__ */ new Date()).getUTCFullYear());
+var currentSeason2 = Math.max(2025, nflSeasonFor());
 var USER_AGENT = "NFL-Fan-Hub-Japan-Atlas/1.0";
 var OTC_FETCH_HEADERS = {
   "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
@@ -4344,10 +4355,10 @@ var playoffRouter = router({
    */
   getSchedule: publicProcedure.input(
     z2.object({
-      season: z2.number().int().default(2026)
+      season: z2.number().int().default(() => nflSeasonFor())
     }).optional()
   ).query(async ({ input }) => {
-    const season = input?.season ?? 2026;
+    const season = input?.season ?? nflSeasonFor();
     const db = await getDb();
     if (!db) {
       return { season, games: [] };
@@ -4540,11 +4551,11 @@ var exciteIndexRouter = router({
    */
   getWeeklyRankings: publicProcedure.input(
     z3.object({
-      season: z3.number().int().default(2026),
+      season: z3.number().int().default(() => nflSeasonFor()),
       weekLabel: z3.string().optional()
     }).optional()
   ).query(async ({ input }) => {
-    const season = input?.season ?? 2026;
+    const season = input?.season ?? nflSeasonFor();
     const db = await getDb();
     if (!db) {
       return { season, weekLabel: null, availableWeeks: [], games: [] };
@@ -6078,8 +6089,7 @@ function officialPreseasonScoreUrls(season) {
   return [1, 2, 3].map((week) => officialPreseasonWeekScoresUrl(season, week));
 }
 function currentSeason3() {
-  const now = /* @__PURE__ */ new Date();
-  return now.getUTCMonth() < 2 ? now.getUTCFullYear() - 1 : now.getUTCFullYear();
+  return nflSeasonFor();
 }
 function hash3(value) {
   return createHash5("sha256").update(value).digest("hex");
@@ -6136,7 +6146,20 @@ function parseNFLStandingsPage(html, season, sourceUrl) {
     }];
   });
 }
+var POSTSEASON_ROUND_LABELS = {
+  "1": "WILD CARD",
+  "2": "DIVISIONAL",
+  "3": "CONF CHAMP",
+  "4": "SUPER BOWL"
+};
+function officialPostseasonScoreUrls(season) {
+  return ["wild-card-weekend", "divisional-playoffs", "conference-championships", "super-bowl-sunday"].map(
+    (slug) => `https://www.nfl.com/schedules/${season}/by-week/${slug}`
+  );
+}
 function phaseAndWeek(html, gamePath) {
+  const postseasonFromPath = gamePath?.match(/-post-(\d+)/i)?.[1];
+  if (postseasonFromPath) return { seasonPhase: "postseason", weekLabel: POSTSEASON_ROUND_LABELS[postseasonFromPath] ?? `POSTSEASON ${postseasonFromPath}` };
   const preseasonFromPath = gamePath?.match(/-pre-(\d+)/i)?.[1];
   if (preseasonFromPath) return { seasonPhase: "preseason", weekLabel: `PRESEASON WEEK ${preseasonFromPath}` };
   const regularFromPath = gamePath?.match(/-reg-(\d+)/i)?.[1];
@@ -6337,8 +6360,13 @@ async function refreshOfficialScorePulse() {
 async function refreshOfficialLeagueDashboard() {
   const season = currentSeason3();
   const standingsUrl = officialStandingsUrl(season);
-  const scoreSourceUrls = [officialScheduleUrl, ...officialPreseasonScoreUrls(season)];
-  const [standingsHtml, ...scorePages] = await Promise.all([fetchOfficialHtml3(standingsUrl), ...scoreSourceUrls.map((url) => fetchOfficialHtml3(url))]);
+  const isPostseasonMonth = (/* @__PURE__ */ new Date()).getUTCMonth() < 2;
+  const postseasonUrls = isPostseasonMonth ? officialPostseasonScoreUrls(season) : [];
+  const scoreSourceUrls = [officialScheduleUrl, ...officialPreseasonScoreUrls(season), ...postseasonUrls];
+  const [standingsHtml, ...scorePages] = await Promise.all([
+    fetchOfficialHtml3(standingsUrl),
+    ...scoreSourceUrls.map((url) => postseasonUrls.includes(url) ? fetchOfficialHtml3(url).catch(() => "") : fetchOfficialHtml3(url))
+  ]);
   const standings = parseNFLStandingsPage(standingsHtml, season, standingsUrl);
   const scoresByExternalId = /* @__PURE__ */ new Map();
   scorePages.forEach((html, index2) => {
