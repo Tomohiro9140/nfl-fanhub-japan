@@ -5,7 +5,13 @@ function matchupKey(firstTeam: string, secondTeam: string) {
   return [firstTeam, secondTeam].sort().join("-");
 }
 
+const POSTSEASON_LABEL = /^(?:WILD CARD|DIVISIONAL|CONF CHAMP|SUPER BOWL|POSTSEASON)\b/i;
+
 function sameWeek(left: string | null, right: string | null) {
+  // プレーオフのラウンド名には数字がないので、同カードのレギュラーシーズンの試合と取り違えないよう別扱いにする
+  const leftPost = Boolean(left && POSTSEASON_LABEL.test(left));
+  const rightPost = Boolean(right && POSTSEASON_LABEL.test(right));
+  if (left && right && (leftPost || rightPost)) return leftPost && rightPost && left.toUpperCase() === right.toUpperCase();
   const leftWeek = left?.match(/\d+/)?.[0];
   const rightWeek = right?.match(/\d+/)?.[0];
   return !leftWeek || !rightWeek || leftWeek === rightWeek;

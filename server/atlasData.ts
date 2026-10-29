@@ -1,6 +1,7 @@
 import fs from "fs";
 import path from "path";
 import { storageGetSignedUrl } from "./storage";
+import { nflSeasonFor } from "@shared/season";
 
 type CsvRow = Record<string, string>;
 
@@ -30,7 +31,7 @@ export type AtlasPlayerResult = {
 const cache = new Map<string, CacheEntry<unknown>>();
 const inFlight = new Map<string, Promise<unknown>>();
 const NFLVERSE_RELEASES = "https://github.com/nflverse/nflverse-data/releases/download";
-const currentSeason = Math.max(2025, new Date().getUTCFullYear());
+const currentSeason = Math.max(2025, nflSeasonFor());
 const USER_AGENT = "NFL-Fan-Hub-Japan-Atlas/1.0";
 const OTC_FETCH_HEADERS = {
   "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",

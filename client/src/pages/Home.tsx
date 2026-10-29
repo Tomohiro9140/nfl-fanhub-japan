@@ -29,6 +29,7 @@ import { ExciteIndexDialog } from "@/components/ExciteIndexDialog";
 import { preloadAtlasRoute, preloadCoachingTreeRoute, preloadFieldlineRoute } from "@/lib/routePreload";
 import { spoilerModeForTeamChange } from "@/lib/teamExperience";
 import { trpc } from "@/lib/trpc";
+import { nflSeasonFor } from "@shared/season";
 
 const brandLogo = "/fan-hub-field-mark.png";
 const favoriteTeamStorageKey = "nfl-fan-hub-favorite-team";
@@ -657,7 +658,7 @@ export default function Home() {
           />
         </React.Suspense>
       ) : null}
-      <ExciteIndexDialog open={exciteDialogOpen} onClose={() => setExciteDialogOpen(false)} season={2026} />
+      <ExciteIndexDialog open={exciteDialogOpen} onClose={() => setExciteDialogOpen(false)} season={nflSeasonFor()} />
     </div>
   );
 }

@@ -3,6 +3,7 @@ import { z } from "zod";
 import { getDb } from "./db";
 import { officialGames, teamWeekStats } from "../drizzle/schema";
 import { and, eq } from "drizzle-orm";
+import { nflSeasonFor } from "@shared/season";
 
 export const playoffRouter = router({
   /**
@@ -12,12 +13,12 @@ export const playoffRouter = router({
     .input(
       z
         .object({
-          season: z.number().int().default(2026),
+          season: z.number().int().default(() => nflSeasonFor()),
         })
         .optional()
     )
     .query(async ({ input }) => {
-      const season = input?.season ?? 2026;
+      const season = input?.season ?? nflSeasonFor();
       const db = await getDb();
       if (!db) {
         return { season, games: [] };

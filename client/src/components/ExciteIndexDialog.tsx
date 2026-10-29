@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { ArrowUpRight, Flame, Loader2, Star, Trophy, Tv } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { getTeamByCode } from "@/lib/nflTeams";
+import { nflSeasonFor } from "@shared/season";
 import {
   Dialog,
   DialogContent,
@@ -46,7 +47,7 @@ function StarRating({ stars }: { stars: number }) {
 export function ExciteIndexDialog({
   open,
   onClose,
-  season = 2026,
+  season = nflSeasonFor(),
   initialWeekLabel,
 }: ExciteIndexDialogProps) {
   const [selectedWeek, setSelectedWeek] = useState<string | undefined>(initialWeekLabel);
