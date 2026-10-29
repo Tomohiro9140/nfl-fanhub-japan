@@ -8,3 +8,6 @@ if (!Number.isInteger(season) || season < 2025 || season > 2100) {
 
 const result = await importFieldlineSeasonFromNflverse(season, process.env.OWNER_OPEN_ID);
 console.log(JSON.stringify(result));
+
+// DB接続などが残ってプロセスが終わらず、Actions がタイムアウトするのを防ぐ
+process.exit(0);
