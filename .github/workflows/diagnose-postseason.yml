@@ -1,0 +1,21 @@
+name: Diagnose Postseason Pages (temporary)
+
+# 一時的な調査用。作業用ブランチへの push でのみ動き、DBには書き込まない。調査後に削除する。
+on:
+  push:
+    branches: [claude/peaceful-clarke-ngvii2]
+    paths: [scripts/diagnose-postseason-pages.mjs, .github/workflows/diagnose-postseason.yml]
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v3
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'pnpm'
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm tsx scripts/diagnose-postseason-pages.mjs
