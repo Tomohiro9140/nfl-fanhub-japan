@@ -29,3 +29,6 @@ for (let index = 0; index < teamCodes.length; index += concurrency) {
 }
 
 console.log(JSON.stringify({ processed: results.length, leagueScheduleTeams: results.filter((result) => result.games > 0).length, games: results.reduce((sum, result) => sum + result.games, 0), errors: results.filter((result) => result.errors > 0) }, null, 2));
+
+// DB接続などが残ってプロセスが終わらず、Actions がタイムアウトするのを防ぐ
+process.exit(0);
