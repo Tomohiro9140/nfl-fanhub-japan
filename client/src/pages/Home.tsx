@@ -374,7 +374,7 @@ export default function Home() {
       { id: "ATLAS", label: "ATLAS", href: "/atlas/", icon: Database, desc: "選手名鑑・契約", preload: warmAtlasRoute },
       { id: "SIMULATOR", label: "SEASON SIMULATOR", href: "/playoffs/", icon: Trophy, desc: "シード順＆ドラフト予想" },
       { id: "LINKS", label: "LINKS", href: "/links", icon: Globe, desc: "ブログ・メディア" },
-      { id: "WAR ROOM", label: "WAR ROOM", href: "https://nfl-warroom-japan.onrender.com/", icon: ExternalLink, desc: "NFL WARROOM JAPAN" },
+      { id: "WAR ROOM", label: "WAR ROOM", href: "https://nfl-warroom-japan.onrender.com/", icon: ExternalLink, desc: "GMシミュレーター" },
     ],
     []
   );
