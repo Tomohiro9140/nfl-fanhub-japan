@@ -2,13 +2,12 @@
 最終更新: 2026-11-08 / Codex
 
 ## 現在作業中の機能と背景
-- 右上の三本線メニューに外部サイト NFL WARROOM JAPAN へのリンクを追加した。作業ブランチ: `codex/add-war-room-menu-link`。
+- WAR ROOM の三本線メニュー説明を、ユーザー指定の「GMシミュレーター」に変更。作業ブランチ: `codex/war-room-menu-description`。
 
 ## このシフトで完了したこと
-- `client/src/pages/Home.tsx` のトップページ用メニューに `WAR ROOM` を追加。
-- `client/src/components/EmbeddedAppNav.tsx` の共通メニューにも同じリンクを追加。ATLAS、COACHING TREE、FIELDLINE、SIMULATOR、LINKS で表示される。
-- リンク先は `https://nfl-warroom-japan.onrender.com/`。別タブで開き、`noopener noreferrer` を付けた。
-- 変更対象は上記2ファイルと本ファイルのみ。PRのCIで型チェック・ビルドを確認する。
+- `client/src/pages/Home.tsx` と `client/src/components/EmbeddedAppNav.tsx` の WAR ROOM 説明を「NFL WARROOM JAPAN」から「GMシミュレーター」に変更。
+- WAR ROOM への外部リンク自体は前シフトの PR #14 で追加・マージ済み。リンク先や別タブ動作はそのまま。
+- 変更対象は上記2ファイルと本ファイルのみ。PRのCIで型チェック・ビルドを確認後にマージする。
 
 ## 次のシフトでやること
 - 急ぎの追加作業はない。ユーザーの新しい依頼を優先する。
