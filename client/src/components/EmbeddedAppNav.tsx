@@ -9,6 +9,7 @@ import {
   Activity,
   Globe,
   ChevronRight,
+  ExternalLink,
 } from "lucide-react";
 
 export type NavPageId =
@@ -32,6 +33,7 @@ const NAV_ITEMS = [
   { id: "ATLAS", label: "ATLAS", href: "/atlas", icon: Database, desc: "選手名鑑・契約" },
   { id: "SIMULATOR", label: "SIMULATOR", href: "/playoffs", icon: Trophy, desc: "シード順＆ドラフト予想" },
   { id: "LINKS", label: "LINKS", href: "/links", icon: Globe, desc: "ブログ・メディア" },
+  { id: "WAR ROOM", label: "WAR ROOM", href: "https://nfl-warroom-japan.onrender.com/", icon: ExternalLink, desc: "NFL WARROOM JAPAN" },
 ];
 
 export function EmbeddedAppNav({ current }: EmbeddedAppNavProps) {
@@ -92,6 +94,8 @@ export function EmbeddedAppNav({ current }: EmbeddedAppNavProps) {
                   <a
                     key={item.href}
                     href={item.href}
+                    target={item.href.startsWith("https://") ? "_blank" : undefined}
+                    rel={item.href.startsWith("https://") ? "noopener noreferrer" : undefined}
                     onClick={() => setIsNavOpen(false)}
                     className={`group flex items-center justify-between rounded-lg border px-2 py-2 transition ${
                       isCurrent
