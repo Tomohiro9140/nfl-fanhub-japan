@@ -19,6 +19,7 @@ import {
   Activity,
   Globe,
   ChevronRight,
+  ExternalLink,
 } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { getTeamByCode, nflTeams, type FavoriteTeam, type TeamBrand } from "@/lib/nflTeams";
@@ -373,6 +374,7 @@ export default function Home() {
       { id: "ATLAS", label: "ATLAS", href: "/atlas/", icon: Database, desc: "選手名鑑・契約", preload: warmAtlasRoute },
       { id: "SIMULATOR", label: "SEASON SIMULATOR", href: "/playoffs/", icon: Trophy, desc: "シード順＆ドラフト予想" },
       { id: "LINKS", label: "LINKS", href: "/links", icon: Globe, desc: "ブログ・メディア" },
+      { id: "WAR ROOM", label: "WAR ROOM", href: "https://nfl-warroom-japan.onrender.com/", icon: ExternalLink, desc: "NFL WARROOM JAPAN" },
     ],
     []
   );
@@ -483,6 +485,8 @@ export default function Home() {
                   <a
                     key={item.href}
                     href={item.href}
+                    target={item.href.startsWith("https://") ? "_blank" : undefined}
+                    rel={item.href.startsWith("https://") ? "noopener noreferrer" : undefined}
                     onClick={() => setNavOpen(false)}
                     onPointerEnter={item.preload}
                     onPointerDown={item.preload}
