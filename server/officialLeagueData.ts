@@ -1,7 +1,8 @@
 import { createHash } from "node:crypto";
 import { nflSeasonFor } from "@shared/season";
 import type { InsertOfficialScoreboardGame, InsertOfficialStanding } from "../drizzle/schema";
-import { getOfficialScoreboardKickoffTimes, hasOfficialScorePulseWindow, replaceOfficialScoreboardGames, upsertOfficialStandings } from "./db";
+import { getOfficialScoreboardKickoffTimes, hasOfficialScorePulseWindow, repairEstimatedOfficialGameKickoffs, replaceOfficialScoreboardGames, upsertOfficialStandings } from "./db";
+import { fetchEspnWeekKickoffs } from "./officialKickoffs";
 import { refreshOfficialGameHighlights } from "./nflGameHighlights";
 import { refreshOfficialNflInactives } from "./officialFeeds";
 import { TEAM_NAMES } from "./officialTeamData";
@@ -362,6 +363,11 @@ export async function refreshOfficialLeagueDashboard() {
   const scores = await enrichScoresWithOfficialKickoffTimes(season, Array.from(scoresByExternalId.values()));
   await upsertOfficialStandings(standings);
   await replaceOfficialScoreboardGames(season, scores);
+  // 日程ページから時刻を読めなかった試合（試合中・国際試合など）を、ESPN の確定時刻で直す
+  const kickoffRepairs = await repairEstimatedOfficialGameKickoffs(await fetchEspnWeekKickoffs()).catch((error) => {
+    console.warn("[kickoff] 仮のキックオフ時刻の修正に失敗:", error instanceof Error ? error.message : error);
+    return 0;
+  });
   const highlights = await refreshOfficialGameHighlights();
-  return { standings: standings.length, scores: scores.length, highlights, season };
+  return { standings: standings.length, scores: scores.length, kickoffRepairs, highlights, season };
 }

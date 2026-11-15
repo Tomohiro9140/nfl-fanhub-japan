@@ -6,6 +6,7 @@ import { dedupeOfficialFeedItems } from "./officialFeedDeduplication";
 import { drizzle } from "drizzle-orm/mysql2";
 import { ExternalAvailabilityInsight, InsertExternalAvailabilityInsight, InsertOfficialFeedItem, InsertOfficialGame, InsertOfficialGameStats, InsertOfficialRosterEntry, InsertOfficialScoreboardGame, InsertOfficialStanding, InsertUser, externalAvailabilityInsights, officialFeedItems, officialGameStats, officialGames, officialRosterEntries, officialScoreboardGames, officialStandings, users } from "../drizzle/schema";
 import { ENV } from './_core/env';
+import { planKickoffRepairs, preserveKnownKickoffs } from "./officialKickoffs";
 
 let _db: ReturnType<typeof drizzle> | null = null;
 
@@ -197,11 +198,27 @@ export async function upsertOfficialGames(items: InsertOfficialGame[]) {
   }
 }
 
+/** 仮のキックオフ時刻になっている直近の試合を、ESPN の確定時刻で直す */
+export async function repairEstimatedOfficialGameKickoffs(kickoffs: Map<string, Date>, now = new Date()) {
+  if (!kickoffs.size) return 0;
+  const db = await getDb();
+  if (!db) return 0;
+  const windowMs = 8 * 24 * 60 * 60 * 1_000;
+  const rows = await db.select({ id: officialGames.id, teamCode: officialGames.teamCode, opponentCode: officialGames.opponentCode, kickoffAt: officialGames.kickoffAt })
+    .from(officialGames)
+    .where(and(gte(officialGames.kickoffAt, new Date(now.getTime() - windowMs)), lt(officialGames.kickoffAt, new Date(now.getTime() + windowMs))));
+  const repairs = planKickoffRepairs(rows, kickoffs);
+  for (const repair of repairs) await db.update(officialGames).set({ kickoffAt: repair.kickoffAt }).where(eq(officialGames.id, repair.id));
+  return repairs.length;
+}
+
 export async function replaceOfficialGamesForTeam(teamCode: string, items: InsertOfficialGame[]) {
   if (items.length === 0) return;
   const db = await getDb();
   if (!db) throw new Error("Database is not available for official schedule cache");
   const existingGames = await db.select().from(officialGames).where(eq(officialGames.teamCode, teamCode));
+  // 試合中の同期では仮の時刻しか得られないので、分かっている正確な時刻を残す
+  items = preserveKnownKickoffs(existingGames, items);
   const daznByExternalId = new Map(existingGames.map((game) => [game.externalId, game]));
   const incomingExternalIds = new Set(items.map((item) => item.externalId));
   const preservedTodayGames = existingGames
