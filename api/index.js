@@ -465,6 +465,62 @@ var ENV = {
   forgeApiKey: process.env.BUILT_IN_FORGE_API_KEY ?? ""
 };
 
+// shared/kickoff.ts
+var ESTIMATED_KICKOFF_SECONDS = 59;
+function isEstimatedKickoff(value) {
+  if (value == null) return false;
+  const date = new Date(value);
+  return !Number.isNaN(date.getTime()) && date.getUTCSeconds() === ESTIMATED_KICKOFF_SECONDS;
+}
+var ESTIMATED_KICKOFF_SPOILER_LEAD_MS = 4 * 24 * 60 * 60 * 1e3;
+
+// server/officialKickoffs.ts
+var WEEK_MS2 = 7 * 24 * 60 * 60 * 1e3;
+var SAME_GAME_WINDOW_MS = 8 * 24 * 60 * 60 * 1e3;
+function preserveKnownKickoffs(existing, incoming) {
+  return incoming.map((item) => {
+    if (!isEstimatedKickoff(item.kickoffAt)) return item;
+    const known = existing.find(
+      (row) => row.opponentCode === item.opponentCode && row.seasonPhase === item.seasonPhase && (row.weekLabel ?? null) === (item.weekLabel ?? null) && !isEstimatedKickoff(row.kickoffAt) && Math.abs(new Date(row.kickoffAt).getTime() - item.kickoffAt.getTime()) <= SAME_GAME_WINDOW_MS
+    );
+    return known ? { ...item, kickoffAt: new Date(known.kickoffAt), externalId: known.externalId } : item;
+  });
+}
+var ESPN_TEAM_CODES = { WSH: "WAS" };
+function kickoffPairKey(firstTeam, secondTeam) {
+  return [firstTeam, secondTeam].sort().join("-");
+}
+function parseEspnKickoffs(data) {
+  const kickoffs = /* @__PURE__ */ new Map();
+  const events = data?.events ?? [];
+  for (const event of events) {
+    const competition = event?.competitions?.[0];
+    if (!competition || competition.timeValid === false) continue;
+    const codes = (competition.competitors ?? []).map((c) => c?.team?.abbreviation).filter(Boolean).map((code) => ESPN_TEAM_CODES[code] ?? code);
+    const date = new Date(event.date ?? competition.date);
+    if (codes.length !== 2 || Number.isNaN(date.getTime())) continue;
+    kickoffs.set(kickoffPairKey(codes[0], codes[1]), date);
+  }
+  return kickoffs;
+}
+async function fetchEspnWeekKickoffs() {
+  try {
+    const res = await fetch("https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard", { signal: AbortSignal.timeout(15e3) });
+    if (!res.ok) return /* @__PURE__ */ new Map();
+    return parseEspnKickoffs(await res.json());
+  } catch {
+    return /* @__PURE__ */ new Map();
+  }
+}
+function planKickoffRepairs(rows, kickoffs) {
+  return rows.flatMap((row) => {
+    if (!isEstimatedKickoff(row.kickoffAt)) return [];
+    const kickoffAt = kickoffs.get(kickoffPairKey(row.teamCode, row.opponentCode));
+    if (!kickoffAt || Math.abs(kickoffAt.getTime() - new Date(row.kickoffAt).getTime()) > WEEK_MS2) return [];
+    return [{ id: row.id, kickoffAt }];
+  });
+}
+
 // server/db.ts
 var _db = null;
 async function getDb() {
@@ -616,11 +672,22 @@ async function upsertOfficialGames(items) {
     });
   }
 }
+async function repairEstimatedOfficialGameKickoffs(kickoffs, now = /* @__PURE__ */ new Date()) {
+  if (!kickoffs.size) return 0;
+  const db = await getDb();
+  if (!db) return 0;
+  const windowMs = 8 * 24 * 60 * 60 * 1e3;
+  const rows = await db.select({ id: officialGames.id, teamCode: officialGames.teamCode, opponentCode: officialGames.opponentCode, kickoffAt: officialGames.kickoffAt }).from(officialGames).where(and(gte(officialGames.kickoffAt, new Date(now.getTime() - windowMs)), lt(officialGames.kickoffAt, new Date(now.getTime() + windowMs))));
+  const repairs = planKickoffRepairs(rows, kickoffs);
+  for (const repair of repairs) await db.update(officialGames).set({ kickoffAt: repair.kickoffAt }).where(eq(officialGames.id, repair.id));
+  return repairs.length;
+}
 async function replaceOfficialGamesForTeam(teamCode, items) {
   if (items.length === 0) return;
   const db = await getDb();
   if (!db) throw new Error("Database is not available for official schedule cache");
   const existingGames = await db.select().from(officialGames).where(eq(officialGames.teamCode, teamCode));
+  items = preserveKnownKickoffs(existingGames, items);
   const daznByExternalId = new Map(existingGames.map((game) => [game.externalId, game]));
   const incomingExternalIds = new Set(items.map((item) => item.externalId));
   const preservedTodayGames = existingGames.filter((game) => !incomingExternalIds.has(game.externalId) && isSameJstCalendarDay(game.kickoffAt, /* @__PURE__ */ new Date())).map(({ id: _id, ...game }) => game);
@@ -1729,8 +1796,7 @@ function resolveCardKickoff(card, weekNum, season, isPreseason) {
     if (monthIdx !== -1) {
       const day = Number.parseInt(dateMatch[2], 10);
       const year = monthIdx < 5 ? season + 1 : season;
-      const sec = isExplicitTbd ? 59 : 0;
-      return new Date(Date.UTC(year, monthIdx, day, 18, 0, sec));
+      return new Date(Date.UTC(year, monthIdx, day, 18, 0, 59));
     }
   }
   if (isPreseason) {
@@ -6377,8 +6443,12 @@ async function refreshOfficialLeagueDashboard() {
   const scores = await enrichScoresWithOfficialKickoffTimes(season, Array.from(scoresByExternalId.values()));
   await upsertOfficialStandings(standings);
   await replaceOfficialScoreboardGames(season, scores);
+  const kickoffRepairs = await repairEstimatedOfficialGameKickoffs(await fetchEspnWeekKickoffs()).catch((error) => {
+    console.warn("[kickoff] \u4EEE\u306E\u30AD\u30C3\u30AF\u30AA\u30D5\u6642\u523B\u306E\u4FEE\u6B63\u306B\u5931\u6557:", error instanceof Error ? error.message : error);
+    return 0;
+  });
   const highlights = await refreshOfficialGameHighlights();
-  return { standings: standings.length, scores: scores.length, highlights, season };
+  return { standings: standings.length, scores: scores.length, kickoffRepairs, highlights, season };
 }
 
 // server/daznGameLinks.ts
