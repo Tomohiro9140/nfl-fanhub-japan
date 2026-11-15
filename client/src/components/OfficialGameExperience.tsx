@@ -5,6 +5,7 @@ import { compactVenue } from "@/lib/gameVenue";
 import { GameCountdown } from "@/components/GameCountdown";
 import { filterRosterByStatus } from "@/lib/rosterFilter";
 import { dedupeDisplayArticles } from "@/lib/articleDedup";
+import { isEstimatedKickoff } from "@shared/kickoff";
 
 export type TeamSnapshot = {
   nextGame?: { opponentCode: string; homeAway: "home" | "away"; seasonPhase: "preseason" | "regular" | "postseason"; weekLabel: string | null; kickoffAt: Date; kickoffAtEstimated?: boolean; gameDate?: string | null; finishedAt?: Date | null; venue: string | null; broadcast: string | null; sourceUrl: string; daznUrl: string | null; nflHighlightUrl?: string | null; gameState: string | null; awayScore: number | null; homeScore: number | null; fetchedAt: Date };
@@ -129,8 +130,9 @@ export function OfficialGameTicket({ favorite, snapshot, loading, spoilerMode = 
               {isRevealedFinal ? <><p className="mt-1 font-display text-3xl font-black leading-none tracking-[.03em] text-white"><span className={favoriteScore != null && opponentScore != null && favoriteScore > opponentScore ? "text-[#ffc1a7]" : ""}>{favoriteScore}</span><span> — </span><span className={favoriteScore != null && opponentScore != null && opponentScore > favoriteScore ? "text-[#ffc1a7]" : ""}>{opponentScore}</span></p><p className="mt-1 font-mono text-[8px] font-bold tracking-[.14em] text-[#ffc1a7]">FINAL SCORE</p></> : <p className="mt-2 font-mono text-[8px] font-bold tracking-[.14em] text-[#a5b3c9]">FINAL · SCORE HIDDEN</p>}
             </> : <>
               <p className="font-mono text-[9px] font-semibold tracking-[.14em] text-[#a5b3c9]">{game.kickoffAtEstimated && gameStatus.label === "LIVE" ? "OFFICIAL SCOREBOARD" : "JST"}</p>
-              <p className="mt-1 font-display text-lg font-extrabold leading-none">{game.kickoffAtEstimated && gameStatus.label === "LIVE" ? "LIVE NOW" : fmtDate(game.kickoffAt)}</p>
-              <GameCountdown kickoffAt={game.kickoffAt} result={{ gameState: game.gameState, awayScore: game.awayScore, homeScore: game.homeScore }} hideFinalScore={spoilerMode} className="mt-1 text-[9px]" />
+              <p className="mt-1 font-display text-lg font-extrabold leading-none">{game.kickoffAtEstimated && gameStatus.label === "LIVE" ? "LIVE NOW" : isEstimatedKickoff(game.kickoffAt) ? "日時確認中" : fmtDate(game.kickoffAt)}</p>
+              {/* 仮の時刻（秒59）は実際の開始とずれることがあるので、時刻もカウントダウンも出さない */}
+              {isEstimatedKickoff(game.kickoffAt) ? null : <GameCountdown kickoffAt={game.kickoffAt} result={{ gameState: game.gameState, awayScore: game.awayScore, homeScore: game.homeScore }} hideFinalScore={spoilerMode} className="mt-1 text-[9px]" />}
             </>}
           </div>
           <div className="text-right"><p className={`font-display text-base font-bold leading-tight ${isRevealedFinal && favoriteScore != null && opponentScore != null && opponentScore > favoriteScore ? "text-[#ffc1a7]" : ""}`}>{opponentLabel}</p></div>

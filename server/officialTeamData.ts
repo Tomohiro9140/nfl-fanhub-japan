@@ -139,9 +139,8 @@ function resolveCardKickoff(card: string, weekNum: number | null, season: number
     if (monthIdx !== -1) {
       const day = Number.parseInt(dateMatch[2], 10);
       const year = monthIdx < 5 ? season + 1 : season;
-      // 時間が未確定または TBD の場合は秒を 59 に設定
-      const sec = isExplicitTbd ? 59 : 0;
-      return new Date(Date.UTC(year, monthIdx, day, 18, 0, sec));
+      // 日付しか分からず時刻は仮（現地13時）なので、必ず秒を 59 にして仮の時刻として扱う
+      return new Date(Date.UTC(year, monthIdx, day, 18, 0, 59));
     }
   }
 

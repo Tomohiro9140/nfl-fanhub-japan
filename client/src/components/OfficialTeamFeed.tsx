@@ -4,6 +4,7 @@ import { trpc } from "@/lib/trpc";
 import { dedupeDisplayArticles } from "@/lib/articleDedup";
 import type { FavoriteTeam } from "@/lib/nflTeams";
 import { ArticleSummaryDialog } from "./ArticleSummaryDialog";
+import { ESTIMATED_KICKOFF_SPOILER_LEAD_MS, isEstimatedKickoff } from "@shared/kickoff";
 
 type SourceKind = "team_official" | "nfl_official" | "pft" | "cbs" | "local" | "blog";
 
@@ -85,11 +86,23 @@ function SourceMark({ kind }: { kind: SourceKind }) {
 export function spoilerNewsCutoff(game?: CompletedGame) {
   if (!game) return null;
   const kickoffAt = new Date(game.kickoffAt ?? 0);
-  if (!game.kickoffAtEstimated && !Number.isNaN(kickoffAt.getTime())) {
+  // 秒が59の時刻は日程ページから読めなかったときの仮の時刻。実際より遅いことがあるので確定扱いしない
+  const provisionalKickoff = isEstimatedKickoff(kickoffAt);
+  if (!game.kickoffAtEstimated && !provisionalKickoff && !Number.isNaN(kickoffAt.getTime())) {
     return new Date(kickoffAt.getTime() - 90 * 60 * 1000);
   }
   const gameDateCutoff = game.gameDate ? new Date(`${game.gameDate}T00:00:00.000Z`) : null;
-  return gameDateCutoff && !Number.isNaN(gameDateCutoff.getTime()) ? gameDateCutoff : null;
+  if (gameDateCutoff && !Number.isNaN(gameDateCutoff.getTime())) return gameDateCutoff;
+  // 仮の時刻しかない場合は、木曜・国際試合でも漏れないよう数日前から隠す
+  return provisionalKickoff ? new Date(kickoffAt.getTime() - ESTIMATED_KICKOFF_SPOILER_LEAD_MS) : null;
+}
+
+/** ネタバレ防止を効かせ始める時刻（確定時刻ならキックオフ、仮の時刻なら数日前） */
+export function spoilerProtectionStart(game: CompletedGame) {
+  if (!game.kickoffAt) return null;
+  const kickoffAt = new Date(game.kickoffAt);
+  if (Number.isNaN(kickoffAt.getTime())) return null;
+  return isEstimatedKickoff(kickoffAt) ? new Date(kickoffAt.getTime() - ESTIMATED_KICKOFF_SPOILER_LEAD_MS) : kickoffAt;
 }
 
 export function shouldHideAllSpoilerNews(game?: CompletedGame) {
@@ -233,7 +246,7 @@ export function OfficialTeamFeed({ favorite, spoilerMode = false, completedGame 
     completedGame && (
       /live|ingame|in_progress|halftime/i.test(completedGame.gameState ?? "") ||
       (/final|completed/i.test(completedGame.gameState ?? "") && (!completedGame.kickoffAt || new Date(completedGame.kickoffAt).getTime() <= Date.now())) ||
-      (completedGame.kickoffAt && new Date(completedGame.kickoffAt).getTime() <= Date.now() && !completedGame.gameState)
+      ((spoilerProtectionStart(completedGame)?.getTime() ?? Infinity) <= Date.now() && !completedGame.gameState)
     )
   );
 
